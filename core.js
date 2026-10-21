@@ -78,3 +78,33 @@ CFO.print = html => {
 // Datas auxiliares (usadas nas planilhas)
 const dias = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const hoje = () => dias(0);
+
+// Filtro de Mês/Ano (usado em Requisição e EPIs por contrato). O mês da requisição pode vir como "Janeiro/2026", "01/2026", "2026-01"...
+CFO.periodo = (() => {
+  const NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const chaves = NOMES.map(CFO.norm);
+  const parse = s => {
+    const t = CFO.norm(s), a = t.match(/^([a-z]+)(\d{4})$/), x = String(s ?? '');
+    if (a) { const i = chaves.findIndex(n => n === a[1] || n.startsWith(a[1].slice(0, 3))); if (i >= 0) return { m: i + 1, y: +a[2] }; }
+    let b = x.match(/(\d{4})[-\/.](\d{1,2})/); if (b) return { m: +b[2], y: +b[1] };
+    b = x.match(/(\d{1,2})[-\/.](?:\d{1,2}[-\/.])?(\d{4})/); if (b) return { m: +b[1], y: +b[2] };
+    return null;
+  };
+  return {
+    parse, NOMES,
+    // HTML dos dois seletores (as opções de ano são preenchidas por fill)
+    html: () => `<select id="fm" aria-label="Mês"><option value="">Todos os meses</option>${NOMES.map((n, i) => `<option value="${i + 1}">${n}</option>`).join('')}</select>
+      <select id="fa" aria-label="Ano"><option value="">Todos os anos</option></select>`,
+    // Preenche os anos existentes nas requisições, mantendo o que estava escolhido
+    fill(root, reqs) {
+      const fa = root.querySelector('#fa'), atual = fa.value;
+      const anos = [...new Set(reqs.map(r => parse(r.mes)?.y).filter(Boolean))].sort((a, b) => b - a);
+      fa.innerHTML = '<option value="">Todos os anos</option>' + anos.map(y => `<option ${String(y) === atual ? 'selected' : ''}>${y}</option>`).join('');
+    },
+    // Função de teste conforme o que está escolhido
+    test(root) {
+      const m = root.querySelector('#fm').value, y = root.querySelector('#fa').value;
+      return r => { if (!m && !y) return true; const p = parse(r.mes); return !!p && (!m || p.m === +m) && (!y || p.y === +y); };
+    }
+  };
+})();

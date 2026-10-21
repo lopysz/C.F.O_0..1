@@ -6,10 +6,10 @@
   const valor = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
 
   // Contratos cadastrados + contratos que aparecem nas requisições
-  const montar = () => {
+  const montar = ok => {
     const map = new Map();
     CFO.store.get('contratos', []).forEach(c => { if (c.num && !map.has(String(c.num))) map.set(String(c.num), { num: String(c.num), nome: c.nome || '', reqs: [] }); });
-    CFO.store.get('requisicoes', []).forEach(r => {
+    CFO.store.get('requisicoes', []).filter(ok).forEach(r => {
       let c = map.get(r.contrato);
       if (!c) { c = { num: r.contrato, nome: r.contratoNome, reqs: [] }; map.set(r.contrato, c); }
       if (!c.nome) c.nome = r.contratoNome;
@@ -43,14 +43,27 @@
     <div class="tw" style="margin-top:.5rem"><table><thead><tr><th>Item</th><th>Tam.</th><th>Aprov.</th></tr></thead><tbody>
     ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qa}</td></tr>`).join('')}</tbody></table></div></div>`;
 
+  // Contratos que usam um EPI (pelo nome), com base nas requisições. Nome igual tem prioridade; senão, nome parecido.
+  CFO.contratosDoEpi = nome => {
+    const n = CFO.norm(nome); if (!n) return [];
+    const reqs = CFO.store.get('requisicoes', []), nomes = new Set(reqs.flatMap(r => r.itens.map(i => i.item)));
+    const igual = [...nomes].filter(x => CFO.norm(x) === n);
+    const usa = igual.length ? igual : [...nomes].filter(x => { const m = CFO.norm(x); return m.includes(n) || (m.length > 3 && n.includes(m)); });
+    const set = new Set(usa);
+    return [...new Set(reqs.filter(r => r.contrato && r.itens.some(i => set.has(i.item))).map(r => String(r.contrato)))].sort(numCmp);
+  };
+
   CFO.modules.epis_contrato = body => {
-    const lista = montar();
+    let lista = montar(() => true);
     let q = '', so = false;
     body.innerHTML = `<div class="bar"><input id="q" type="search" placeholder="Buscar contrato...">
+      ${CFO.periodo.html()}
       <label class="chk"><input id="so" type="checkbox"> Só com requisições</label></div><p class="log" id="count"></p><div id="lst"></div>`;
     const $ = s => body.querySelector(s);
 
     function render() {
+      CFO.periodo.fill(body, CFO.store.get('requisicoes', []));
+      lista = montar(CFO.periodo.test(body));
       const t = CFO.norm(q), v = lista.filter(c => (!so || c.reqs.length) && CFO.norm(c.num + ' ' + c.nome).includes(t));
       $('#count').textContent = `${v.length} contrato(s)`;
       $('#lst').innerHTML = v.map(c => `<div class="foto" data-n="${esc(c.num)}"><div><b>${esc(c.num)}</b>${c.nome ? ' - ' + esc(c.nome) : ''}<br>
@@ -78,6 +91,7 @@
     }
 
     $('#q').oninput = e => { q = e.target.value; render(); };
+    $('#fm').onchange = $('#fa').onchange = render;
     $('#so').onchange = e => { so = e.target.checked; render(); };
     render();
   };

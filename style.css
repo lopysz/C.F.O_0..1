@@ -99,3 +99,5 @@ summary{cursor:pointer}details .tw{margin-top:.6rem}
 /* Tabelas: nome do item quebra em várias linhas (cabe melhor no celular) */
 td:first-child{white-space:normal;min-width:130px}
 .tw table{font-size:.82rem}.tw th,.tw td{padding:.5rem .45rem}
+
+.bar select{width:auto;flex:none}

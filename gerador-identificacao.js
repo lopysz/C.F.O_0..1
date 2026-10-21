@@ -17,6 +17,9 @@
       <div class="fp-rev">Data de revisão __ /__ /__</div>
     </div>`;
 
+  // Nomes sugeridos ao escrever o EPI: Planilha EPI + itens das requisições
+  const nomesEpi = () => [...new Set([...CFO.store.get('epi', []).map(e => e.item), ...CFO.store.get('requisicoes', []).flatMap(r => r.itens.map(i => i.item))].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
   CFO.modules.etiquetas = body => {
     let list = [];
     body.innerHTML = `<div class="bar"><button id="new">+ Nova ficha</button><input id="q" type="search" placeholder="Buscar por C.A. ou nome..."></div><div id="lst"></div>`;
@@ -52,17 +55,19 @@
     /* --- Editor --- */
     function editor(f0) {
       CFO.open(f0 ? 'Editar ficha' : 'Nova ficha', b => {
-        const f = f0 ? structuredClone(f0) : { id: Date.now() + Math.random().toString(36).slice(2, 6), foto: '', ca: '', den: [''], util: ['', '', ''], contratos: [] };
+        const f = f0 ? structuredClone(f0) : { id: Date.now() + Math.random().toString(36).slice(2, 6), foto: '', epi: '', ca: '', den: [''], util: ['', '', ''], contratos: [] };
         const sel = new Set(f.contratos), q = s => b.querySelector(s);
         const base = [...new Map(CFO.store.get('contratos', []).filter(r => r.num).map(r => [String(r.num), r])).values()].sort((x, y) => num(x.num, y.num));
         b.innerHTML = `<div class="ed">
           <label>Foto do item</label>
           <div class="photo"><img id="ph" alt="" ${f.foto ? `src="${f.foto}"` : 'hidden'}><button id="pick" class="ghost">Escolher foto</button><input id="pf" type="file" accept="image/*" hidden></div>
+          <label>Ou escreva o nome do EPI<input id="epi" list="epiNomes" placeholder="Ex.: Luva de vaqueta" value="${esc(f.epi || '')}"></label>
+          <datalist id="epiNomes">${nomesEpi().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
           <label>C.A.<input id="ca" value="${esc(f.ca)}"></label>
           <label>Denominações</label><div id="den"></div><button id="addDen" class="ghost">+ Adicionar denominação</button>
           <label>Utilidades</label><div id="util"></div><button id="addUtil" class="ghost">+ Adicionar utilidade</button>
           <label>Utilizado nos contratos</label>
-          <div class="bar"><input id="cq" type="search" placeholder="Buscar contrato..."><button id="all" class="ghost">Marcar todos</button><button id="none" class="ghost">Desmarcar</button></div>
+          <div class="bar"><input id="cq" type="search" placeholder="Buscar contrato..."><button id="all" class="ghost">Marcar por contratos</button><button id="none" class="ghost">Desmarcar</button></div>
           <div id="clist" class="clist"></div>
           <div class="bar"><input id="manual" placeholder="Outro nº (ex.: 1408)"><button id="addC" class="ghost">Adicionar nº</button></div>
           <p id="selc" class="log"></p>
@@ -95,7 +100,14 @@
         const cnt = () => q('#selc').textContent = `${sel.size} contrato(s) selecionado(s)`;
         const shown = () => [...q('#clist').querySelectorAll('input')].map(c => c.value);
         q('#cq').oninput = drawC;
-        q('#all').onclick = () => { shown().forEach(n => sel.add(n)); drawC(); };
+        // Marca só os contratos que usam o EPI escrito (dados de Jurídico Operacional > EPIs por contrato)
+        q('#all').onclick = () => {
+          const nome = q('#epi').value.trim();
+          if (!nome) { alert('Escreva o nome do EPI no campo acima para marcar os contratos que o usam.'); q('#epi').focus(); return; }
+          const achados = CFO.contratosDoEpi(nome);
+          if (!achados.length) { alert(`Nenhum contrato usa "${nome}" nas requisições importadas. Confira o nome do EPI.`); return; }
+          sel.clear(); achados.forEach(n => sel.add(n)); q('#cq').value = ''; drawC();
+        };
         q('#none').onclick = () => { shown().forEach(n => sel.delete(n)); drawC(); };
         q('#addC').onclick = () => { const n = q('#manual').value.trim(); if (n) { sel.add(n); q('#manual').value = ''; drawC(); } };
         drawC();
@@ -104,7 +116,7 @@
           const vals = box => [...q(box).querySelectorAll('input,textarea')].map(x => x.value.trim()).filter(Boolean);
           const ca = q('#ca').value.trim(), den = vals('#den');
           if (!ca && !den.length) { alert('Informe ao menos o C.A. ou uma denominação.'); return; }
-          Object.assign(f, { ca, den, util: vals('#util'), contratos: [...sel] });
+          Object.assign(f, { epi: q('#epi').value.trim(), ca, den, util: vals('#util'), contratos: [...sel] });
           await CFO.db.put('fichas', f);
           CFO.close(); if (f0) CFO.close(); load();
         };
