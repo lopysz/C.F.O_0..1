@@ -24,8 +24,24 @@
     reqs.forEach(r => r.itens.forEach(i => { const x = m.get(i.item) || { item: i.item, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; m.set(i.item, x); }));
     return [...m.values()].sort((a, b) => b.valor - a.valor);
   };
-  const tabela = rows => `<div class="tw"><table><thead><tr><th>EPI</th><th>Qtd retirada</th><th>Valor</th></tr></thead><tbody>
-    ${rows.map(x => `<tr><td>${esc(x.item)}</td><td>${x.qtd}</td><td>${R$(x.valor)}</td></tr>`).join('')}</tbody></table></div>`;
+  // Código do item: procura na Planilha EPI (nome igual; se não achar, nome parecido)
+  const codigos = () => {
+    const epi = CFO.store.get('epi', []).filter(e => e.item);
+    const exato = new Map(epi.map(e => [CFO.norm(e.item), e.codigo]));
+    return nome => {
+      const n = CFO.norm(nome);
+      if (exato.has(n)) return exato.get(n) || '';
+      const p = epi.find(e => { const m = CFO.norm(e.item); return m && n && (m.includes(n) || n.includes(m)); });
+      return p ? p.codigo || '' : '';
+    };
+  };
+  // EPIs do contrato: só código e nome, sem repetir
+  const tabela = (rows, cod) => `<div class="tw"><table><thead><tr><th>Código</th><th>EPI</th></tr></thead><tbody>
+    ${rows.map(x => `<tr><td>${esc(cod(x.item)) || '-'}</td><td>${esc(x.item)}</td></tr>`).join('')}</tbody></table></div>`;
+  // Uma requisição do solicitante: cabeçalho + itens
+  const reqCard = r => `<div class="card" style="margin-top:.6rem"><b style="font-size:1rem">${esc(r.id)}</b> <small>· ${esc(r.mes)}${r.motivo ? ' · ' + esc(r.motivo) : ''}</small>
+    <div class="tw" style="margin-top:.5rem"><table><thead><tr><th>Item</th><th>Tam.</th><th>Aprov.</th></tr></thead><tbody>
+    ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qa}</td></tr>`).join('')}</tbody></table></div></div>`;
 
   CFO.modules.epis_contrato = body => {
     const lista = montar();
@@ -46,7 +62,7 @@
     function detalhe(c) {
       CFO.open(`Contrato ${c.num}`, b => {
         const gasto = c.reqs.reduce((a, r) => a + valor(r), 0), itens = c.reqs.reduce((a, r) => a + qtd(r), 0);
-        const sols = new Map();
+        const cod = codigos(), sols = new Map();
         c.reqs.forEach(r => { const k = r.sol || '(sem nome)'; if (!sols.has(k)) sols.set(k, []); sols.get(k).push(r); });
         const ordem = [...sols.entries()].sort((a, b) => b[1].reduce((x, r) => x + valor(r), 0) - a[1].reduce((x, r) => x + valor(r), 0));
         b.innerHTML = `<h3>${esc(c.nome || 'Contrato ' + c.num)}</h3>
@@ -54,9 +70,9 @@
             <div class="card"><small>Itens retirados</small><b>${itens}</b></div><div class="card"><small>Valor gasto</small><b>${R$(gasto)}</b></div>
             <div class="card"><small>Solicitantes</small><b>${sols.size}</b></div></div>`
           + (c.reqs.length ? `
-          <h3 class="sec">Solicitantes</h3>${ordem.map(([nome, rs]) => `<details><summary><b>${esc(nome)}</b> · ${rs.length} req · ${rs.reduce((a, r) => a + qtd(r), 0)} item(ns) · ${R$(rs.reduce((a, r) => a + valor(r), 0))}</summary>
-            <p class="log">${rs.map(r => esc(r.id) + ' (' + esc(r.mes) + ')').join(', ')}</p>${tabela(porItem(rs))}</details>`).join('')}
-          <h3 class="sec">EPIs utilizados no contrato</h3>${tabela(porItem(c.reqs))}`
+          <h3 class="sec">Histórico por solicitante</h3>${ordem.map(([nome, rs]) => `<details><summary><b>${esc(nome)}</b> · ${rs.length} requisição(ões)</summary>
+            ${rs.map(reqCard).join('')}</details>`).join('')}
+          <h3 class="sec">EPIs utilizados no contrato</h3>${tabela(porItem(c.reqs), cod)}`
           : '<p class="empty">Nenhuma requisição importada para este contrato ainda.</p>');
       });
     }
