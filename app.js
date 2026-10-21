@@ -17,7 +17,7 @@ function hub(d, body) {
   }).join('')}</div>`;
   body.querySelectorAll('.orb:not(.off)').forEach(b => b.onclick = () => {
     const s = d.subs[b.dataset.i];
-    CFO.open(s.name, CFO.modules[s.m]);
+    CFO.open(s.name, CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
   });
 }
 
