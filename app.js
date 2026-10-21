@@ -3,7 +3,7 @@
 const DRAWERS = [
   { name: 'Almoxarifado Operacional', short: 'Almox. Op.',
     subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos ativos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
-  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }] },
+  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Controle de gastos', m: 'controle_gastos' }] },
   { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }] }
 ];
 
@@ -36,3 +36,5 @@ pick.type = 'file'; pick.multiple = true; pick.hidden = true; pick.setAttribute(
 document.body.append(pick);
 document.getElementById('impPasta').onclick = () => pick.click();
 pick.onchange = async () => { const f = [...pick.files]; pick.value = ''; await CFO.importFiles(f); };
+document.getElementById('impDrive').onclick = e => CFO.importDrive(e.currentTarget);
+document.getElementById('cfgDrive').onclick = () => CFO.driveConfig();

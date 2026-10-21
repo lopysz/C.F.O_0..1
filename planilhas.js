@@ -62,7 +62,12 @@ CFO.sheet = cfg => {
 
   /* --- Tela da planilha --- */
   const api = body => {
-    let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '';
+    let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '', per = { m: '', y: '' };
+    const calcular = () => {                          // colunas calculadas a partir das requisições (cfg.calc) no período escolhido
+      if (!cfg.calc) return { cols: [], cards: [], todas: [] };
+      const todas = CFO.store.get('requisicoes', []), r = cfg.calc({ reqs: todas.filter(CFO.periodo.fn(per.m, per.y)), rows });
+      return { cols: r.cols || [], cards: r.cards || [], todas };
+    };
     const save = () => { CFO.store.set(K, rows); CFO.store.set(K + ':mov', movs); draw(); };
     const field = (c, v = '') => c.options
       ? `<label>${c.label}<select name="${c.k}">${c.options.map(o => `<option ${o == v ? 'selected' : ''}>${o}</option>`).join('')}</select></label>`
@@ -70,23 +75,29 @@ CFO.sheet = cfg => {
     const form = (r = {}) => cfg.columns.map(c => field(c, r[c.k])).join('');
 
     function draw() {
-      const list = rows.filter(r => JSON.stringify(Object.values(r)).toLowerCase().includes(q));
+      const list = rows.filter(r => JSON.stringify(Object.values(r)).toLowerCase().includes(q)), cx = calcular();
       body.innerHTML = `
-        <div class="cards">${cfg.dash(rows, movs).map(d => `<div class="card ${d[2] || ''}"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('')}</div>
+        <div class="cards">${[...cfg.dash(rows, movs), ...cx.cards].map(d => `<div class="card ${d[2] || ''}"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('')}</div>
         <div class="bar">
           <input id="q" type="search" placeholder="Buscar..." value="${CFO.esc(q)}">
+          ${cfg.calc ? CFO.periodo.html() : ''}
           <button id="add">+ Adicionar</button>
           <button id="imp" class="ghost">Importar</button>
           <button id="exp" class="ghost">Exportar</button>
           <button id="clr" class="ghost danger">Limpar tudo</button>
           <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
         </div>
-        <div class="tw"><table><thead><tr>${cfg.columns.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>
-          ${list.map(r => `<tr>${cfg.columns.map(c => `<td>${CFO.esc(r[c.k])}</td>`).join('')}
+        <div class="tw"><table><thead><tr>${cfg.columns.map(c => `<th>${c.label}</th>`).join('')}${cx.cols.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>
+          ${list.map(r => `<tr>${cfg.columns.map(c => `<td>${CFO.esc(r[c.k])}</td>`).join('')}${cx.cols.map(c => `<td>${CFO.esc(c.get(r))}</td>`).join('')}
             <td class="act">${cfg.moves ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}<button data-e="${r.id}" title="Editar">✎</button><button data-d="${r.id}" title="Excluir">🗑</button></td></tr>`).join('')
             || '<tr><td colspan="99" class="empty">Nenhum registro. Adicione um item ou importe uma planilha.</td></tr>'}
         </tbody></table></div>
         ${cfg.moves && movs.length ? `<ul class="log"><b>Últimas movimentações</b>${movs.slice(-5).reverse().map(m => `<li>${m.tipo}: ${CFO.esc(m.item)} (${m.qtd}) - ${CFO.esc(m.resp)} - ${m.data.slice(0, 10)}</li>`).join('')}</ul>` : ''}`;
+      if (cfg.calc) {                                   // filtro de mês/ano
+        body.querySelector('#fm').value = per.m; CFO.periodo.fill(body, cx.todas, per.y);
+        body.querySelector('#fm').onchange = e => { per.m = e.target.value; draw(); };
+        body.querySelector('#fa').onchange = e => { per.y = e.target.value; draw(); };
+      }
       bind();
     }
 
@@ -106,7 +117,7 @@ CFO.sheet = cfg => {
                  movs.push({ item: r[first.k], tipo: d.tipo, qtd: n, resp: d.resp, data: new Date().toISOString() }); save(); });
       });
       $('#exp').onclick = () => {
-        const ws = XLSX.utils.json_to_sheet(rows.map(r => Object.fromEntries(cfg.columns.map(c => [c.label, r[c.k]]))));
+        const ws = XLSX.utils.json_to_sheet(rows.map(r => Object.fromEntries([...cfg.columns.map(c => [c.label, r[c.k]]), ...calcular().cols.map(c => [c.label, c.get(r)])])));
         const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, K); XLSX.writeFile(wb, K + '.xlsx');
       };
       $('#clr').onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(); } };

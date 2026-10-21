@@ -101,3 +101,21 @@ td:first-child{white-space:normal;min-width:130px}
 .tw table{font-size:.82rem}.tw th,.tw td{padding:.5rem .45rem}
 
 .bar select{width:auto;flex:none}
+
+/* Resumo do solicitante: nome à esquerda, valor gasto à direita */
+summary.sum{display:flex;justify-content:space-between;align-items:center;gap:1.5rem;list-style:none}
+summary.sum::-webkit-details-marker{display:none}
+summary.sum .val{color:var(--accent);font-weight:700;white-space:nowrap;margin-left:auto}
+
+/* ===== 12. Controle de gastos ===== */
+.tabs{display:flex;gap:.5rem;margin-bottom:.8rem}.tabs button.on{background:var(--accent);border-color:var(--accent)}
+.chart svg{display:block;max-width:none}
+.hbars{display:grid;gap:.4rem;margin-bottom:.8rem}
+.hb{display:grid;grid-template-columns:minmax(90px,36%) 1fr auto;gap:.6rem;align-items:center;font-size:.82rem}
+.hl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ht{height:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ht i{display:block;height:100%;background:var(--accent)}
+.hv{color:var(--muted);white-space:nowrap}
+.tw+h3.sec{margin-top:1.6rem}
+.topbtns{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:flex-end}
+.chart{margin-bottom:.8rem}

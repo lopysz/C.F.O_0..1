@@ -83,7 +83,7 @@
             <div class="card"><small>Itens retirados</small><b>${itens}</b></div><div class="card"><small>Valor gasto</small><b>${R$(gasto)}</b></div>
             <div class="card"><small>Solicitantes</small><b>${sols.size}</b></div></div>`
           + (c.reqs.length ? `
-          <h3 class="sec">Histórico por solicitante</h3>${ordem.map(([nome, rs]) => `<details><summary><b>${esc(nome)}</b> · ${rs.length} requisição(ões)</summary>
+          <h3 class="sec">Histórico por solicitante</h3>${ordem.map(([nome, rs]) => `<details><summary class="sum"><span><b>${esc(nome)}</b> • ${rs.length} requisição(ões)</span><span class="val">${R$(rs.reduce((x, r) => x + valor(r), 0))}</span></summary>
             ${rs.map(reqCard).join('')}</details>`).join('')}
           <h3 class="sec">EPIs utilizados no contrato</h3>${tabela(porItem(c.reqs), cod)}`
           : '<p class="empty">Nenhuma requisição importada para este contrato ainda.</p>');

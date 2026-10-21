@@ -95,16 +95,18 @@ CFO.periodo = (() => {
     // HTML dos dois seletores (as opções de ano são preenchidas por fill)
     html: () => `<select id="fm" aria-label="Mês"><option value="">Todos os meses</option>${NOMES.map((n, i) => `<option value="${i + 1}">${n}</option>`).join('')}</select>
       <select id="fa" aria-label="Ano"><option value="">Todos os anos</option></select>`,
-    // Preenche os anos existentes nas requisições, mantendo o que estava escolhido
-    fill(root, reqs) {
-      const fa = root.querySelector('#fa'), atual = fa.value;
+    // Preenche os anos existentes nas requisições, mantendo o que estava escolhido (ou o ano indicado em keep)
+    fill(root, reqs, keep) {
+      const fa = root.querySelector('#fa'), atual = String(keep ?? fa.value);
       const anos = [...new Set(reqs.map(r => parse(r.mes)?.y).filter(Boolean))].sort((a, b) => b - a);
       fa.innerHTML = '<option value="">Todos os anos</option>' + anos.map(y => `<option ${String(y) === atual ? 'selected' : ''}>${y}</option>`).join('');
     },
-    // Função de teste conforme o que está escolhido
-    test(root) {
-      const m = root.querySelector('#fm').value, y = root.querySelector('#fa').value;
-      return r => { if (!m && !y) return true; const p = parse(r.mes); return !!p && (!m || p.m === +m) && (!y || p.y === +y); };
-    }
+    // Função de teste para um mês/ano (vazio = todos)
+    fn: (m, y) => r => { if (!m && !y) return true; const p = parse(r.mes); return !!p && (!m || p.m === +m) && (!y || p.y === +y); },
+    // Função de teste conforme o que está escolhido na tela
+    test(root) { return this.fn(root.querySelector('#fm').value, root.querySelector('#fa').value); },
+    // Chave AAAAMM para ordenar e "Mês/Ano" para exibir
+    key: s => { const p = parse(s); return p ? p.y * 100 + p.m : 0; },
+    label: s => { const p = parse(s); return p ? NOMES[p.m - 1].slice(0, 3) + '/' + p.y : String(s || '-'); }
   };
 })();
