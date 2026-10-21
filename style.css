@@ -1,0 +1,92 @@
+/* ===== 1. Tokens ===== */
+:root{--bg:#0a1424;--panel:#101f38;--panel2:#16294a;--line:#24406b;--accent:#3d8bfd;--text:#e8eef9;--muted:#8fa3c4;--warn:#f5b84a;--r:14px}
+/* ===== 2. Base ===== */
+*{box-sizing:border-box;margin:0}
+body{display:flex;flex-direction:column;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent);padding:.55rem .9rem;border-radius:10px}
+button.danger:hover{border-color:#e5646b;color:#ff9aa0}
+button.ghost{background:transparent;border-color:var(--line)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;width:100%}
+/* ===== 3. Início (gavetas) ===== */
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:1.6rem 1.2rem .8rem}
+.top h1{font-size:1.9rem;letter-spacing:.12em}
+.top p{color:var(--muted);margin-top:.2rem}
+#home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem 1.2rem 3rem}
+.drawer{width:min(56vw,180px);aspect-ratio:1;display:grid;place-items:center;text-align:center;font-size:1.05rem;font-weight:600;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1rem}
+.drawer:hover{border-color:var(--accent);background:var(--panel2)}
+/* ===== 4. Telas sobrepostas ===== */
+.screen{position:fixed;inset:0;background:var(--bg);overflow:auto;z-index:10}
+.screen>header{position:sticky;top:0;display:flex;align-items:center;gap:.8rem;padding:.8rem 1rem;background:var(--panel);border-bottom:1px solid var(--line);z-index:2}
+.screen h2{font-size:1.05rem}
+.x{width:2.3rem;height:2.3rem;padding:0;background:transparent;border-color:var(--line)}
+.body{padding:1rem;max-width:1000px;margin:auto}
+/* ===== 5. Hub de subgavetas ===== */
+.hub{position:relative;width:min(94vw,calc(100dvh - 120px));max-width:900px;aspect-ratio:1;margin:0 auto;container-type:inline-size}
+.core{position:absolute;left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);display:grid;place-items:center;text-align:center;font-weight:700;font-size:max(12px,3.6cqw);background:var(--panel2);border:2px solid var(--accent);border-radius:var(--r);padding:.4rem}
+.orb{position:absolute;width:26%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;padding:.3rem;font-size:max(10px,3.2cqw);line-height:1.15;background:var(--panel);border:1px solid var(--accent)}
+.orb:hover{background:var(--accent)}
+.orb.off{border:1px dashed var(--line);color:var(--muted);cursor:default;background:transparent}
+/* ===== 6. Planilhas ===== */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.7rem;margin-bottom:1rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:.8rem}
+.card small{color:var(--muted)}.card b{display:block;font-size:1.4rem;margin-top:.2rem}
+.card.warn b{color:var(--warn)}
+.bar{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem}
+.bar input[type=search]{flex:1;min-width:140px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{padding:.6rem .7rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--panel);color:var(--muted);font-weight:600}
+.act{text-align:right}.act button{padding:.25rem .5rem;margin-left:.2rem;background:transparent;border-color:var(--line)}
+.empty{text-align:center;color:var(--muted);padding:1.5rem}
+.log{margin-top:1rem;color:var(--muted);font-size:.85rem}.log li{margin-left:1rem}
+/* ===== 7. Diálogo ===== */
+dialog{margin:auto;width:min(92vw,420px);background:var(--panel);color:var(--text);border:1px solid var(--accent);border-radius:var(--r);padding:1.2rem}
+dialog::backdrop{background:rgba(3,8,18,.7)}
+dialog label{display:block;margin:.6rem 0;color:var(--muted);font-size:.85rem}
+dialog label>*{margin-top:.25rem;color:var(--text)}
+.row{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem}
+
+/* ===== 8. Hub centralizado na tela ===== */
+.body.center{display:flex;align-items:center;justify-content:center;min-height:calc(100dvh - 64px);max-width:none}
+
+/* ===== 9. Foto de Separação ===== */
+.foto{display:flex;gap:.8rem;align-items:center;padding:.6rem;margin-bottom:.6rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);cursor:pointer}
+.foto:hover{border-color:var(--accent)}
+.foto img{width:84px;height:84px;object-fit:cover;border-radius:10px;flex:none}
+.full img,.prev{display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:10px}
+.full p{margin:.8rem 0}
+.btn{display:inline-block;padding:.55rem .9rem;border-radius:10px;background:var(--accent);color:var(--text);text-decoration:none}
+
+/* ===== 10. Gerador de Identificação ===== */
+.ed label{display:block;margin:.9rem 0 .3rem;color:var(--muted);font-size:.85rem}
+.ed .ck{display:flex;gap:.5rem;align-items:center;margin:0;padding:.35rem;color:var(--text)}
+.ed .ck input{width:auto}.ed .ck span{color:var(--muted);font-size:.8rem}
+.rowin{display:flex;gap:.4rem;margin-bottom:.4rem}.rowin button{padding:.3rem .6rem}
+.photo{display:flex;gap:.8rem;align-items:center}
+.photo img{width:96px;height:96px;object-fit:contain;background:#fff;border-radius:10px}
+.clist{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:.3rem;margin-bottom:.6rem}
+.pv{overflow:hidden}.pv .fp{transform-origin:top left}
+/* Ficha A4 (modelo do PDF) */
+.fp{width:794px;box-sizing:border-box;padding:48px 60px;background:#fff;color:#0f172a;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.fp h1{margin:0 0 16px;padding-bottom:14px;text-align:center;font-size:25px;border-bottom:2px solid #0f172a}
+.fp-row{display:grid;gap:14px;margin-bottom:14px}
+.fp-row.fp-top{grid-template-columns:1fr 1fr;height:292px}
+.fp-row.fp-bottom{grid-template-columns:325fr 439fr;min-height:325px}
+.fp-box{border:2px solid #0f172a;border-radius:10px;padding:12px;overflow:hidden;box-sizing:border-box}
+.fp-box h2{margin:0 0 12px;padding-bottom:6px;border-bottom:3px solid #2563eb;font-size:15px;letter-spacing:.03em}
+.fp-photo{display:flex;flex-direction:column;padding:8px}
+.fp-img{flex:1;min-height:0;display:grid;place-items:center}
+.fp-img img{max-width:100%;max-height:100%;object-fit:contain}
+.fp-ca{margin-top:8px;padding:8px;background:#0f172a;color:#fff;text-align:center;font-weight:700;font-size:20px;letter-spacing:.06em;border-radius:6px}
+.fp ol{margin:0;padding:0;list-style:none;counter-reset:n}
+.fp ol li{counter-increment:n;margin:0 0 10px;font-weight:700;font-size:16px}
+.fp ol li::before{content:counter(n) ". "}
+.fp ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.35}.fp ul li{margin-bottom:12px}
+.fp-chips{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.fp-chips span{padding:5px 0;background:#eef3fb;border:1px solid #d5deee;border-radius:5px;text-align:center;font-weight:700;font-size:11px}
+.fp-rev{width:270px;margin:0 0 0 auto;padding:6px 10px;border:1.5px solid #0f172a;border-radius:6px;text-align:center;font-weight:700;font-size:16px}
+/* Impressão: só a ficha, em A4 */
+#printArea{display:none}
+@media print{@page{size:A4;margin:0}body>*:not(#printArea){display:none!important}#printArea{display:block}body{display:block;background:#fff}}
