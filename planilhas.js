@@ -7,6 +7,25 @@ CFO.readBook = async file => {
   return wb.SheetNames.map(n => ({ sheet: n, data: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '', blankrows: false }) }));
 };
 
+// Procura o cabeçalho (em qualquer linha) e reconhece colunas por nome/apelido. Devolve {hi, m, n}
+CFO.findHeader = (data, columns, min = 2) => {
+  const norm = CFO.norm, names = c => [c.label, ...(c.alias || [])].map(norm);
+  const mapCols = hdr => {
+    const m = {}, used = new Set(), h = hdr.map(norm);
+    [true, false].forEach(exact => columns.forEach(c => {
+      if (m[c.k] !== undefined) return;
+      const i = h.findIndex((x, j) => x && !used.has(j) && names(c).some(n => exact ? x === n : x.includes(n)));
+      if (i >= 0) { m[c.k] = i; used.add(i); }
+    }));
+    return m;
+  };
+  for (let i = 0; i < Math.min(data.length, 100); i++) {
+    const m = mapCols(data[i]), n = Object.keys(m).length;
+    if (n >= min) return { hi: i, m, n };
+  }
+  return { hi: -1, m: {}, n: 0 };
+};
+
 CFO.sheet = cfg => {
   const K = cfg.key, first = cfg.columns.find(c => c.k === cfg.nameKey) || cfg.columns[0], norm = CFO.norm;
   const dk = r => (cfg.dedupe || cfg.columns.map(c => c.k)).map(k => norm(r[k])).join('|');
@@ -22,24 +41,8 @@ CFO.sheet = cfg => {
     return d;
   };
 
-  /* --- Leitura inteligente: acha o cabeçalho em qualquer linha e reconhece colunas por nome/apelido --- */
-  const names = c => [c.label, ...(c.alias || [])].map(norm);
-  const mapCols = hdr => {
-    const m = {}, used = new Set(), h = hdr.map(norm);
-    [true, false].forEach(exact => cfg.columns.forEach(c => {
-      if (m[c.k] !== undefined) return;
-      const i = h.findIndex((x, j) => x && !used.has(j) && names(c).some(n => exact ? x === n : x.includes(n)));
-      if (i >= 0) { m[c.k] = i; used.add(i); }
-    }));
-    return m;
-  };
-  const findHeader = data => {
-    for (let i = 0; i < Math.min(data.length, 100); i++) {
-      const m = mapCols(data[i]), n = Object.keys(m).length;
-      if (n >= Math.min(2, cfg.columns.length)) return { hi: i, m, n };
-    }
-    return { hi: -1, m: {}, n: 0 };
-  };
+  /* --- Leitura inteligente (cabeçalho em qualquer linha, colunas por nome) --- */
+  const findHeader = data => CFO.findHeader(data, cfg.columns, Math.min(2, cfg.columns.length));
   const score = data => findHeader(data).n;           // quantas colunas reconhecidas (usado para rotear a pasta)
   const importData = data => {                        // grava direto no armazenamento
     let { hi, m } = findHeader(data);

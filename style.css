@@ -90,3 +90,12 @@ dialog label>*{margin-top:.25rem;color:var(--text)}
 /* Impressão: só a ficha, em A4 */
 #printArea{display:none}
 @media print{@page{size:A4;margin:0}body>*:not(#printArea){display:none!important}#printArea{display:block}body{display:block;background:#fff}}
+
+/* ===== 11. Requisições e EPIs por contrato ===== */
+.sec{margin:1.4rem 0 .6rem;font-size:1rem}
+details{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:.6rem .8rem;margin-bottom:.5rem}
+summary{cursor:pointer}details .tw{margin-top:.6rem}
+.chk{display:flex;align-items:center;gap:.4rem;color:var(--muted);font-size:.85rem}.chk input{width:auto}
+/* Tabelas: nome do item quebra em várias linhas (cabe melhor no celular) */
+td:first-child{white-space:normal;min-width:130px}
+.tw table{font-size:.82rem}.tw th,.tw td{padding:.5rem .45rem}

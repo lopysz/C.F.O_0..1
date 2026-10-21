@@ -3,7 +3,7 @@
 CFO.modules.contratos = CFO.sheet({
   key: 'contratos', title: 'Contratos ativos', hints: ['contrato'], nameKey: 'nome', dedupe: ['num', 'nome'],
   columns: [
-    { k: 'num', label: 'N° Contrato', alias: ['numero', 'n contrato', 'nº', 'contrato n'] },
+    { k: 'num', label: 'N° Contrato', alias: ['numero', 'n contrato', 'contrato n'] },
     { k: 'nome', label: 'Contrato', alias: ['contratos', 'descricao', 'nome', 'cliente'] },
     { k: 'ini', label: 'Início', type: 'date', alias: ['inicio', 'data inicio'] },
     { k: 'fim', label: 'Término', type: 'date', alias: ['termino', 'vencimento', 'data fim'] },

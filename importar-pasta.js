@@ -18,7 +18,7 @@ CFO.importFiles = async files => {
       const name = f.name + (sheets.length > 1 ? ` (${s.sheet})` : '');
       if (!best) { lines.push([name, 'Tipo de planilha não reconhecido']); continue; }
       const r = best.importData(s.data);
-      lines.push([name, `${best.cfg.title}: ${r.add} novo(s)` + (r.dup ? `, ${r.dup} duplicado(s) ignorado(s)` : '')]);
+      lines.push([name, `${best.cfg.title}: ${r.add} novo(s)` + (r.upd ? `, ${r.upd} atualizada(s)` : '') + (r.dup ? `, ${r.dup} duplicado(s) ignorado(s)` : '')]);
     }
   }
   if (!lines.length) lines.push(['Nenhuma planilha (.xlsx, .xls, .csv) encontrada', '']);
