@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C.F.O - Caixa de Ferramentas Operacional</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><div><h1>C.F.O</h1><p>Caixa de Ferramentas Operacional</p></div><button id="impPasta" class="ghost">Importar pasta</button></header>
+<main id="home"></main>
+<div id="screens"></div>
+
+<!-- Biblioteca para importar/exportar planilhas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Núcleo (manter nesta ordem) -->
+<script src="core.js"></script>
+<script src="planilhas.js"></script>
+<script src="importar-pasta.js"></script>
+
+<!-- Funções: um arquivo para cada. Para criar uma nova, adicione uma linha aqui -->
+<script src="epi.js"></script>
+<script src="contratos.js"></script>
+<script src="foto-separacao.js"></script>
+<script src="gerador-identificacao.js"></script>
+
+<!-- Gavetas e inicialização (sempre por último) -->
+<script src="app.js"></script>
+</body>
+</html>
