@@ -62,10 +62,10 @@
   const tile = (t, v, sub = '') => `<div class="card"><small>${t}</small><b>${v}</b>${sub}</div>`;
 
   CFO.modules.controle_gastos = body => {
-    let aba = 'fin', f = { c: '', s: '' }, det = {}, ultimo = null;
+    let aba = 'fin', f = { c: '', s: '', v: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
     body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tlog" class="ghost">Logística</button></div>
-      <div class="bar"><select id="fc"></select><select id="fs"></select>${P.html()}${CFO.motivo.html()}
+      <div class="bar"><select id="fc"></select><select id="fs"></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select>${P.html()}${CFO.motivo.html()}
         <label class="chk" id="metaL">Meta mensal (R$) <input id="meta" type="number" min="0" step="any" title="Meta mensal de gasto (opcional)" style="width:8rem"></label>
         <span class="exp"><button id="xls" class="ghost" title="Baixar o que está na tela em Excel">Exportar Excel</button><button id="pdf" class="ghost" title="Gerar PDF do que está na tela">Exportar PDF</button></span></div>
       <div id="out"></div>`;
@@ -103,7 +103,7 @@
       const totV = rs.reduce((a, r) => a + valor(r), 0), totQ = rs.reduce((a, r) => a + qtd(r), 0);
 
       const grp = (lista, ch, nm) => { const mp = new Map(); lista.forEach(r => { const k = ch(r), x = mp.get(k) || { k, nome: nm(r), n: 0, valor: 0, qtd: 0 }; x.n++; x.valor += valor(r); x.qtd += qtd(r); mp.set(k, x); }); return [...mp.values()]; };
-      const porContrato = campo => grp(rs, r => r.contrato, r => r.contrato + (r.contratoNome ? ' - ' + r.contratoNome : '')).sort((a, b) => b[campo] - a[campo]);
+      const porContrato = campo => grp(rs, r => r.contrato, r => r.contrato + (r.contratoNome ? ' - ' + r.contratoNome : '')).filter(x => !f.v || x.valor > 0).sort((a, b) => b[campo] - a[campo]);
       const porSol = campo => grp(rs, r => r.sol || '(sem nome)', r => r.sol || '(sem nome)').sort((a, b) => b[campo] - a[campo]);
       const itens = new Map();
       rs.forEach(r => r.itens.forEach(i => { const x = itens.get(i.item) || { nome: i.item, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; itens.set(i.item, x); }));
@@ -292,6 +292,7 @@
     $('#tlog').onclick = () => { aba = 'log'; render(); };
     $('#fc').onchange = e => { f.c = e.target.value; opcoes(); render(); };
     $('#fs').onchange = e => { f.s = e.target.value; render(); };
+    $('#fv').onchange = e => { f.v = e.target.value; render(); };
     $('#fm').onchange = $('#fa').onchange = $('#ft').onchange = render;
     $('#meta').oninput = e => { CFO.store.set('meta_mensal', +e.target.value || 0); render(); };
     opcoes(); render();

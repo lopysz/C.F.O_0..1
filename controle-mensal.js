@@ -54,10 +54,10 @@
   };
 
   CFO.modules.controle_mensal = body => {
-    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0 }, det = {}, ultimo = null;
+    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0, v: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
     body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tprev" class="ghost">Previsão</button><button id="taud" class="ghost">Auditoria</button></div>
-      <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
+      <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select><select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
         <span class="exp"><button id="xls" class="ghost">Exportar Excel</button><button id="pdf" class="ghost">Exportar PDF</button></span></div>
       <div id="out"></div>`;
     const $ = s => body.querySelector(s);
@@ -92,12 +92,14 @@
         const k = key(r); c.v.set(k, (c.v.get(k) || 0) + valor(r)); c.q.set(k, (c.q.get(k) || 0) + qtd(r)); c.reqs.push(r);
       });
       nomes.forEach((nm, num) => { if (!ctr.has(num) && (!f.c || f.c === num)) ctr.set(num, novo(num, nm)); });
-      const stats = [...ctr.values()].sort((a, b) => numCmp(a.num, b.num)).map(c => {
+      const todos = [...ctr.values()].sort((a, b) => numCmp(a.num, b.num)).map(c => {
         let passado = 0, prog = 0; c.v.forEach((v, k) => { if (k < cur) passado += v; else if (k > cur) prog += v; });
         const atual = c.v.get(cur) || 0, proj = projetar(c.v), teto = +(cfg[c.num] || {}).teto || 0, trab = +(cfg[c.num] || {}).trab || 0;
         const sit = !teto ? 'Sem teto' : atual > teto ? 'Acima' : proj[0] > teto ? 'Previsto acima' : atual >= teto * .8 ? 'Atenção' : 'Dentro';
         return { c, passado, atual, prog, proj, prev: proj.reduce((a, b) => a + b, 0), media: media3(c.v), teto, trab, sit };
       });
+      // Filtro "Só com valor": esconde contratos sem nenhum valor (passado, atual, programado e previsão zerados)
+      const stats = f.v ? todos.filter(s => s.passado + s.atual + s.prog + s.prev > 0) : todos;
       const soma = fn => stats.reduce((a, s) => a + fn(s), 0);
 
       // linha do tempo: até 12 meses para trás + próximos meses da previsão
@@ -147,7 +149,7 @@
         const opMes = [...new Set([cur, ...reqs.map(key)])].filter(k => k <= add(cur, H)).sort((a, b) => b - a);
         const seletor = `<select id="fr" aria-label="Mês de referência">${opMes.map(k => `<option value="${k}" ${k === mr ? 'selected' : ''}>${lbl(k)}</option>`).join('')}</select>`;
         const params = `<div class="tw scroll"><table><thead><tr><th>Contrato</th><th>Teto mensal (R$)</th><th>Trabalhadores</th></tr></thead><tbody>
-          ${stats.map(s => `<tr><td>${esc(nomeC(s.c))}</td><td><input type="number" min="0" step="any" data-c="${esc(s.c.num)}" data-k="teto" value="${s.teto || ''}" placeholder="Sem teto"></td>
+          ${todos.map(s => `<tr><td>${esc(nomeC(s.c))}</td><td><input type="number" min="0" step="any" data-c="${esc(s.c.num)}" data-k="teto" value="${s.teto || ''}" placeholder="Sem teto"></td>
             <td><input type="number" min="0" step="1" data-c="${esc(s.c.num)}" data-k="trab" value="${s.trab || ''}" placeholder="-"></td></tr>`).join('') || '<tr><td colspan="3" class="empty">Sem contratos</td></tr>'}</tbody></table></div>`;
         const chartHtml = grafico(meses, meses.map(totMes), meses.map(corMes), unico ? unico.teto : 0);
         fat.pre = seletor;
@@ -257,7 +259,7 @@
     const txtSel = id => { const e = $(id); return e && e.selectedOptions[0] ? e.selectedOptions[0].text : ''; };
     const agora = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
     const titulo = () => 'Controle de mensal - ' + { fin: 'Financeiro', prev: 'Previsão', aud: 'Auditoria' }[ultimo.aba];
-    const filtros = () => [['Contrato', txtSel('#fc')], ['Tipo', txtSel('#ft')], ['Previsão', txtSel('#fh')], ...(ultimo.aba === 'fin' ? [['Mês de referência', lbl(f.m || curKey())]] : [])];
+    const filtros = () => [['Contrato', txtSel('#fc')], ['Tipo', txtSel('#ft')], ['Previsão', txtSel('#fh')], ['Valores', txtSel('#fv')], ...(ultimo.aba === 'fin' ? [['Mês de referência', lbl(f.m || curKey())]] : [])];
     const cel = (v, t) => v === '' || v == null ? '' : t === '$' ? { t: 'n', v: +v, z: '"R$" #,##0.00' } : t === 'n' ? { t: 'n', v: +v, z: '#,##0.0' } : t === '%' ? { t: 'n', v: +v, z: '0.0%' } : t === 'c' ? (v.ok ? 'Sim' : 'Não') : String(v);
     const usados = new Set();
     const aba31 = nome => { let n = nome.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31).trim() || 'Planilha', i = 2; while (usados.has(n)) n = n.slice(0, 28) + ' ' + i++; usados.add(n); return n; };
@@ -294,6 +296,7 @@
     $('#tfin').onclick = () => { aba = 'fin'; render(); }; $('#tprev').onclick = () => { aba = 'prev'; render(); }; $('#taud').onclick = () => { aba = 'aud'; render(); };
     $('#fc').onchange = e => { f.c = e.target.value; render(); };
     $('#ft').onchange = e => { f.t = e.target.value; render(); };
+    $('#fv').onchange = e => { f.v = e.target.value; render(); };
     $('#fh').onchange = e => { f.h = +e.target.value; render(); };
     opcoes(); render();
   };
