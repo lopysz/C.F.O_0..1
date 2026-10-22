@@ -30,11 +30,33 @@ DRAWERS.forEach(d => {
   home.append(b);
 });
 
-// Botão "Importar pasta" (topo): escolhe uma pasta e distribui as planilhas
-const pick = document.createElement('input');
-pick.type = 'file'; pick.multiple = true; pick.hidden = true; pick.setAttribute('webkitdirectory', '');
-document.body.append(pick);
-document.getElementById('impPasta').onclick = () => pick.click();
-pick.onchange = async () => { const f = [...pick.files]; pick.value = ''; await CFO.importFiles(f); };
-document.getElementById('impDrive').onclick = e => CFO.importDrive(e.currentTarget);
-document.getElementById('cfgDrive').onclick = () => CFO.driveConfig();
+// Botão "Importar planilhas" (topo): escolhe de onde vêm as planilhas e distribui cada uma para a função certa
+const input = (extra = {}) => {
+  const e = document.createElement('input');
+  e.type = 'file'; e.multiple = true; e.hidden = true; Object.entries(extra).forEach(([k, v]) => e.setAttribute(k, v));
+  e.onchange = async () => { const f = [...e.files]; e.value = ''; await CFO.importFiles(f); };
+  document.body.append(e); return e;
+};
+const pickPasta = input({ webkitdirectory: '' });
+// No celular/tablet, o seletor de arquivos do sistema lista também o Google Drive
+const pickArquivos = input({ accept: '.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv' });
+
+document.getElementById('imp').onclick = () => {
+  const d = document.createElement('dialog'); d.className = 'imp';
+  d.innerHTML = `<form method="dialog"><h3>Importar planilhas</h3>
+    <button type="button" data-a="pasta">📁 Pasta do dispositivo</button>
+    <button type="button" data-a="arq">📄 Arquivos (dispositivo ou Google Drive)</button>
+    <p class="log">No celular, ao escolher "Arquivos", o menu do Android/iPhone mostra o Google Drive junto com as pastas do aparelho. No computador, abra a pasta do Drive sincronizada.</p>
+    <button type="button" data-a="drive">☁ Google Drive pela conta (pasta inteira)</button>
+    <button type="button" data-a="cfg" class="ghost">⚙ Configurar Google Drive</button>
+    <button value="cancel" class="ghost" formnovalidate>Cancelar</button></form>`;
+  d.onclose = () => d.remove();
+  d.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
+    const a = b.dataset.a; d.close();
+    if (a === 'pasta') pickPasta.click();
+    else if (a === 'arq') pickArquivos.click();
+    else if (a === 'drive') CFO.importDrive(b);
+    else CFO.driveConfig();
+  });
+  document.body.append(d); d.showModal();
+};

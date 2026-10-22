@@ -110,12 +110,13 @@ summary.sum .val{color:var(--accent);font-weight:700;white-space:nowrap;margin-l
 /* ===== 12. Controle de gastos ===== */
 .tabs{display:flex;gap:.5rem;margin-bottom:.8rem}.tabs button.on{background:var(--accent);border-color:var(--accent)}
 .chart svg{display:block;max-width:none}
-.hbars{display:grid;gap:.4rem;margin-bottom:.8rem}
-.hb{display:grid;grid-template-columns:minmax(90px,36%) 1fr auto;gap:.6rem;align-items:center;font-size:.82rem}
-.hl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ht{height:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+/* Ranking: nome completo (quebra em linhas) + valor na mesma linha, barra embaixo */
+.hbars{display:grid;gap:.7rem;margin-bottom:.8rem}
+.hb{display:grid;grid-template-columns:1fr auto;column-gap:.6rem;row-gap:.25rem;align-items:baseline;font-size:.82rem}
+.hl{grid-column:1;overflow-wrap:anywhere;line-height:1.25}
+.hv{grid-column:2;color:var(--muted);white-space:nowrap;text-align:right}
+.ht{grid-column:1/-1;height:.55rem;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .ht i{display:block;height:100%;background:var(--accent)}
-.hv{color:var(--muted);white-space:nowrap}
 .tw+h3.sec{margin-top:1.6rem}
 .topbtns{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:flex-end}
 .chart{margin-bottom:.8rem}
@@ -146,7 +147,37 @@ table.heat td{text-align:center;font-size:.75rem;min-width:52px}table.heat td:fi
 .sit{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:.5rem;text-align:center}
 .sit>div{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:.5rem .3rem}.sit b{display:block;font-size:1.3rem;margin-bottom:.2rem}
 .urg{margin-top:.7rem;display:grid;gap:.35rem;font-size:.82rem}
-.urg>div{display:flex;justify-content:space-between;gap:.6rem;border-bottom:1px solid var(--line);padding-bottom:.3rem}
-.urg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.urg small{color:var(--muted);white-space:nowrap}
+.urg>div{display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem;border-bottom:1px solid var(--line);padding-bottom:.3rem}
+.urg span{overflow-wrap:anywhere}.urg small{color:var(--muted);text-align:right}
 @media(max-width:860px){.pn.w8,.pn.w4,.pn.w6{grid-column:span 12}}
 [hidden]{display:none!important}
+
+/* ===== Exportar (Excel/PDF) e importar ===== */
+.bar .exp{margin-left:auto;display:flex;gap:.5rem}
+dialog.imp button{display:block;width:100%;margin-top:.5rem;text-align:left}
+dialog.imp .log{margin:.2rem 0 .6rem}
+dialog.imp button.ghost{text-align:center}
+/* Relatório de impressão do Controle de gastos (A4 paisagem) */
+.rel{font-family:Arial,Helvetica,sans-serif;color:#0f172a;background:#fff;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.rel h1{font-size:16pt;margin:0 0 .2rem}.rel h2{font-size:12pt;margin:1rem 0 .4rem;border-bottom:2px solid #2563eb;padding-bottom:.2rem}.rel h3{font-size:10.5pt;margin:0;break-after:avoid}
+.rel .meta{color:#475569;font-size:9pt;margin:.15rem 0}
+.rel .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:.6rem 0}
+.rel .card{background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;break-inside:avoid}
+.rel .card small{color:#475569;font-size:8pt}.rel .card b{font-size:12pt;color:#0f172a;margin-top:2px}
+.rel .dash{display:grid;grid-template-columns:repeat(12,1fr);gap:8px;grid-auto-flow:dense}
+.rel .pn{grid-column:span 6;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:8px;break-inside:avoid}
+.rel .pn.w8,.rel .pn.w12{grid-column:span 12}
+.rel .pn>header{margin-bottom:6px}.rel .pn>header small{color:#475569}
+.rel .tw{overflow:visible;border:0}
+.rel .tw svg{min-width:0!important;width:100%!important;max-width:100%}
+.rel .legend{color:#475569}
+.rel table{font-size:8pt}.rel th,.rel td{white-space:normal;border-bottom:1px solid #e2e8f0;padding:3px 5px;color:#0f172a}
+.rel th{background:#e2e8f0;color:#334155}.rel thead{display:table-header-group}.rel tr{break-inside:avoid}
+.rel table.heat td{min-width:0;font-size:7pt}
+.rel .ht{background:#e2e8f0;border-color:#cbd5e1}.rel .hv{color:#475569}
+.rel .sit>div{background:#f8fafc;border-color:#cbd5e1}
+.rel .urg>div{border-color:#e2e8f0}.rel .urg small{color:#475569}
+.rel .tag{color:#475569;border-color:#94a3b8}.rel .tag.bad{color:#b91c1c;border-color:#b91c1c}.rel .tag.warn{color:#b45309;border-color:#b45309}.rel .tag.ok{color:#15803d;border-color:#15803d}
+.rel .up{color:#15803d}.rel .down{color:#b91c1c}
+.rel .log{color:#475569;font-size:8pt}
+.rel .sub{margin:.8rem 0 .3rem;font-size:10.5pt;font-weight:700;break-after:avoid}

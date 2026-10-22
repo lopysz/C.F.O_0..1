@@ -23,7 +23,7 @@
   // bars: [{nome, cor, vals}] · lines: [{nome, cor, vals, dash, pct}] · cats: rótulos. pct = linha no eixo da direita (0-100%)
   const chart = ({ cats, bars = [], lines = [], fmt = curto, rot = false, rotulos = true }) => {
     if (!cats.length) return '<p class="empty">Sem dados no período.</p>';
-    const n = cats.length, hasPct = lines.some(l => l.pct), L = 46, R = hasPct ? 42 : 12, T = 14, B = rot ? 78 : 30, H = 250 + (rot ? 20 : 0);
+    const n = cats.length, hasPct = lines.some(l => l.pct), L = 46, R = hasPct ? 42 : 12, T = 14, B = rot ? 96 : 30, H = 250 + (rot ? 38 : 0);
     const W = Math.max(640, n * (bars.length > 1 ? 74 : 54) + L + R), base = H - B, gw = (W - L - R) / n;
     const max = Math.max(1, ...bars.flatMap(b => b.vals), ...lines.filter(l => !l.pct).flatMap(l => l.vals));
     const mag = 10 ** Math.floor(Math.log10(max)), top = [1, 2, 2.5, 5, 10].map(m => m * mag).find(m => m >= max) || max;
@@ -44,7 +44,7 @@
         + (l.dash ? '' : pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${l.cor}"><title>${esc(cats[i])} • ${esc(l.nome)}: ${esc(l.pct ? pct(p[2]) : fmt(p[2]))}</title></circle>`).join(''));
     }).join('');
     const rotulosX = cats.map((c, i) => rot
-      ? `<text transform="translate(${cx(i)},${base + 12}) rotate(-35)" text-anchor="end" font-size="10" fill="var(--muted)">${esc(c.length > 16 ? c.slice(0, 15) + '…' : c)}</text>`
+      ? `<text transform="translate(${cx(i)},${base + 12}) rotate(-35)" text-anchor="end" font-size="10" fill="var(--muted)"><title>${esc(c)}</title>${esc(c.length > 22 ? c.slice(0, 21) + '…' : c)}</text>`
       : `<text x="${cx(i)}" y="${base + 16}" text-anchor="middle" font-size="10" fill="var(--muted)">${esc(c)}</text>`).join('');
     const leg = [...bars, ...lines].map(s => `<span><i style="background:${s.cor}"></i>${esc(s.nome)}</span>`).join('');
     return `<div class="legend">${leg}</div><div class="tw chart"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:560px;height:auto" role="img">${grade}${barras}${linhas}${rotulosX}</svg></div>`;
@@ -54,19 +54,20 @@
   const ranking = (dados, fmt) => {
     if (!dados.length) return '<p class="empty">Sem dados no período.</p>';
     const max = Math.max(...dados.map(d => d.v), 1);
-    return `<div class="hbars">${dados.map(d => `<div class="hb"><span class="hl" title="${esc(d.rot)}">${esc(d.rot)}</span>
-      <span class="ht"><i style="width:${Math.max(2, 100 * d.v / max)}%"></i></span><span class="hv">${fmt(d.v)}${d.extra ? ' · ' + d.extra : ''}</span></div>`).join('')}</div>`;
+    return `<div class="hbars">${dados.map(d => `<div class="hb"><span class="hl">${esc(d.rot)}</span><span class="hv">${fmt(d.v)}${d.extra ? ' · ' + d.extra : ''}</span>
+      <span class="ht"><i style="width:${Math.max(2, 100 * d.v / max)}%"></i></span></div>`).join('')}</div>`;
   };
   const tab = (cab, linhas) => `<div class="tw"><table><thead><tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${linhas.join('') || `<tr><td colspan="${cab.length}" class="empty">Sem dados</td></tr>`}</tbody></table></div>`;
   const delta = (atual, ant) => ant ? `<small class="${atual > ant ? 'up' : atual < ant ? 'down' : ''}">${atual > ant ? '▲' : atual < ant ? '▼' : '='} ${pct(Math.abs(atual - ant) / ant)} vs mês anterior</small>` : '<small>sem mês anterior para comparar</small>';
   const tile = (t, v, sub = '') => `<div class="card"><small>${t}</small><b>${v}</b>${sub}</div>`;
 
   CFO.modules.controle_gastos = body => {
-    let aba = 'fin', f = { c: '', s: '' }, det = {};
+    let aba = 'fin', f = { c: '', s: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
     body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tlog" class="ghost">Logística</button></div>
       <div class="bar"><select id="fc"></select><select id="fs"></select>${P.html()}
-        <label class="chk" id="metaL">Meta mensal (R$) <input id="meta" type="number" min="0" step="any" title="Meta mensal de gasto (opcional)" style="width:8rem"></label></div>
+        <label class="chk" id="metaL">Meta mensal (R$) <input id="meta" type="number" min="0" step="any" title="Meta mensal de gasto (opcional)" style="width:8rem"></label>
+        <span class="exp"><button id="xls" class="ghost" title="Baixar o que está na tela em Excel">Exportar Excel</button><button id="pdf" class="ghost" title="Gerar PDF do que está na tela">Exportar PDF</button></span></div>
       <div id="out"></div>`;
     const $ = s => body.querySelector(s);
     const todas = () => CFO.store.get('requisicoes', []);
@@ -116,6 +117,7 @@
       const { kpis, paineis } = aba === 'fin' ? financeiro() : logistica();
       $('#out').innerHTML = `<div class="cards kpis">${kpis.join('')}</div><div class="dash">${paineis}
         <section class="pn w12"><header><h3>Detalhamento</h3><div class="subtabs" id="subtabs"></div></header><div id="det" class="scroll"></div></section></div>${aviso}`;
+      ultimo = { aba, kpis, paineis, detalhes, filtros: filtrosAtuais() };
       const nomes = Object.keys(detalhes);
       if (!nomes.includes(det[aba])) det[aba] = nomes[0];
       const drawDet = () => {
@@ -226,6 +228,66 @@
       }
     }
 
+    /* ---------- Exportar o que está na tela (respeita contrato, solicitante, mês, ano e a aba) ---------- */
+    const txtSel = id => { const e = $(id); return e && e.selectedOptions[0] ? e.selectedOptions[0].text : ''; };
+    function filtrosAtuais() {
+      const meta = +CFO.store.get('meta_mensal', 0) || 0;
+      return [['Contrato', txtSel('#fc')], ['Solicitante', txtSel('#fs')], ['Mês', txtSel('#fm')], ['Ano', txtSel('#fa')],
+        ...(aba === 'fin' && meta ? [['Meta mensal', R$(meta)]] : [])];
+    }
+    const agora = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    const tituloRel = () => 'Controle de gastos - ' + (ultimo.aba === 'fin' ? 'Financeiro' : 'Logística');
+    const dom = html => { const d = document.createElement('div'); d.innerHTML = html; return d; };
+    const COLS_TEXTO = ['Contrato', 'Código', 'EPI', 'Solicitante', 'Mês'];
+    const num = t => parseFloat(t.replace(/\./g, '').replace(',', '.'));
+    // Converte o texto da célula (formato pt-BR) em número do Excel, para dar para somar/ordenar
+    function celula(td, col) {
+      const t = td.textContent.replace(/\s+/g, ' ').trim(), ti = td.getAttribute('title') || '';
+      if (!t) return '';
+      if (/^R\$/.test(ti)) return { t: 'n', v: num(ti.replace(/^R\$\s*/, '')), z: '"R$" #,##0.00' };   // mapa de calor
+      if (COLS_TEXTO.includes(col)) return t;
+      let m = t.match(/^R\$\s*(-?[\d.]+,\d+)$/); if (m) return { t: 'n', v: num(m[1]), z: '"R$" #,##0.00' };
+      m = t.match(/^([▲▼])?\s*(-?[\d.]+(?:,\d+)?)%$/); if (m) return { t: 'n', v: (m[1] === '▼' ? -1 : 1) * num(m[2]) / 100, z: '0.0%' };
+      if (/^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?$/.test(t) && !/^0\d/.test(t)) return { t: 'n', v: num(t), z: t.includes(',') ? '#,##0.0' : '#,##0' };
+      return t;
+    }
+    const abaNome = (nome, usados) => { let n = nome.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31).trim() || 'Planilha', i = 2; while (usados.has(n)) n = n.slice(0, 28) + ' ' + i++; usados.add(n); return n; };
+    const largura = aoa => aoa[0].map((_, c) => ({ wch: Math.min(60, Math.max(8, ...aoa.map(r => { const x = r[c]; return String(x && x.t === 'n' ? '99.999,99' : x ?? '').length; }) ) + 2) }));
+
+    function exportarExcel() {
+      if (!ultimo) return;
+      if (typeof XLSX === 'undefined') { alert('A biblioteca de Excel não carregou (verifique a internet) e tente de novo.'); return; }
+      const wb = XLSX.utils.book_new(), usados = new Set();
+      const cards = [...dom(ultimo.kpis.join('')).querySelectorAll('.card')].map(c => { const sm = [...c.querySelectorAll('small')]; return [sm[0].textContent, c.querySelector('b').textContent, sm.slice(1).map(x => x.textContent).join(' ')]; });
+      const resumo = [[tituloRel()], ['Gerado em', agora()], [], ['Filtros aplicados'], ...ultimo.filtros.map(([k, v]) => [k, v]), [], ['Indicador', 'Valor', 'Observação'], ...cards];
+      const ws = XLSX.utils.aoa_to_sheet(resumo); ws['!cols'] = [{ wch: 30 }, { wch: 28 }, { wch: 46 }];
+      XLSX.utils.book_append_sheet(wb, ws, abaNome('Resumo', usados));
+      Object.entries(ultimo.detalhes).forEach(([nome, html]) => {
+        const t = dom(html).querySelector('table'); if (!t) return;
+        const cab = [...t.rows[0].cells].map(c => c.textContent.trim());
+        const aoa = [cab, ...[...t.tBodies[0].rows].map(r => [...r.cells].map((c, i) => celula(c, cab[i])))];
+        if (aoa.length === 2 && aoa[1].length === 1) return;   // "Sem dados"
+        const sh = XLSX.utils.aoa_to_sheet(aoa); sh['!cols'] = largura(aoa);
+        XLSX.utils.book_append_sheet(wb, sh, abaNome(nome, usados));
+      });
+      XLSX.writeFile(wb, `controle-de-gastos-${ultimo.aba === 'fin' ? 'financeiro' : 'logistica'}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    function exportarPDF() {
+      if (!ultimo) return;
+      const limpa = h => h.replace(/var\(--line\)/g, '#cbd5e1').replace(/var\(--muted\)/g, '#475569').replace(/var\(--text\)/g, '#0f172a');
+      const tabelas = Object.entries(ultimo.detalhes).map(([nome, html]) => `<div class="sub">${esc(nome)}</div>${limpa(html)}`).join('');
+      CFO.print(`<style>@page{size:A4 landscape;margin:10mm}</style><div class="rel">
+        <h1>${esc(tituloRel())}</h1>
+        <p class="meta">${ultimo.filtros.filter(x => x[1]).map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' &nbsp;·&nbsp; ')}</p>
+        <p class="meta">Gerado em ${esc(agora())}</p>
+        <div class="cards">${ultimo.kpis.join('')}</div>
+        <div class="dash">${limpa(ultimo.paineis)}</div>
+        <h2>Detalhamento</h2>${tabelas}</div>`);
+    }
+
+    $('#xls').onclick = exportarExcel;
+    $('#pdf').onclick = exportarPDF;
     $('#tfin').onclick = () => { aba = 'fin'; render(); };
     $('#tlog').onclick = () => { aba = 'log'; render(); };
     $('#fc').onchange = e => { f.c = e.target.value; opcoes(); render(); };
