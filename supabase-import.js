@@ -33,11 +33,16 @@ CFO.importSupabase = async () => {
   }
   const files = [], falhas = [];
   for (const p of caminhos) {
-    try {
-      const r = await fetch(`${base}/storage/v1/object/public/${bucket}/${p.split('/').map(encodeURIComponent).join('/')}`);
-      if (!r.ok) throw new Error(r.status);
-      files.push(new File([await r.blob()], p.split('/').pop()));
-    } catch { falhas.push(p); }
+    const enc = p.split('/').map(encodeURIComponent).join('/');
+    let blob = null, erro = '';
+    for (const [tipo, hdr] of [['public', {}], ['authenticated', H]]) {   // 1º público, 2º com a chave (política SELECT)
+      try {
+        const r = await fetch(`${base}/storage/v1/object/${tipo}/${bucket}/${enc}`, { headers: hdr });
+        if (r.ok) { blob = await r.blob(); break; }
+        erro += `${tipo}: ${r.status} `;
+      } catch (e) { erro += `${tipo}: ${e.message} `; }
+    }
+    if (blob) files.push(new File([blob], p.split('/').pop())); else falhas.push(p + '  (' + erro.trim() + ')');
   }
   await CFO.importFiles(files);
   if (falhas.length) alert('Não foi possível baixar:\n' + falhas.join('\n'));
