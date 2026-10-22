@@ -2,14 +2,14 @@
    A "pasta" no Supabase nasce sozinha no primeiro envio (pasta = prefixo do caminho do arquivo).
    Envia um backup .json com TODOS os dados do sistema (EPI, contratos, requisições, metas, etc.).
    Cada envio cria um arquivo novo com data e hora; nada é sobrescrito. */
-CFO.supaEnviar = async (caminho, blob, tipo) => {
+CFO.supaEnviar = async (caminho, blob, tipo, upsert) => {
   const c = window.CFO_SUPABASE || {};
   if (!c.url || !c.bucket || !c.anonKey) throw new Error('Preencha url, bucket e anonKey no supabase-config.js');
   const base = (/^https?:/.test(c.url) ? c.url : `https://${c.url}.supabase.co`).replace(/\/+$/, '');
   const enc = caminho.split('/').map(encodeURIComponent).join('/');
   const r = await fetch(`${base}/storage/v1/object/${encodeURIComponent(c.bucket)}/${enc}`, {
     method: 'POST',
-    headers: { apikey: c.anonKey, Authorization: 'Bearer ' + c.anonKey, 'Content-Type': tipo || blob.type || 'application/octet-stream' },
+    headers: { apikey: c.anonKey, Authorization: 'Bearer ' + c.anonKey, 'Content-Type': tipo || blob.type || 'application/octet-stream', ...(upsert ? { 'x-upsert': 'true' } : {}) },
     body: blob
   });
   if (!r.ok) { let m = ''; try { m = (await r.json()).message || ''; } catch {} throw new Error(`${r.status} ${m}`.trim()); }
@@ -32,4 +32,3 @@ CFO.enviarBackup = async () => {
     alert('Não consegui enviar.\n' + e.message + '\n\nSe for 401/403: falta a política de INSERT no Storage (veja as instruções).');
   }
 };
-document.getElementById('env').onclick = () => { if (confirm('Enviar um backup de todos os dados para o Supabase?')) CFO.enviarBackup(); };
