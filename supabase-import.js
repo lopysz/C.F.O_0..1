@@ -7,7 +7,7 @@ CFO.importSupabase = async () => {
   const base = (/^https?:/.test(c.url) ? c.url : `https://${c.url}.supabase.co`).replace(/\/+$/, ''), bucket = encodeURIComponent(c.bucket);
   const H = c.anonKey ? { apikey: c.anonKey, Authorization: 'Bearer ' + c.anonKey } : {};
   const ehPlanilha = n => /\.(xlsx|xls|csv)$/i.test(n) && !n.startsWith('~$');
-  const caminhos = [];
+  const caminhos = [], vistos = [];
   try {
     if (c.arquivos && c.arquivos.length) c.arquivos.forEach(n => caminhos.push((c.pasta ? c.pasta.replace(/\/+$/, '') + '/' : '') + n));
     else {
@@ -16,7 +16,7 @@ CFO.importSupabase = async () => {
         if (!r.ok) throw new Error('Listagem bloqueada (' + r.status + ')');
         for (const o of await r.json()) {
           const p = (prefix ? prefix + '/' : '') + o.name;
-          if (o.id === null) await listar(p); else if (ehPlanilha(o.name)) caminhos.push(p);
+          if (o.id === null) await listar(p); else { vistos.push(p); if (ehPlanilha(o.name)) caminhos.push(p); }
         }
       };
       await listar((c.pasta || '').replace(/^\/+|\/+$/g, ''));
@@ -25,7 +25,12 @@ CFO.importSupabase = async () => {
     alert('Não consegui listar os arquivos do bucket.\n' + e.message + '\n\nSolução: crie a política de leitura (SELECT) no Storage, ou preencha "arquivos" no supabase-config.js.');
     return;
   }
-  if (!caminhos.length) { alert('Nenhuma planilha encontrada no bucket.'); return; }
+  if (!caminhos.length) {
+    alert(vistos.length
+      ? 'O bucket tem ' + vistos.length + ' arquivo(s), mas nenhum .xlsx/.xls/.csv:\n' + vistos.slice(0, 10).join('\n')
+      : 'A listagem voltou VAZIA. Normalmente é falta da política de leitura (SELECT) no Storage para a role anon, ou o nome do bucket está diferente do que está no Supabase.');
+    return;
+  }
   const files = [], falhas = [];
   for (const p of caminhos) {
     try {
