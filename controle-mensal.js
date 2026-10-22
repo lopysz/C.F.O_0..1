@@ -54,10 +54,10 @@
   };
 
   CFO.modules.controle_mensal = body => {
-    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0 }, ultimo = null;
+    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0 }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
     body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tprev" class="ghost">Previsão</button><button id="taud" class="ghost">Auditoria</button></div>
-      <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fh">${[3, 6, 12].map(n => `<option value="${n}">Previsão: ${n} meses</option>`).join('')}</select>
+      <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
         <span class="exp"><button id="xls" class="ghost">Exportar Excel</button><button id="pdf" class="ghost">Exportar PDF</button></span></div>
       <div id="out"></div>`;
     const $ = s => body.querySelector(s);
@@ -73,7 +73,7 @@
 
     function render() {
       ['fin', 'prev', 'aud'].forEach(a => $('#t' + a).classList.toggle('on', aba === a));
-      const cur = curKey(), H = f.h, key = r => P.key(r.mes), mr = f.m || cur;
+      const cur = curKey(), H = f.h, hTxt = H === 1 ? '1 mês' : H + ' meses', key = r => P.key(r.mes), mr = f.m || cur;
       const cfg = CFO.store.get('mensal:cfg', {}), comp = CFO.store.get('mensal:comprov', {});
       const base = CFO.store.get('requisicoes', []).filter(r => (!f.c || r.contrato === f.c) && CFO.motivo.fn(f.t)(r));
       const reqs = base.filter(key), semMes = base.length - reqs.length;
@@ -115,12 +115,12 @@
           { t: 'Realizado (meses passados)', v: R$(soma(s => s.passado)) },
           { t: `Mês atual (${lbl(cur)})`, v: R$(vAt), s: vAnt ? `${vAt > vAnt ? '▲' : vAt < vAnt ? '▼' : '='} ${pct(Math.abs(vAt - vAnt) / vAnt)} vs mês anterior` : 'sem mês anterior' },
           { t: 'Já programado (planilhas)', v: R$(soma(s => s.prog)), s: 'meses futuros nas requisições' },
-          { t: `Previsão próximos ${H} meses`, v: R$(soma(s => s.prev)), s: 'programado + média' },
+          { t: `Previsão próximos ${hTxt}`, v: R$(soma(s => s.prev)), s: 'programado + média' },
           { t: 'Contratos acima do teto', v: `${acima} de ${comTeto}`, s: comTeto ? 'no mês atual' : 'defina o teto abaixo' },
           { t: 'Maior gasto no mês', v: top && top.atual ? pct(vAt ? top.atual / vAt : 0) : '-', s: top && top.atual ? nomeC(top.c) : '' }];
 
         const porC = { nome: 'Por contrato', scroll: true,
-          cab: [['Contrato', 't'], ['Passado', '$'], [`Mês atual`, '$'], ['Programado', '$'], [`Previsão ${H} meses`, '$'], ['Média mensal', '$'], ['Teto mensal', '$'], ['Atual / teto', '%'], ['Situação', 's']],
+          cab: [['Contrato', 't'], ['Passado', '$'], [`Mês atual`, '$'], ['Programado', '$'], [`Previsão ${hTxt}`, '$'], ['Média mensal', '$'], ['Teto mensal', '$'], ['Atual / teto', '%'], ['Situação', 's']],
           linhas: [...stats.map(s => [nomeC(s.c), s.passado, s.atual, s.prog, s.prev, s.media, s.teto || '', s.teto ? s.atual / s.teto : '', s.sit]),
             ['TOTAL', soma(s => s.passado), vAt, soma(s => s.prog), soma(s => s.prev), soma(s => s.media), '', '', '']] };
 
@@ -136,12 +136,12 @@
           x.q += i.qa; g.set(kk, x);
         }));
         const itensF = [...g.values()].sort((a, b) => numCmp(a.c, b.c) || b.q * b.p - a.q * a.p);
-        const fat = { nome: `Itens a faturar - ${lbl(mr)}`, scroll: true, cab: [['Contrato', 't'], ['Item', 't'], ['Tam.', 't'], ['Qtd', 'n'], ['Preço unit.', '$'], ['Valor', '$']],
+        const fat = { nome: 'Itens a faturar', sheet: `Itens a faturar - ${lbl(mr)}`, pre: '', scroll: true, cab: [['Contrato', 't'], ['Item', 't'], ['Tam.', 't'], ['Qtd', 'n'], ['Preço unit.', '$'], ['Valor', '$']],
           linhas: [...itensF.map(x => [x.c, x.item, x.tam, x.q, x.p, x.q * x.p]), ...(itensF.length ? [['TOTAL', '', '', itensF.reduce((a, x) => a + x.q, 0), '', itensF.reduce((a, x) => a + x.q * x.p, 0)]] : [])] };
 
         const sg = new Map(); let tm = 0;                                  // maiores despesas do mês por solicitante (setor/centro de custo)
         reqs.filter(r => key(r) === mr).forEach(r => { const k = r.sol || '(sem nome)', x = sg.get(k) || { n: 0, q: 0, v: 0, cs: new Set() }; x.n++; x.q += qtd(r); x.v += valor(r); x.cs.add(r.contrato); sg.set(k, x); tm += valor(r); });
-        const sol = { nome: `Maiores despesas por solicitante - ${lbl(mr)}`, scroll: true, cab: [['Solicitante', 't'], ['Contratos', 't'], ['Req.', 'n'], ['Itens', 'n'], ['Valor', '$'], ['% do mês', '%']],
+        const sol = { nome: 'Por solicitante', sheet: `Despesas por solicitante - ${lbl(mr)}`, scroll: true, cab: [['Solicitante', 't'], ['Contratos', 't'], ['Req.', 'n'], ['Itens', 'n'], ['Valor', '$'], ['% do mês', '%']],
           linhas: [...sg].sort((a, b) => b[1].v - a[1].v).map(([k, x]) => [k, [...x.cs].join(', '), x.n, x.q, x.v, tm ? x.v / tm : 0]) };
 
         const opMes = [...new Set([cur, ...reqs.map(key)])].filter(k => k <= add(cur, H)).sort((a, b) => b - a);
@@ -150,10 +150,11 @@
           ${stats.map(s => `<tr><td>${esc(nomeC(s.c))}</td><td><input type="number" min="0" step="any" data-c="${esc(s.c.num)}" data-k="teto" value="${s.teto || ''}" placeholder="Sem teto"></td>
             <td><input type="number" min="0" step="1" data-c="${esc(s.c.num)}" data-k="trab" value="${s.trab || ''}" placeholder="-"></td></tr>`).join('') || '<tr><td colspan="3" class="empty">Sem contratos</td></tr>'}</tbody></table></div>`;
         const chartHtml = grafico(meses, meses.map(totMes), meses.map(corMes), unico ? unico.teto : 0);
-        return { kpis, chartHtml, secoes: [porC, piv, fat, sol],
-          paineis: [painel('Mensais por mês', chartHtml, 'realizado, mês atual, programado e previsão'), painel('Por contrato', tabHtml(porC)), painel('Faturamento por mês e contrato', tabHtml(piv), 'o que já foi cobrado e o que está programado'),
-            painel(`Itens a faturar`, seletor + tabHtml(fat), 'confira se cada item enviado entrou na fatura do contrato'), painel('Rastreabilidade: quem mais gasta', tabHtml(sol), `no mês ${lbl(mr)}`),
-            painel('Parâmetros dos contratos', params, 'teto mensal (orçamento) e nº de trabalhadores alocados', 'w12')] };
+        fat.pre = seletor;
+        const rk = stats.filter(s => s.atual > 0).sort((a, b) => b.atual - a.atual).slice(0, 6);
+        const rkHtml = rk.length ? `<div class="hbars">${rk.map(s => `<div class="hb"><span class="hl">${esc(nomeC(s.c))}</span><span class="hv">${R$(s.atual)}${vAt ? ' · ' + pct(s.atual / vAt) : ''}</span><span class="ht"><i style="width:${Math.max(2, 100 * s.atual / rk[0].atual)}%"></i></span></div>`).join('')}</div>` : '<p class="empty">Sem gasto no mês atual.</p>';
+        return { kpis, chartHtml, secoes: [porC, piv, fat, sol, { nome: 'Parâmetros', tela: true, sub: 'teto mensal (orçamento) e nº de trabalhadores alocados em cada contrato', custom: params }],
+          paineis: [painel('Mensais por mês', chartHtml, 'realizado, mês atual, programado e previsão', 'w8'), painel('Maiores gastos no mês', rkHtml, lbl(cur), 'w4')] };
       }
 
       /* ================= PREVISÃO ================= */
@@ -173,18 +174,21 @@
         const kpis = [
           { t: 'Itens em falta ou atenção', v: itens.filter(x => x.sit === 'Falta' || x.sit === 'Atenção').length, s: 'cobertura menor que 2 meses' },
           { t: 'Itens parados / excesso', v: itens.filter(x => x.sit === 'Excesso' || x.sit === 'Sem giro').length, s: 'capital parado em estoque' },
-          { t: `Unidades previstas (${H} meses)`, v: N(itens.reduce((a, x) => a + x.pq, 0)) },
+          { t: `Unidades previstas (${hTxt})`, v: N(itens.reduce((a, x) => a + x.pq, 0)) },
           { t: 'Compra sugerida', v: R$(itens.reduce((a, x) => a + x.val, 0)), s: 'previsão menos estoque, no último preço' }];
-        const tI = { nome: 'Previsão por item', scroll: true, cab: [['EPI', 't'], ['Média/mês', 'n'], [`Previsão ${H} meses`, 'n'], ['Estoque', 'n'], ['Cobertura (meses)', 'n'], ['Sugestão de compra', 'n'], ['Valor estimado', '$'], ['Situação', 's']],
+        const tI = { nome: 'Por item', scroll: true, cab: [['EPI', 't'], ['Média/mês', 'n'], [`Previsão ${hTxt}`, 'n'], ['Estoque', 'n'], ['Cobertura (meses)', 'n'], ['Sugestão de compra', 'n'], ['Valor estimado', '$'], ['Situação', 's']],
           linhas: itens.map(x => [x.nome, x.md, x.pq, x.est ?? '', x.cob ?? '', x.sug, x.val, x.sit]) };
         const mf = Array.from({ length: H }, (_, j) => add(cur, j + 1));
         const tQ = { nome: 'Quantidade por mês', scroll: true, cab: [['EPI', 't'], ...mf.map(k => [lbl(k), 'n'])], linhas: itens.map(x => [x.nome, ...x.proj]) };
-        const tC = { nome: 'Valor previsto por contrato', scroll: true, cab: [['Contrato', 't'], ...mf.map(k => [lbl(k) + (stats.some(s => s.c.v.has(k)) ? ' *' : ''), '$']), ['Total', '$']],
+        const tC = { nome: 'Valor por contrato', scroll: true, cab: [['Contrato', 't'], ...mf.map(k => [lbl(k) + (stats.some(s => s.c.v.has(k)) ? ' *' : ''), '$']), ['Total', '$']],
           linhas: [...stats.map(s => [nomeC(s.c), ...s.proj, s.prev]), ['TOTAL', ...mf.map((_, j) => soma(s => s.proj[j])), soma(s => s.prev)]] };
-        return { kpis, chartHtml: '', secoes: [tI, tQ, tC],
-          paineis: [painel('Previsão de compras e cobertura do estoque', tabHtml(tI), 'cobertura = estoque ÷ média mensal dos últimos 3 meses'),
-            painel('Quantidade prevista por mês', tabHtml(tQ), 'mês com pedido já nas planilhas usa o programado; os demais, a média'),
-            painel('Valor previsto por contrato', tabHtml(tC), '* mês com valores já programados nas planilhas')] };
+        const chartHtml = grafico(meses, meses.map(totMes), meses.map(corMes), 0);
+        const sits = ['Falta', 'Atenção', 'OK', 'Excesso', 'Sem giro', 'Sem cadastro'];
+        const sitHtml = `<div class="sit">${sits.map(t => `<div><b>${itens.filter(x => x.sit === t).length}</b>${t}</div>`).join('')}</div>
+          <div class="urg">${itens.filter(x => x.sit === 'Falta' || x.sit === 'Atenção').slice(0, 5).map(x => `<div><span>${esc(x.nome)}</span><small>${N(x.cob ?? 0)} mês(es) de cobertura</small></div>`).join('')}</div>`;
+        tQ.sub = 'mês com pedido já nas planilhas usa o programado; os demais, a média'; tC.sub = '* mês com valores já programados nas planilhas'; tI.sub = 'cobertura = estoque ÷ média mensal dos últimos 3 meses';
+        return { kpis, chartHtml, secoes: [tI, tQ, tC],
+          paineis: [painel('Gasto previsto por mês', chartHtml, `próximos ${hTxt}`, 'w8'), painel('Situação do estoque', sitHtml, 'cobertura dos itens', 'w4')] };
       }
 
       /* ================= AUDITORIA ================= */
@@ -216,21 +220,30 @@
         const tT = { nome: 'Consumo por trabalhador', scroll: true, cab: [['Contrato', 't'], ['Trabalhadores', 'n'], ['Itens no mês atual', 'n'], ['Itens/trabalhador', 'n'], ['Média 3 meses', 'n'], ['Valor/trabalhador', '$']],
           linhas: stats.map(s => [nomeC(s.c), s.trab || '', s.c.q.get(cur) || 0, s.trab ? (s.c.q.get(cur) || 0) / s.trab : '', s.trab ? media3(s.c.q) / s.trab : '', s.trab ? s.atual / s.trab : '']) };
         const lista = [...passados].sort((a, b) => key(b) - key(a) || numCmp(b.id, a.id)), mostra = lista.slice(0, 150);
-        const tR = { nome: 'Conferência de recibos', scroll: true, cab: [['Requisição', 't'], ['Contrato', 't'], ['Solicitante', 't'], ['Mês', 't'], ['Valor', '$'], ['Recibo conferido', 'c']],
+        const tR = { nome: 'Recibos', scroll: true, cab: [['Requisição', 't'], ['Contrato', 't'], ['Solicitante', 't'], ['Mês', 't'], ['Valor', '$'], ['Recibo conferido', 'c']],
           linhas: mostra.map(r => [r.id, r.contrato, r.sol, lbl(key(r)), valor(r), { id: r.id, ok: !!comp[r.id] }]) };
+        tA.sub = 'duplicidades, consumo fora do padrão, acima do teto e aprovado acima do solicitado'; tT.sub = 'informe o nº de trabalhadores em Financeiro > Parâmetros';
+        tR.sub = (lista.length > 150 ? 'mostrando as 150 mais recentes · ' : '') + 'marque quando o recibo assinado bater com a requisição';
+        const tipos = ['Acima do teto', 'Fora do padrão', 'Duplicidade', 'Aprovado > solicitado'], mx = Math.max(1, ...tipos.map(qtdTipo));
+        const hb = (rot, txt, w) => `<div class="hb"><span class="hl">${esc(rot)}</span><span class="hv">${txt}</span><span class="ht"><i style="width:${w}%"></i></span></div>`;
+        const alHtml = `<div class="hbars">${tipos.map(t => hb(t, qtdTipo(t), Math.max(2, 100 * qtdTipo(t) / mx))).join('')}</div>`;
+        const okN = passados.length - pend, recHtml = `<div class="hbars">${hb('Recibos conferidos', `${okN} de ${passados.length}`, passados.length ? Math.max(2, 100 * okN / passados.length) : 0)}</div>`;
         return { kpis, chartHtml: '', secoes: [tA, tT, tR],
-          paineis: [painel('Alertas', tabHtml(tA), 'duplicidades, consumo fora do padrão, acima do teto e aprovado acima do solicitado'),
-            painel('Consumo por trabalhador', tabHtml(tT), 'informe o nº de trabalhadores em Financeiro > Parâmetros'),
-            painel('Conferência de entrega (ficha de EPI / recibo)', tabHtml(tR), lista.length > 150 ? 'mostrando as 150 mais recentes' : 'marque quando o recibo assinado bater com a requisição')] };
+          paineis: [painel('Alertas por tipo', alHtml, 'últimos 12 meses', 'w6'), painel('Conferência de entrega', recHtml, 'ficha de EPI / recibo assinado', 'w6')] };
       }
 
       const r = aba === 'fin' ? financeiro() : aba === 'prev' ? previsao() : auditoria();
-      $('#out').innerHTML = `<div class="cards kpis">${r.kpis.map(tile).join('')}</div><div class="dash">${r.paineis.join('')}</div>`
+      if (!r.secoes.some(x => x.nome === det[aba])) det[aba] = r.secoes[0].nome;
+      const sec = r.secoes.find(x => x.nome === det[aba]);
+      $('#out').innerHTML = `<div class="cards kpis">${r.kpis.map(tile).join('')}</div><div class="dash">${r.paineis.join('')}
+        <section class="pn w12"><header><h3>Detalhamento</h3><div class="subtabs">${r.secoes.map(x => `<button class="ghost ${x === sec ? 'on' : ''}" data-d="${esc(x.nome)}">${esc(x.nome)}</button>`).join('')}</div></header>
+          ${sec.sub ? `<p class="log" style="margin:0 0 .6rem">${esc(sec.sub)}</p>` : ''}${sec.pre || ''}${sec.custom || tabHtml(sec)}</section></div>`
         + (semMes ? `<p class="log">${semMes} requisição(ões) sem mês reconhecido ficaram de fora.</p>` : '')
         + (!reqs.length ? `<p class="log">Nenhuma requisição do tipo "${esc(f.t || 'TODOS')}" encontrada. Importe as requisições ou troque o tipo no filtro.</p>` : '');
       ultimo = { aba, kpis: r.kpis, chartHtml: r.chartHtml, secoes: r.secoes };
 
       // eventos
+      body.querySelectorAll('.subtabs button').forEach(b => b.onclick = () => keep(() => { det[aba] = b.dataset.d; render(); }));
       const fr = $('#fr'); if (fr) fr.onchange = e => keep(() => { f.m = +e.target.value; render(); });
       body.querySelectorAll('input[data-k]').forEach(el => el.onchange = () => {
         const c = CFO.store.get('mensal:cfg', {}); c[el.dataset.c] = { ...(c[el.dataset.c] || {}), [el.dataset.k]: +el.value || 0 }; CFO.store.set('mensal:cfg', c); keep(render);
@@ -257,11 +270,11 @@
       const resumo = [[titulo()], ['Gerado em', agora()], [], ['Filtros aplicados'], ...filtros(), [], ['Indicador', 'Valor', 'Observação'], ...ultimo.kpis.map(k => [k.t, String(k.v), k.s || ''])];
       const ws = XLSX.utils.aoa_to_sheet(resumo); ws['!cols'] = [{ wch: 30 }, { wch: 28 }, { wch: 46 }];
       XLSX.utils.book_append_sheet(wb, ws, aba31('Resumo'));
-      ultimo.secoes.forEach(s => {
+      ultimo.secoes.filter(x => !x.tela).forEach(s => {
         const aoa = [s.cab.map(c => c[0]), ...s.linhas.map(l => l.map((v, i) => cel(v, s.cab[i][1])))];
         const sh = XLSX.utils.aoa_to_sheet(aoa);
         sh['!cols'] = s.cab.map((c, i) => ({ wch: Math.min(60, Math.max(10, c[0].length, ...s.linhas.map(l => String(typeof l[i] === 'number' ? '99.999,99' : l[i] ?? '').length)) + 2) }));
-        XLSX.utils.book_append_sheet(wb, sh, aba31(s.nome));
+        XLSX.utils.book_append_sheet(wb, sh, aba31(s.sheet || s.nome));
       });
       XLSX.writeFile(wb, `controle-de-mensal-${{ fin: 'financeiro', prev: 'previsao', aud: 'auditoria' }[ultimo.aba]}-${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
@@ -274,7 +287,7 @@
         <p class="meta">${filtros().filter(x => x[1]).map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' &nbsp;·&nbsp; ')}</p><p class="meta">Gerado em ${esc(agora())}</p>
         <div class="cards">${ultimo.kpis.map(tile).join('')}</div>
         ${ultimo.chartHtml ? `<div class="pn w12">${limpa(ultimo.chartHtml)}</div>` : ''}
-        ${ultimo.secoes.map(s => `<div class="sub">${esc(s.nome)}</div>${tabHtml(s, true)}`).join('')}</div>`);
+        ${ultimo.secoes.filter(x => !x.tela).map(s => `<div class="sub">${esc(s.sheet || s.nome)}</div>${tabHtml(s, true)}`).join('')}</div>`);
     }
 
     $('#xls').onclick = exportarExcel; $('#pdf').onclick = exportarPDF;
