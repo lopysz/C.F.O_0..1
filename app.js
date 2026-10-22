@@ -2,33 +2,52 @@
    Para criar uma subgaveta nova: registre o módulo em js/modules/ e adicione { name, m } em subs. */
 const DRAWERS = [
   { name: 'Almoxarifado Operacional', short: 'Almox. Op.',
-    subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos ativos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
-  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Controle de gastos', m: 'controle_gastos' }, { name: 'Controle de mensal', m: 'controle_mensal' }] },
+    subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
+  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Controle de gastos', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
   { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }] }
 ];
 
-// Quadrado central com círculos (subgavetas) ao redor
-function hub(d, body) {
-  const n = 6;
-  body.classList.add('center');
-  body.innerHTML = `<div class="hub"><div class="core">${d.short}</div>${Array.from({ length: n }, (_, i) => {
-    const s = d.subs[i], a = (-90 + i * 360 / n) * Math.PI / 180;
-    return `<button class="orb ${s ? '' : 'off'}" data-i="${i}" style="left:${50 + 36 * Math.cos(a)}%;top:${50 + 36 * Math.sin(a)}%">${s ? s.name : 'Em breve'}</button>`;
-  }).join('')}</div>`;
-  body.querySelectorAll('.orb:not(.off)').forEach(b => b.onclick = () => {
-    const s = d.subs[b.dataset.i];
-    CFO.open(s.name, CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
-  });
+// Abre a função escolhida (tela cheia)
+function abrir(s) {
+  CFO.open(s.name, CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
 }
 
-// Início
+// Início: quadrados na lateral; ao tocar em um, abre um "leque" com as funções ao lado dele
 const home = document.getElementById('home');
+home.classList.add('fanhome');
+let aberto = null;
+function fechar() { if (aberto) { aberto.classList.remove('open'); aberto.querySelector('.drawer').setAttribute('aria-expanded', 'false'); aberto = null; } }
+function posicionar(fan) {            // mantém o leque inteiro dentro da tela
+  fan.style.setProperty('--dy', '0px');
+  const r = fan.getBoundingClientRect(), topo = 70, fim = innerHeight - 12;
+  let dy = 0;
+  if (r.bottom > fim) dy = fim - r.bottom;
+  if (r.top + dy < topo) dy = topo - r.top;
+  fan.style.setProperty('--dy', dy + 'px');
+}
 DRAWERS.forEach(d => {
+  const w = document.createElement('div'); w.className = 'dw';
   const b = document.createElement('button');
-  b.className = 'drawer'; b.textContent = d.name;
-  b.onclick = () => CFO.open(d.name, body => hub(d, body));
-  home.append(b);
+  b.className = 'drawer'; b.textContent = d.name; b.setAttribute('aria-expanded', 'false');
+  const fan = document.createElement('div'); fan.className = 'fan'; fan.setAttribute('role', 'menu');
+  d.subs.forEach((s, i) => {
+    const f = document.createElement('button');
+    f.className = 'fi'; f.textContent = s.name; f.setAttribute('role', 'menuitem'); f.style.setProperty('--i', i);
+    f.onclick = () => { fechar(); abrir(s); };
+    fan.append(f);
+  });
+  b.onclick = e => {
+    e.stopPropagation();
+    const mesmo = aberto === w; fechar();
+    if (mesmo) return;
+    w.classList.add('open'); b.setAttribute('aria-expanded', 'true'); aberto = w; posicionar(fan);
+  };
+  w.append(b, fan); home.append(w);
 });
+// Tocar em qualquer lugar fora de um botão fecha o leque
+document.addEventListener('pointerdown', e => { if (aberto && !e.target.closest('.drawer, .fi')) fechar(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
+addEventListener('resize', () => { if (aberto) posicionar(aberto.querySelector('.fan')); });
 
 // Botão "Importar planilhas" (topo): escolhe de onde vêm as planilhas e distribui cada uma para a função certa
 const input = (extra = {}) => {
