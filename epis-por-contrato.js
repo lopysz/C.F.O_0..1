@@ -75,18 +75,27 @@
     function detalhe(c) {
       CFO.open(`Contrato ${c.num}`, b => {
         const gasto = c.reqs.reduce((a, r) => a + valor(r), 0), itens = c.reqs.reduce((a, r) => a + qtd(r), 0);
-        const cod = codigos(), sols = new Map();
-        c.reqs.forEach(r => { const k = r.sol || '(sem nome)'; if (!sols.has(k)) sols.set(k, []); sols.get(k).push(r); });
-        const ordem = [...sols.entries()].sort((a, b) => b[1].reduce((x, r) => x + valor(r), 0) - a[1].reduce((x, r) => x + valor(r), 0));
+        const cod = codigos();
         b.innerHTML = `<h3>${esc(c.nome || 'Contrato ' + c.num)}</h3>
           <div class="cards" style="margin-top:.8rem"><div class="card"><small>Requisições</small><b>${c.reqs.length}</b></div>
             <div class="card"><small>Itens retirados</small><b>${itens}</b></div><div class="card"><small>Valor gasto</small><b>${R$(gasto)}</b></div>
-            <div class="card"><small>Solicitantes</small><b>${sols.size}</b></div></div>`
+            <div class="card"><small>Solicitantes</small><b>${new Set(c.reqs.map(r => r.sol || '(sem nome)')).size}</b></div></div>`
           + (c.reqs.length ? `
-          <h3 class="sec">Histórico por solicitante</h3>${ordem.map(([nome, rs]) => `<details><summary class="sum"><span><b>${esc(nome)}</b> • ${rs.length} requisição(ões)</span><span class="val">${R$(rs.reduce((x, r) => x + valor(r), 0))}</span></summary>
-            ${rs.map(reqCard).join('')}</details>`).join('')}
+          <h3 class="sec">Histórico por solicitante</h3><div class="bar">${CFO.motivo.html()}</div><div id="sup"></div>
           <h3 class="sec">EPIs utilizados no contrato</h3>${tabela(porItem(c.reqs), cod)}`
           : '<p class="empty">Nenhuma requisição importada para este contrato ainda.</p>');
+        const fs = b.querySelector('#ft');
+        if (fs) {                                                         // filtro por tipo (Admissão, Mensal, Troca...) só na parte dos solicitantes
+          CFO.motivo.fill(b, c.reqs);
+          const drawSup = () => {
+            const sols = new Map();
+            c.reqs.filter(CFO.motivo.fn(fs.value)).forEach(r => { const k = r.sol || '(sem nome)'; if (!sols.has(k)) sols.set(k, []); sols.get(k).push(r); });
+            const ordem = [...sols.entries()].sort((a, z) => z[1].reduce((x, r) => x + valor(r), 0) - a[1].reduce((x, r) => x + valor(r), 0));
+            b.querySelector('#sup').innerHTML = ordem.map(([nome, rs]) => `<details><summary class="sum"><span><b>${esc(nome)}</b> • ${rs.length} requisição(ões)</span><span class="val">${R$(rs.reduce((x, r) => x + valor(r), 0))}</span></summary>
+              ${rs.map(reqCard).join('')}</details>`).join('') || '<p class="empty">Nenhuma requisição deste tipo neste contrato.</p>';
+          };
+          fs.onchange = drawSup; drawSup();
+        }
       });
     }
 

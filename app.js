@@ -3,7 +3,7 @@
 const DRAWERS = [
   { name: 'Almoxarifado Operacional', short: 'Almox. Op.',
     subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos ativos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
-  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Controle de gastos', m: 'controle_gastos' }] },
+  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Controle de gastos', m: 'controle_gastos' }, { name: 'Controle de mensal', m: 'controle_mensal' }] },
   { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }] }
 ];
 

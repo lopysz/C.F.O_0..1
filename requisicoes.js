@@ -42,15 +42,15 @@
     body.innerHTML = `
       <div class="cards" id="cards"></div>
       <div class="bar"><input id="q" type="search" placeholder="Buscar nº, contrato, solicitante ou item...">
-        ${CFO.periodo.html()}
+        ${CFO.periodo.html()}${CFO.motivo.html()}
         <button id="imp" class="ghost">Importar</button><button id="clr" class="ghost danger">Limpar tudo</button>
         <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden></div>
       <div id="lst"></div>`;
     const $ = s => body.querySelector(s);
 
     function render() {
-      const todas = all(); CFO.periodo.fill(body, todas);
-      const rs = todas.filter(CFO.periodo.test(body)), t = CFO.norm(q);
+      const todas = all(); CFO.periodo.fill(body, todas); CFO.motivo.fill(body, todas);
+      const rs = todas.filter(CFO.periodo.test(body)).filter(CFO.motivo.test(body)), t = CFO.norm(q);
       const v = rs.filter(r => CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item)].join(' ')).includes(t));
       $('#cards').innerHTML = [['Requisições', rs.length], ['Itens aprovados', rs.reduce((a, r) => a + qtd(r), 0)],
         ['Valor aprovado', R$(rs.reduce((a, r) => a + total(r), 0))], ['Contratos atendidos', new Set(rs.map(r => r.contrato)).size]]
@@ -77,7 +77,7 @@
     }
 
     $('#q').oninput = e => { q = e.target.value; render(); };
-    $('#fm').onchange = $('#fa').onchange = render;
+    $('#fm').onchange = $('#fa').onchange = $('#ft').onchange = render;
     $('#imp').onclick = () => $('#file').click();
     $('#file').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;

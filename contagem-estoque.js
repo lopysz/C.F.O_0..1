@@ -207,7 +207,7 @@ CFO.modules.contagem = (() => {
         const q = CFO.norm($('#q').value), v = todos().filter(r => !q || CFO.norm(r.item + r.codigo).includes(q));
         $('#lst').innerHTML = v.map(r => `
           <div class="crow" data-id="${esc(r.id)}" data-s="${r.sis ?? ''}">
-            <div><b>${esc(r.item)}</b>${r.novo ? ' <span class="tag">Novo</span>' : ''}<br>
+            <div><b>${esc(r.item)}</b>${r.novo ? ' <span class="nv">Novo</span>' : ''}<br>
               <small>${r.codigo ? 'Cód. ' + esc(r.codigo) + ' · ' : ''}${r.novo ? 'Item novo' : 'Sistema: ' + fmt(r.sis)}</small><small class="dv"></small></div>
             <input type="number" inputmode="decimal" min="0" step="any" placeholder="Qtd" value="${esc(st.vals[r.id] ?? '')}"></div>`).join('')
           || '<p class="empty">Nenhum item. Importe a Planilha EPI ou toque em "+ Novo item".</p>';
@@ -273,7 +273,7 @@ CFO.modules.contagem = (() => {
         <div class="bar"><button id="ex">Exportar</button><button id="del" class="ghost danger">Excluir contagem</button></div>
         ${[gt, gv].filter(Boolean).map(g => `<div class="gr">${g.svg}</div>`).join('')}
         <div class="tw"><table><thead><tr><th>Código</th><th>Item</th><th>Sistema</th><th>Contado</th><th>Dif.</th><th>Anterior</th><th>Variação</th></tr></thead><tbody>
-          ${L.map(x => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.item)}${x.novo ? ' <span class="tag">Novo</span>' : ''}</td><td>${x.sis == null ? '-' : fmt(x.sis)}</td><td><b>${fmt(x.qtd)}</b></td>
+          ${L.map(x => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.item)}${x.novo ? ' <span class="nv">Novo</span>' : ''}</td><td>${x.sis == null ? '-' : fmt(x.sis)}</td><td><b>${fmt(x.qtd)}</b></td>
             <td class="${cls(x.dif)}">${sg(x.dif)}</td><td>${x.ant == null ? '-' : fmt(x.ant)}</td><td class="${cls(x.v)}">${x.v == null ? '-' : seta(x.v) + ' ' + sg(x.v)}</td></tr>`).join('')}
         </tbody></table></div>`;
       b.querySelector('#ex').onclick = () => escolherExport(tipo => exportarContagem(all, i, tipo));

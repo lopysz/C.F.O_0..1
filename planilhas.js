@@ -62,10 +62,10 @@ CFO.sheet = cfg => {
 
   /* --- Tela da planilha --- */
   const api = body => {
-    let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '', per = { m: '', y: '' };
+    let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '', per = { m: '', y: '', t: '' };
     const calcular = () => {                          // colunas calculadas a partir das requisições (cfg.calc) no período escolhido
       if (!cfg.calc) return { cols: [], cards: [], todas: [] };
-      const todas = CFO.store.get('requisicoes', []), r = cfg.calc({ reqs: todas.filter(CFO.periodo.fn(per.m, per.y)), rows });
+      const todas = CFO.store.get('requisicoes', []), r = cfg.calc({ reqs: todas.filter(CFO.periodo.fn(per.m, per.y)).filter(CFO.motivo.fn(per.t)), rows });
       return { cols: r.cols || [], cards: r.cards || [], todas };
     };
     const save = () => { CFO.store.set(K, rows); CFO.store.set(K + ':mov', movs); draw(); };
@@ -80,7 +80,7 @@ CFO.sheet = cfg => {
         <div class="cards">${[...cfg.dash(rows, movs), ...cx.cards].map(d => `<div class="card ${d[2] || ''}"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('')}</div>
         <div class="bar">
           <input id="q" type="search" placeholder="Buscar..." value="${CFO.esc(q)}">
-          ${cfg.calc ? CFO.periodo.html() : ''}
+          ${cfg.calc ? CFO.periodo.html() + CFO.motivo.html() : ''}
           <button id="add">+ Adicionar</button>
           <button id="imp" class="ghost">Importar</button>
           <button id="exp" class="ghost">Exportar</button>
@@ -97,6 +97,8 @@ CFO.sheet = cfg => {
         body.querySelector('#fm').value = per.m; CFO.periodo.fill(body, cx.todas, per.y);
         body.querySelector('#fm').onchange = e => { per.m = e.target.value; draw(); };
         body.querySelector('#fa').onchange = e => { per.y = e.target.value; draw(); };
+        CFO.motivo.fill(body, cx.todas, 'ft', per.t);
+        body.querySelector('#ft').onchange = e => { per.t = e.target.value; draw(); };
       }
       bind();
     }

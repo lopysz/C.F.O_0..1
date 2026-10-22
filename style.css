@@ -183,10 +183,10 @@ dialog.imp button.ghost{text-align:center}
 .rel .log{color:#475569;font-size:8pt}
 .rel .sub{margin:.8rem 0 .3rem;font-size:10.5pt;font-weight:700;break-after:avoid}
 
-/* ===== 12. Contagem de estoque ===== */
+/* ===== 13. Contagem de estoque ===== */
 .big{display:block;width:100%;padding:1rem;margin-bottom:1rem;font-size:1.05rem;font-weight:600}
 .up{color:#4cd08a}.dn{color:#ff6b73}.card.up b{color:#4cd08a}.card.dn b{color:#ff6b73}
-.tag{display:inline-block;padding:0 .4rem;border-radius:6px;background:var(--accent);font-size:.7rem;vertical-align:middle}
+.nv{display:inline-block;padding:0 .4rem;border-radius:6px;background:var(--accent);font-size:.7rem;vertical-align:middle}
 .crow{display:flex;gap:.8rem;align-items:center;justify-content:space-between;padding:.6rem .8rem;margin-bottom:.5rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
 .crow small{color:var(--muted)}.crow input{width:110px;flex:none;text-align:right}
 .sticky-bot{position:sticky;bottom:0;padding:.7rem 0;background:var(--bg)}.sticky-bot button{width:100%;padding:.8rem}

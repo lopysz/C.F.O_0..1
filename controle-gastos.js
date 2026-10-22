@@ -65,7 +65,7 @@
     let aba = 'fin', f = { c: '', s: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
     body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tlog" class="ghost">Logística</button></div>
-      <div class="bar"><select id="fc"></select><select id="fs"></select>${P.html()}
+      <div class="bar"><select id="fc"></select><select id="fs"></select>${P.html()}${CFO.motivo.html()}
         <label class="chk" id="metaL">Meta mensal (R$) <input id="meta" type="number" min="0" step="any" title="Meta mensal de gasto (opcional)" style="width:8rem"></label>
         <span class="exp"><button id="xls" class="ghost" title="Baixar o que está na tela em Excel">Exportar Excel</button><button id="pdf" class="ghost" title="Gerar PDF do que está na tela">Exportar PDF</button></span></div>
       <div id="out"></div>`;
@@ -80,7 +80,7 @@
       const sols = [...new Set(rs.filter(r => !f.c || r.contrato === f.c).map(r => r.sol || '(sem nome)'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
       if (f.s && !sols.includes(f.s)) f.s = '';
       $('#fs').innerHTML = '<option value="">Todos os solicitantes</option>' + sols.map(s => `<option ${s === f.s ? 'selected' : ''}>${esc(s)}</option>`).join('');
-      P.fill(body, rs);
+      P.fill(body, rs); CFO.motivo.fill(body, rs);
       $('#metaL').hidden = aba !== 'fin';
     }
 
@@ -88,7 +88,7 @@
       $('#tfin').classList.toggle('on', aba === 'fin'); $('#tlog').classList.toggle('on', aba === 'log'); $('#metaL').hidden = aba !== 'fin';
       const m = $('#fm').value, y = $('#fa').value;
       // base: contrato + solicitante · tendência: + ano (todos os meses) · rs: + mês (o que os totais e rankings usam)
-      const base = todas().filter(r => (!f.c || r.contrato === f.c) && (!f.s || (r.sol || '(sem nome)') === f.s));
+      const base = todas().filter(r => (!f.c || r.contrato === f.c) && (!f.s || (r.sol || '(sem nome)') === f.s) && CFO.motivo.fn($('#ft').value)(r));
       const tend = base.filter(P.fn('', y)), rs = tend.filter(P.fn(m, y));
       const key = r => P.key(r.mes);
 
@@ -232,7 +232,7 @@
     const txtSel = id => { const e = $(id); return e && e.selectedOptions[0] ? e.selectedOptions[0].text : ''; };
     function filtrosAtuais() {
       const meta = +CFO.store.get('meta_mensal', 0) || 0;
-      return [['Contrato', txtSel('#fc')], ['Solicitante', txtSel('#fs')], ['Mês', txtSel('#fm')], ['Ano', txtSel('#fa')],
+      return [['Contrato', txtSel('#fc')], ['Solicitante', txtSel('#fs')], ['Tipo', txtSel('#ft')], ['Mês', txtSel('#fm')], ['Ano', txtSel('#fa')],
         ...(aba === 'fin' && meta ? [['Meta mensal', R$(meta)]] : [])];
     }
     const agora = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -292,7 +292,7 @@
     $('#tlog').onclick = () => { aba = 'log'; render(); };
     $('#fc').onchange = e => { f.c = e.target.value; opcoes(); render(); };
     $('#fs').onchange = e => { f.s = e.target.value; render(); };
-    $('#fm').onchange = $('#fa').onchange = render;
+    $('#fm').onchange = $('#fa').onchange = $('#ft').onchange = render;
     $('#meta').oninput = e => { CFO.store.set('meta_mensal', +e.target.value || 0); render(); };
     opcoes(); render();
   };

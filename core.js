@@ -110,3 +110,22 @@ CFO.periodo = (() => {
     label: s => { const p = parse(s); return p ? NOMES[p.m - 1].slice(0, 3) + '/' + p.y : String(s || '-'); }
   };
 })();
+
+// Filtro de Tipo da requisição (coluna Motivo): TODOS, ADMISSÃO, EVENTUAL, MENSAL... (usado em EPI, Requisição, EPIs por contrato e Controle de gastos)
+CFO.motivo = (() => {
+  const LISTA = ['ADMISSÃO', 'EVENTUAL', 'MENSAL', 'RETIRADA DE MENSAL', 'TROCA (DANO)', 'TROCA (REGULAR)', 'TROCA POR DANO / DEFEITO'];
+  const igual = (a, b) => CFO.norm(a) === CFO.norm(b);
+  return {
+    LISTA,
+    html: (id = 'ft') => `<select id="${id}" aria-label="Tipo da requisição"><option value="">TODOS</option>${LISTA.map(n => `<option>${CFO.esc(n)}</option>`).join('')}</select>`,
+    // Mantém a lista e acrescenta tipos que existem nas requisições importadas mas não estão nela; mantém o que estava escolhido (ou keep)
+    fill(root, reqs, id = 'ft', keep) {
+      const s = root.querySelector('#' + id), atual = keep ?? s.value;
+      const extras = [...new Map(reqs.filter(r => r.motivo && !LISTA.some(n => igual(n, r.motivo))).map(r => [CFO.norm(r.motivo), String(r.motivo).trim()])).values()];
+      s.innerHTML = '<option value="">TODOS</option>' + [...LISTA, ...extras].map(n => `<option ${n === atual ? 'selected' : ''}>${CFO.esc(n)}</option>`).join('');
+    },
+    // Função de teste para um tipo (vazio = todos)
+    fn: t => r => !t || igual(r.motivo, t),
+    test(root, id = 'ft') { return this.fn(root.querySelector('#' + id).value); }
+  };
+})();
