@@ -77,8 +77,9 @@ dialog label>*{margin-top:.25rem;color:var(--text)}
 .fp-box{border:2px solid #0f172a;border-radius:10px;padding:12px;overflow:hidden;box-sizing:border-box}
 .fp-box h2{margin:0 0 12px;padding-bottom:6px;border-bottom:3px solid #2563eb;font-size:15px;letter-spacing:.03em}
 .fp-photo{display:flex;flex-direction:column;padding:8px}
-.fp-img{flex:1;min-height:0;display:grid;place-items:center}
-.fp-img img{max-width:100%;max-height:100%;object-fit:contain}
+/* A foto fica dentro da caixa, de qualquer tamanho: posição absoluta evita que a imagem "empurre" a caixa e seja cortada */
+.fp-img{flex:1;min-height:0;position:relative}
+.fp-img img{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
 .fp-ca{margin-top:8px;padding:8px;background:#0f172a;color:#fff;text-align:center;font-weight:700;font-size:20px;letter-spacing:.06em;border-radius:6px}
 .fp ol{margin:0;padding:0;list-style:none;counter-reset:n}
 .fp ol li{counter-increment:n;margin:0 0 10px;font-weight:700;font-size:16px}
@@ -181,3 +182,21 @@ dialog.imp button.ghost{text-align:center}
 .rel .up{color:#15803d}.rel .down{color:#b91c1c}
 .rel .log{color:#475569;font-size:8pt}
 .rel .sub{margin:.8rem 0 .3rem;font-size:10.5pt;font-weight:700;break-after:avoid}
+
+/* ===== 12. Contagem de estoque ===== */
+.big{display:block;width:100%;padding:1rem;margin-bottom:1rem;font-size:1.05rem;font-weight:600}
+.up{color:#4cd08a}.dn{color:#ff6b73}.card.up b{color:#4cd08a}.card.dn b{color:#ff6b73}
+.tag{display:inline-block;padding:0 .4rem;border-radius:6px;background:var(--accent);font-size:.7rem;vertical-align:middle}
+.crow{display:flex;gap:.8rem;align-items:center;justify-content:space-between;padding:.6rem .8rem;margin-bottom:.5rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.crow small{color:var(--muted)}.crow input{width:110px;flex:none;text-align:right}
+.sticky-bot{position:sticky;bottom:0;padding:.7rem 0;background:var(--bg)}.sticky-bot button{width:100%;padding:.8rem}
+.foto.cnt{justify-content:space-between}.foto.cnt small{color:var(--muted)}.vr{font-weight:700;white-space:nowrap}
+.gr{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:.4rem;margin-bottom:.8rem}.gr svg{display:block;width:100%;height:auto}
+/* PDF da contagem (impressão A4 com fundo branco) */
+.cnt-pdf{padding:14mm;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:11px}
+.cnt-pdf h1{font-size:20px;margin:0}.cnt-pdf .sub{color:#555;margin:2px 0 12px}.cnt-pdf h2{font-size:14px;margin:14px 0 6px}
+.cnt-pdf .gr{background:#fff;border:0;padding:0;margin-bottom:10px;break-inside:avoid}
+.cnt-pdf table{width:100%;border-collapse:collapse}.cnt-pdf thead{display:table-header-group}.cnt-pdf tr{break-inside:avoid}
+.cnt-pdf th,.cnt-pdf td{padding:3px 5px;border-bottom:1px solid #ccc;color:#111;font-size:10px;white-space:normal;text-align:left}
+.cnt-pdf th{background:#e6ecf7;font-weight:700}.cnt-pdf td.n{text-align:right}
+@media print{.cnt-pdf{-webkit-print-color-adjust:exact;print-color-adjust:exact}}

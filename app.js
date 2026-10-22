@@ -4,7 +4,7 @@ const DRAWERS = [
   { name: 'Almoxarifado Operacional', short: 'Almox. Op.',
     subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos ativos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
   { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Controle de gastos', m: 'controle_gastos' }] },
-  { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }] }
+  { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }] }
 ];
 
 // Quadrado central com círculos (subgavetas) ao redor
@@ -47,16 +47,12 @@ document.getElementById('imp').onclick = () => {
     <button type="button" data-a="pasta">📁 Pasta do dispositivo</button>
     <button type="button" data-a="arq">📄 Arquivos (dispositivo ou Google Drive)</button>
     <p class="log">No celular, ao escolher "Arquivos", o menu do Android/iPhone mostra o Google Drive junto com as pastas do aparelho.</p>
-    <button type="button" data-a="drive">☁ Google Drive por link (pasta ou planilha)</button>
-    <button type="button" data-a="cfg" class="ghost">⚙ Chave do Google Drive</button>
     <button value="cancel" class="ghost" formnovalidate>Cancelar</button></form>`;
   d.onclose = () => d.remove();
   d.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
     const a = b.dataset.a; d.close();
     if (a === 'pasta') pickPasta.click();
-    else if (a === 'arq') pickArquivos.click();
-    else if (a === 'drive') CFO.importDrive();
-    else CFO.driveConfig();
+    else pickArquivos.click();
   });
   document.body.append(d); d.showModal();
 };
