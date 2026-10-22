@@ -3,7 +3,8 @@
 CFO.importSupabase = async () => {
   const c = window.CFO_SUPABASE || {};
   if (!c.url || !c.bucket) { alert('Preencha url e bucket no arquivo supabase-config.js'); return; }
-  const base = c.url.replace(/\/+$/, ''), bucket = encodeURIComponent(c.bucket);
+  if (!c.anonKey && !(c.arquivos && c.arquivos.length)) { alert('Falta a chave "anon" no supabase-config.js (Project Settings > API Keys). Ela é necessária para listar os arquivos do bucket.'); return; }
+  const base = (/^https?:/.test(c.url) ? c.url : `https://${c.url}.supabase.co`).replace(/\/+$/, ''), bucket = encodeURIComponent(c.bucket);
   const H = c.anonKey ? { apikey: c.anonKey, Authorization: 'Bearer ' + c.anonKey } : {};
   const ehPlanilha = n => /\.(xlsx|xls|csv)$/i.test(n) && !n.startsWith('~$');
   const caminhos = [];

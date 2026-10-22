@@ -1,13 +1,10 @@
-/* ===== Configuração do Supabase (preencha) =====
-   url:     Project Settings > API > Project URL        (ex.: https://abcdxyz.supabase.co)
-   anonKey: Project Settings > API > chave "anon public" (NUNCA use a service_role aqui)
-   bucket:  nome do bucket do Storage onde estão as planilhas
-   pasta:   subpasta dentro do bucket ('' = raiz)
-   arquivos: (opcional) lista de nomes, caso a listagem automática seja bloqueada. Ex.: ['EPI.xlsx','Contratos.xlsx'] */
+/* ===== Configuração do Supabase =====
+   anonKey: Project Settings > API Keys > "anon" (começa com eyJ...) ou "publishable" (começa com sb_publishable_...)
+            NUNCA coloque senha nem a chave service_role aqui. */
 window.CFO_SUPABASE = {
-  url: '',
-  anonKey: '',
-  bucket: '',
-  pasta: '',
-  arquivos: []
+  url: 'https://eoojyzantstnuyblsarp.supabase.co',
+  anonKey: 'sb_publishable_rJszWt19jXqkMc1LJNLgEA_lvCAzScJ',
+  bucket: 'nuvem',
+  pasta: '',        // '' = pega tudo do bucket (inclusive subpastas)
+  arquivos: []      // deixe vazio: o sistema lista sozinho
 };
