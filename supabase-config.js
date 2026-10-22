@@ -6,5 +6,6 @@ window.CFO_SUPABASE = {
   anonKey: 'sb_publishable_rJszWt19jXqkMc1LJNLgEA_lvCAzScJ',
   bucket: 'Nuvem',
   pasta: '',        // '' = pega tudo do bucket (inclusive subpastas)
+  pastaEnvio: 'CFO', // pasta criada dentro do bucket ao enviar
   arquivos: []      // deixe vazio: o sistema lista sozinho
 };
