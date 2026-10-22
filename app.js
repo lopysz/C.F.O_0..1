@@ -68,6 +68,7 @@ document.getElementById('imp').onclick = () => {
   const d = document.createElement('dialog'); d.className = 'imp';
   d.innerHTML = `<form method="dialog"><h3>Importar planilhas</h3>
     <button type="button" data-a="pasta">📁 Pasta do dispositivo</button>
+    <button type="button" data-a="supa">☁️ Supabase (planilhas do bucket)</button>
     <button type="button" data-a="arq">📄 Arquivos (dispositivo ou Google Drive)</button>
     <p class="log">No celular, ao escolher "Arquivos", o menu do Android/iPhone mostra o Google Drive junto com as pastas do aparelho.</p>
     <button value="cancel" class="ghost" formnovalidate>Cancelar</button></form>`;
@@ -75,6 +76,7 @@ document.getElementById('imp').onclick = () => {
   d.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
     const a = b.dataset.a; d.close();
     if (a === 'pasta') pickPasta.click();
+    else if (a === 'supa') CFO.importSupabase();
     else pickArquivos.click();
   });
   document.body.append(d); d.showModal();
