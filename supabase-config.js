@@ -4,7 +4,7 @@
 window.CFO_SUPABASE = {
   url: 'https://eoojyzantstnuyblsarp.supabase.co',
   anonKey: 'sb_publishable_rJszWt19jXqkMc1LJNLgEA_lvCAzScJ',
-  bucket: 'nuvem',
+  bucket: 'Nuvem',
   pasta: '',        // '' = pega tudo do bucket (inclusive subpastas)
   arquivos: []      // deixe vazio: o sistema lista sozinho
 };
