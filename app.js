@@ -19,7 +19,9 @@ let aberto = null;
 function fechar() { if (aberto) { aberto.classList.remove('open'); aberto.querySelector('.drawer').setAttribute('aria-expanded', 'false'); aberto = null; } }
 function posicionar(fan) {            // mantém o leque inteiro dentro da tela
   fan.style.setProperty('--dy', '0px');
-  const r = fan.getBoundingClientRect(), topo = 70, fim = innerHeight - 12;
+  const topo = 70, fim = innerHeight - 12;
+  fan.style.maxHeight = (fim - topo) + 'px';
+  const r = fan.getBoundingClientRect();
   let dy = 0;
   if (r.bottom > fim) dy = fim - r.bottom;
   if (r.top + dy < topo) dy = topo - r.top;
@@ -30,11 +32,13 @@ DRAWERS.forEach(d => {
   const b = document.createElement('button');
   b.className = 'drawer'; b.textContent = d.name; b.setAttribute('aria-expanded', 'false');
   const fan = document.createElement('div'); fan.className = 'fan'; fan.setAttribute('role', 'menu');
+  const fl = document.createElement('div'); fl.className = 'fl'; fan.append(fl);
+  const con = document.createElement('i'); con.className = 'con';
   d.subs.forEach((s, i) => {
     const f = document.createElement('button');
     f.className = 'fi'; f.textContent = s.name; f.setAttribute('role', 'menuitem'); f.style.setProperty('--i', i);
     f.onclick = () => { fechar(); abrir(s); };
-    fan.append(f);
+    fl.append(f);
   });
   b.onclick = e => {
     e.stopPropagation();
@@ -42,10 +46,10 @@ DRAWERS.forEach(d => {
     if (mesmo) return;
     w.classList.add('open'); b.setAttribute('aria-expanded', 'true'); aberto = w; posicionar(fan);
   };
-  w.append(b, fan); home.append(w);
+  w.append(b, con, fan); home.append(w);
 });
 // Tocar em qualquer lugar fora de um botão fecha o leque
-document.addEventListener('pointerdown', e => { if (aberto && !e.target.closest('.drawer, .fi')) fechar(); });
+document.addEventListener('pointerdown', e => { if (aberto && !e.target.closest('.drawer, .fan')) fechar(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
 addEventListener('resize', () => { if (aberto) posicionar(aberto.querySelector('.fan')); });
 

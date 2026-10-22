@@ -206,14 +206,18 @@ dialog.imp button.ghost{text-align:center}
 .dw{position:relative}
 .dw .drawer{width:min(34vw,150px);font-size:1rem}
 .dw.open .drawer{border-color:var(--accent);background:var(--panel2)}
-.fan{--dy:0px;position:absolute;left:100%;top:50%;margin-left:22px;padding-left:20px;display:flex;flex-direction:column;gap:10px;transform:translateY(calc(-50% + var(--dy)));visibility:hidden;pointer-events:none;z-index:5}
+/* Leque: centralizado no quadrado, nunca maior que a tela (se tiver muitas funções, rola por dentro) */
+.fan{--dy:0px;position:absolute;left:100%;top:50%;margin-left:22px;transform:translateY(calc(-50% + var(--dy)));overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;visibility:hidden;pointer-events:none;z-index:5;padding:2px 2px 2px 0}
 .dw.open .fan{visibility:visible;pointer-events:auto}
-/* tronco vertical (do centro do primeiro ao centro do último item) e ligação com o quadrado */
-.fan::before{content:"";position:absolute;left:0;top:22px;bottom:22px;width:2px;background:var(--accent);transform-origin:top;transform:scaleY(0);transition:transform .25s}
-.fan::after{content:"";position:absolute;left:-22px;top:50%;width:22px;height:2px;background:var(--accent);transform-origin:left;transform:scaleX(0);transition:transform .15s}
-.dw.open .fan::before,.dw.open .fan::after{transform:none}
+.fl{position:relative;display:flex;flex-direction:column;gap:10px;padding-left:20px}
+/* tronco vertical (do centro do primeiro ao centro do último item) */
+.fl::before{content:"";position:absolute;left:0;top:22px;bottom:22px;width:2px;background:var(--accent);transform-origin:top;transform:scaleY(0);transition:transform .25s}
+.dw.open .fl::before{transform:none}
+/* ligação do quadrado até o tronco */
+.con{position:absolute;left:100%;top:50%;width:22px;height:2px;background:var(--accent);transform-origin:left;transform:scaleX(0);transition:transform .15s;pointer-events:none;z-index:5}
+.dw.open .con{transform:none}
 .fi{position:relative;min-height:44px;width:min(50vw,250px);text-align:left;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:.5rem .8rem;opacity:0;transform:translateX(-14px) scale(.9);transform-origin:left center;transition:opacity .2s,transform .2s,background .15s;transition-delay:calc(var(--i)*40ms)}
 .fi::before{content:"";position:absolute;left:-20px;top:50%;width:20px;height:2px;background:var(--accent)}
 .dw.open .fi{opacity:1;transform:none}
 .fi:hover{background:var(--accent)}
-@media (prefers-reduced-motion:reduce){.fi,.fan::before,.fan::after{transition:none}}
+@media (prefers-reduced-motion:reduce){.fi,.fl::before,.con{transition:none}}
