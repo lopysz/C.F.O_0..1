@@ -46,16 +46,16 @@ document.getElementById('imp').onclick = () => {
   d.innerHTML = `<form method="dialog"><h3>Importar planilhas</h3>
     <button type="button" data-a="pasta">📁 Pasta do dispositivo</button>
     <button type="button" data-a="arq">📄 Arquivos (dispositivo ou Google Drive)</button>
-    <p class="log">No celular, ao escolher "Arquivos", o menu do Android/iPhone mostra o Google Drive junto com as pastas do aparelho. No computador, abra a pasta do Drive sincronizada.</p>
-    <button type="button" data-a="drive">☁ Google Drive pela conta (pasta inteira)</button>
-    <button type="button" data-a="cfg" class="ghost">⚙ Configurar Google Drive</button>
+    <p class="log">No celular, ao escolher "Arquivos", o menu do Android/iPhone mostra o Google Drive junto com as pastas do aparelho.</p>
+    <button type="button" data-a="drive">☁ Google Drive por link (pasta ou planilha)</button>
+    <button type="button" data-a="cfg" class="ghost">⚙ Chave do Google Drive</button>
     <button value="cancel" class="ghost" formnovalidate>Cancelar</button></form>`;
   d.onclose = () => d.remove();
   d.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
     const a = b.dataset.a; d.close();
     if (a === 'pasta') pickPasta.click();
     else if (a === 'arq') pickArquivos.click();
-    else if (a === 'drive') CFO.importDrive(b);
+    else if (a === 'drive') CFO.importDrive();
     else CFO.driveConfig();
   });
   document.body.append(d); d.showModal();
