@@ -111,7 +111,7 @@ CFO.periodo = (() => {
   };
 })();
 
-// Filtro de Tipo da requisição (coluna Motivo): TODOS, ADMISSÃO, EVENTUAL, MENSAL... (usado em EPI, Requisição, EPIs por contrato e Controle de gastos)
+// Filtro de Tipo da requisição (coluna Motivo): TODOS, ADMISSÃO, EVENTUAL, MENSAL... (usado em EPI, Requisição, EPIs por contrato e Gastos em EPIs)
 CFO.motivo = (() => {
   const LISTA = ['ADMISSÃO', 'EVENTUAL', 'MENSAL', 'RETIRADA MENSAL', 'TROCA (DANO)', 'TROCA (REGULAR)'];
   // Nomes diferentes do mesmo tipo contam juntos (ex.: "RETIRADA DE MENSAL" = "RETIRADA MENSAL", "USO EVENTUAL" = "EVENTUAL")
