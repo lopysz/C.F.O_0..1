@@ -15,6 +15,7 @@
   const bk = ativo ? encodeURIComponent(c.bucket) : '';
 
   // controle local (não entra no backup: não começa com "cfo:")
+  const VERSAO = 'sync-3 (fotos)';
   const MK = 'cfo_sync';
   const meta = (() => { try { return { mod: {}, seen: {}, dirty: {}, dbDirty: {}, synced: false, ...JSON.parse(localStorage.getItem(MK) || '{}') }; } catch { return { mod: {}, seen: {}, dirty: {}, dbDirty: {}, synced: false }; } })();
   const salvaMeta = () => { try { localStorage.setItem(MK, JSON.stringify(meta)); } catch {} };
@@ -67,7 +68,7 @@
   };
 
   let rodando = null, pendente = false, avisoMudou = false;
-  async function sync({ forcar = false, manual = false } = {}) {
+  async function sync({ forcar = false, manual = false, reenviar = false } = {}) {
     if (!ativo) return;
     if (rodando) { pendente = true; return rodando; }
     rodando = (async () => {
@@ -83,7 +84,7 @@
         const nomesEnv = [];
         for (const k of chavesLocais()) {
           const nome = nomeObj(k);
-          if (meta.dirty[k] || !remoto.has(nome)) {
+          if (meta.dirty[k] || reenviar || !remoto.has(nome)) {
             if (!meta.mod[k]) meta.mod[k] = Date.now();
             await enviar(k); delete meta.dirty[k]; nomesEnv.push(nome);
           }
@@ -111,7 +112,7 @@
         }
         for (const st of STORES) for (const rec of await raw.all(st)) {   // fotos antigas ainda não enviadas
           const nome = nomeDb(st, rec.id);
-          if (!remotoDb.has(nome) && !nomesDb.includes(nome)) { await envObj(nome, { store: st, id: rec.id, updatedAt: Date.now(), value: rec }); nomesDb.push(nome); }
+          if ((reenviar || !remotoDb.has(nome)) && !nomesDb.includes(nome)) { await envObj(nome, { store: st, id: rec.id, updatedAt: Date.now(), value: rec }); nomesDb.push(nome); }
         }
         if (nomesDb.length) for (const st of STORES) (await listar(`${dbRaiz}/${st}`)).forEach((u, n) => { if (nomesDb.includes(n)) meta.seen[n] = u; });
         meta.synced = true; salvaMeta();
@@ -137,12 +138,26 @@
     agendar();
   };
 
+  async function diagnostico() {
+    const l = [`Versão do sistema neste aparelho: ${VERSAO}`, `Usuário/aparelho já sincronizou antes: ${meta.synced ? 'sim' : 'não'}`, `Último estado: ${msg || estado}`, `Alterações de fotos aguardando envio: ${Object.keys(meta.dbDirty).length}`];
+    try {
+      for (const st of STORES) {
+        const loc = (await raw.all(st)).length, rem = (await listar(`${dbRaiz}/${st}`)).size;
+        l.push(`${st}: ${loc} neste aparelho | ${rem} na nuvem`);
+      }
+      l.push(`dados (texto): ${chavesLocais().length} neste aparelho | ${(await listar()).size} na nuvem`);
+    } catch (e) { l.push('Erro ao consultar a nuvem: ' + e.message); }
+    alert(l.join('\n'));
+  }
+
   // Botão da nuvem
   if (btn) btn.onclick = () => {
     const d = document.createElement('dialog'); d.className = 'imp';
     d.innerHTML = `<form method="dialog"><h3>Nuvem (Supabase)</h3><p class="log">${CFO.esc(msg || (ativo ? '' : 'Preencha o supabase-config.js'))}</p>
       <button type="button" data-a="sync">🔄 Sincronizar agora</button>
       <button type="button" data-a="pull">⬇️ Baixar tudo da nuvem (substitui os dados deste aparelho)</button>
+      <button type="button" data-a="reenv">⬆️ Reenviar tudo deste aparelho para a nuvem</button>
+      <button type="button" data-a="diag">🔍 Diagnóstico</button>
       <button type="button" data-a="bk">💾 Enviar um arquivo de backup</button>
       <button value="cancel" class="ghost" formnovalidate>Fechar</button></form>`;
     d.onclose = () => d.remove();
@@ -150,6 +165,8 @@
       const a = b.dataset.a; d.close();
       if (a === 'sync') sync({ manual: true });
       else if (a === 'pull') { if (confirm('Substituir os dados DESTE aparelho pelos que estão na nuvem?')) sync({ forcar: true }); }
+      else if (a === 'reenv') { if (confirm('Reenviar todos os dados e fotos deste aparelho para a nuvem?')) sync({ reenviar: true, manual: true }); }
+      else if (a === 'diag') diagnostico();
       else CFO.enviarBackup();
     });
     document.body.append(d); d.showModal();
