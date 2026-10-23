@@ -249,3 +249,8 @@ dialog.expd{width:min(92vw,360px)}
 .expd .acts{display:flex;gap:.5rem;margin-top:1rem}
 .expd .acts button{flex:1}
 .expd .acts button:disabled{opacity:.5}
+
+/* ===== 17. Texto "Para que serve" ===== */
+details.sobre{margin-bottom:.8rem;border:1px solid var(--line);border-radius:10px;padding:.5rem .8rem;background:var(--panel)}
+details.sobre summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+details.sobre p{margin:.5rem 0 0;font-size:.9rem;line-height:1.4}

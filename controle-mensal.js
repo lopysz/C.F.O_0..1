@@ -1,9 +1,9 @@
-/* ===== Jurídico Operacional > Controle de mensal =====
+/* ===== Jurídico Operacional > Controle mensal =====
    Foco nos pedidos MENSAIS (tipo MENSAL da requisição), por contrato: o que já foi (passado), o do mês atual e o que ainda vem
    (programado nas planilhas + previsão pela média). Três abas:
    - Financeiro: faturamento por contrato e mês, teto (orçamento) por contrato, itens a faturar, maiores despesas
    - Previsão: quantidade e compra sugerida por item, cobertura do estoque (Planilha EPI), itens parados ou em falta
-   - Auditoria: duplicidades, consumo fora do padrão, acima do teto, aprovado acima do solicitado e conferência de recibos
+   - Revisão: duplicidades, consumo fora do padrão, acima do teto, aprovado acima do solicitado e conferência de recibos
    Dados: Requisições (histórico), Planilha EPI (estoque), Contratos. Parâmetros por contrato (teto e nº de trabalhadores) são digitados aqui. */
 (() => {
   const esc = CFO.esc, P = CFO.periodo;
@@ -54,10 +54,11 @@
   };
 
   CFO.modules.controle_mensal = body => {
-    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0, v: '' }, det = {}, ultimo = null;
+    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0, v: '', q: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
-    body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tprev" class="ghost">Previsão</button><button id="taud" class="ghost">Auditoria</button></div>
-      <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select><select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
+    body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Controle mensal</b> é para <b>acompanhar e planejar</b> os pedidos <b>MENSAIS</b> de cada contrato: quanto já foi, quanto é este mês, quanto ainda vem (programado e previsão pela média), o teto de cada contrato e o que comprar. A aba <b>Revisão</b> aponta erros e alertas (duplicidade, consumo fora do padrão, acima do teto, item sem preço, recibo pendente).</p><p>Já o <b>Controle de gastos</b> é para <b>analisar o que passou</b>: quanto cada contrato, solicitante e EPI custou (Financeiro) e como o estoque gira (Logística), em qualquer período e para todos os tipos de pedido.</p></details>
+      <div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tprev" class="ghost">Previsão</button><button id="taud" class="ghost">Revisão</button></div>
+      <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fq" aria-label="Filtrar por saídas"><option value="">Todos os contratos</option><option value="1">Só contratos com saídas</option></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select><select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
         <span class="exp"><button id="exp" class="ghost">Exportar</button></span></div>
       <div id="out"></div>`;
     const $ = s => body.querySelector(s);
@@ -92,14 +93,21 @@
         const k = key(r); c.v.set(k, (c.v.get(k) || 0) + valor(r)); c.q.set(k, (c.q.get(k) || 0) + qtd(r)); c.reqs.push(r);
       });
       nomes.forEach((nm, num) => { if (!ctr.has(num) && (!f.c || f.c === num)) ctr.set(num, novo(num, nm)); });
+      // coordenador do contrato: o que foi digitado em Parâmetros; senão, quem mais pede nele (nomes iguais, mesmo com maiúscula/minúscula diferente, contam juntos)
+      const coordDe = c => {
+        const dig = ((cfg[c.num] || {}).coord || '').trim(); if (dig) return dig.toUpperCase();
+        const mp = new Map(); c.reqs.forEach(r => { const k = CFO.norm(r.sol || ''); if (!k) return; const x = mp.get(k) || { n: 0, t: String(r.sol).trim() }; x.n++; mp.set(k, x); });
+        const b = [...mp.values()].sort((x, y) => y.n - x.n)[0]; return b ? b.t.toUpperCase() : '(SEM COORDENADOR)';
+      };
       const todos = [...ctr.values()].sort((a, b) => numCmp(a.num, b.num)).map(c => {
         let passado = 0, prog = 0; c.v.forEach((v, k) => { if (k < cur) passado += v; else if (k > cur) prog += v; });
         const atual = c.v.get(cur) || 0, proj = projetar(c.v), teto = +(cfg[c.num] || {}).teto || 0, trab = +(cfg[c.num] || {}).trab || 0;
         const sit = !teto ? 'Sem teto' : atual > teto ? 'Acima' : proj[0] > teto ? 'Previsto acima' : atual >= teto * .8 ? 'Atenção' : 'Dentro';
-        return { c, passado, atual, prog, proj, prev: proj.reduce((a, b) => a + b, 0), media: media3(c.v), teto, trab, sit };
+        return { c, passado, atual, ant: c.v.get(prevKey(cur)) || 0, prog, proj, prev: proj.reduce((a, b) => a + b, 0), media: media3(c.v), teto, trab, sit, coord: coordDe(c) };
       });
       // Filtro "Só com valor": esconde contratos sem nenhum valor (passado, atual, programado e previsão zerados)
-      const stats = f.v ? todos.filter(s => s.passado + s.atual + s.prog + s.prev > 0) : todos;
+      // "Só contratos com saídas": esconde contratos que nunca pediram item (ex.: não são atendidos pelo seu setor)
+      const stats = todos.filter(s => (!f.q || s.c.reqs.length) && (!f.v || s.passado + s.atual + s.prog + s.prev > 0));
       const soma = fn => stats.reduce((a, s) => a + fn(s), 0);
 
       // linha do tempo: até 12 meses para trás + próximos meses da previsão
@@ -115,25 +123,35 @@
         const acima = stats.filter(s => s.sit === 'Acima').length, comTeto = stats.filter(s => s.teto).length;
         const kpis = [
           { t: 'Realizado (meses passados)', v: R$(soma(s => s.passado)) },
-          { t: `Mês atual (${lbl(cur)})`, v: R$(vAt), s: vAnt ? `${vAt > vAnt ? '▲' : vAt < vAnt ? '▼' : '='} ${pct(Math.abs(vAt - vAnt) / vAnt)} vs mês anterior` : 'sem mês anterior' },
+          { t: `Mês atual (${lbl(cur)})`, v: R$(vAt), s: vAnt ? `${vAt > vAnt ? '▲' : vAt < vAnt ? '▼' : '='} ${pct(Math.abs(vAt - vAnt) / vAnt)} (${vAt >= vAnt ? '+' : '-'}${R$(Math.abs(vAt - vAnt))}) vs mês anterior` : 'sem mês anterior' },
           { t: 'Já programado (planilhas)', v: R$(soma(s => s.prog)), s: 'meses futuros nas requisições' },
-          { t: `Previsão próximos ${hTxt}`, v: R$(soma(s => s.prev)), s: 'programado + média' },
+          { t: `Previsão próximos ${hTxt}`, v: R$(soma(s => s.prev)), s: 'programado no mês; sem pedido programado, a média' },
           { t: 'Contratos acima do teto', v: `${acima} de ${comTeto}`, s: comTeto ? 'no mês atual' : 'defina o teto abaixo' },
           { t: 'Maior gasto no mês', v: top && top.atual ? pct(vAt ? top.atual / vAt : 0) : '-', s: top && top.atual ? nomeC(top.c) : '' }];
 
+        const vr = (a, b) => b ? a / b - 1 : '';
         const porC = { nome: 'Por contrato', scroll: true,
-          cab: [['Contrato', 't'], ['Passado', '$'], [`Mês atual`, '$'], ['Programado', '$'], [`Previsão ${hTxt}`, '$'], ['Média mensal', '$'], ['Teto mensal', '$'], ['Atual / teto', '%'], ['Situação', 's']],
-          linhas: [...stats.map(s => [nomeC(s.c), s.passado, s.atual, s.prog, s.prev, s.media, s.teto || '', s.teto ? s.atual / s.teto : '', s.sit]),
-            ['TOTAL', soma(s => s.passado), vAt, soma(s => s.prog), soma(s => s.prev), soma(s => s.media), '', '', '']] };
+          cab: [['Contrato', 't'], ['Coordenador', 't'], ['Passado', '$'], [`Mês atual`, '$'], ['Mês anterior', '$'], ['Var. R$', '$'], ['Var. %', '%'], ['Programado', '$'], [`Previsão ${hTxt}`, '$'], ['Média mensal', '$'], ['Teto mensal', '$'], ['Atual / teto', '%'], ['Situação', 's']],
+          linhas: [...stats.map(s => [nomeC(s.c), s.coord, s.passado, s.atual, s.ant, s.atual - s.ant, vr(s.atual, s.ant), s.prog, s.prev, s.media, s.teto || '', s.teto ? s.atual / s.teto : '', s.sit]),
+            ['TOTAL', '', soma(s => s.passado), vAt, vAnt, vAt - vAnt, vr(vAt, vAnt), soma(s => s.prog), soma(s => s.prev), soma(s => s.media), '', '', '']] };
+
+        // Por coordenador (como na planilha MENSAL GERAL): contratos agrupados pelo responsável
+        const cg = new Map();
+        stats.forEach(s => { const k = CFO.norm(s.coord), x = cg.get(k) || { n: s.coord, ct: 0, cv: 0, passado: 0, atual: 0, ant: 0, prev: 0 }; x.ct++; if (s.passado + s.atual + s.prog + s.prev > 0) x.cv++; x.passado += s.passado; x.atual += s.atual; x.ant += s.ant; x.prev += s.prev; cg.set(k, x); });
+        const porCoord = { nome: 'Por coordenador', scroll: true, sub: 'contratos agrupados pelo coordenador (defina em Parâmetros; se vazio, usa quem mais pede no contrato)',
+          cab: [['Coordenador', 't'], ['Contratos', 'n'], ['Com valor', 'n'], ['Mês atual', '$'], ['Mês anterior', '$'], ['Var. R$', '$'], ['Var. %', '%'], ['% do mês', '%'], [`Previsão ${hTxt}`, '$']],
+          linhas: [...[...cg.values()].sort((a, b) => b.atual - a.atual).map(x => [x.n, x.ct, x.cv, x.atual, x.ant, x.atual - x.ant, vr(x.atual, x.ant), vAt ? x.atual / vAt : 0, x.prev]),
+            ['TOTAL', stats.length, stats.filter(s => s.passado + s.atual + s.prog + s.prev > 0).length, vAt, vAnt, vAt - vAnt, vr(vAt, vAnt), vAt ? 1 : 0, soma(s => s.prev)]] };
 
         const mReais = meses.filter(k => k <= cur || stats.some(s => s.c.v.has(k)));
         const piv = { nome: 'Faturamento por mês', scroll: true,
           cab: [['Contrato', 't'], ...mReais.map(k => [lbl(k) + (k === cur ? ' (atual)' : k > cur ? ' (prog.)' : ''), '$']), ['Total', '$']],
           linhas: [...stats.map(s => [nomeC(s.c), ...mReais.map(k => s.c.v.get(k) || ''), mReais.reduce((a, k) => a + (s.c.v.get(k) || 0), 0)]),
-            ['TOTAL', ...mReais.map(k => soma(s => s.c.v.get(k) || 0) || ''), soma(s => mReais.reduce((a, k) => a + (s.c.v.get(k) || 0), 0))]] };
+            ['TOTAL', ...mReais.map(k => soma(s => s.c.v.get(k) || 0) || ''), soma(s => mReais.reduce((a, k) => a + (s.c.v.get(k) || 0), 0))],
+            ['DIFERENÇA AO MÊS ANTERIOR', ...mReais.map(k => k > (ks.length ? Math.min(...ks) : cur) ? soma(s => s.c.v.get(k) || 0) - soma(s => s.c.v.get(prevKey(k)) || 0) : ''), '']] };
 
         const g = new Map();                                               // itens a faturar no mês escolhido (contrato + item + tam. + preço)
-        reqs.filter(r => key(r) === mr).forEach(r => r.itens.forEach(i => {
+        reqs.filter(r => key(r) === mr).forEach(r => r.itens.filter(i => i.qa > 0).forEach(i => {
           const kk = [r.contrato, i.item, i.tam, i.preco].join('|'), x = g.get(kk) || { c: r.contrato, item: i.item, tam: i.tam, q: 0, p: i.preco };
           x.q += i.qa; g.set(kk, x);
         }));
@@ -142,33 +160,35 @@
           linhas: [...itensF.map(x => [x.c, x.item, x.tam, x.q, x.p, x.q * x.p]), ...(itensF.length ? [['TOTAL', '', '', itensF.reduce((a, x) => a + x.q, 0), '', itensF.reduce((a, x) => a + x.q * x.p, 0)]] : [])] };
 
         const sg = new Map(); let tm = 0;                                  // maiores despesas do mês por solicitante (setor/centro de custo)
-        reqs.filter(r => key(r) === mr).forEach(r => { const k = r.sol || '(sem nome)', x = sg.get(k) || { n: 0, q: 0, v: 0, cs: new Set() }; x.n++; x.q += qtd(r); x.v += valor(r); x.cs.add(r.contrato); sg.set(k, x); tm += valor(r); });
+        reqs.filter(r => key(r) === mr).forEach(r => { const k = CFO.norm(r.sol || '(sem nome)'), x = sg.get(k) || { nome: r.sol || '(sem nome)', n: 0, q: 0, v: 0, cs: new Set() }; x.n++; x.q += qtd(r); x.v += valor(r); x.cs.add(r.contrato); sg.set(k, x); tm += valor(r); });
         const sol = { nome: 'Por solicitante', sheet: `Despesas por solicitante - ${lbl(mr)}`, scroll: true, cab: [['Solicitante', 't'], ['Contratos', 't'], ['Req.', 'n'], ['Itens', 'n'], ['Valor', '$'], ['% do mês', '%']],
-          linhas: [...sg].sort((a, b) => b[1].v - a[1].v).map(([k, x]) => [k, [...x.cs].join(', '), x.n, x.q, x.v, tm ? x.v / tm : 0]) };
+          linhas: [...sg].sort((a, b) => b[1].v - a[1].v).map(([k, x]) => [x.nome, [...x.cs].join(', '), x.n, x.q, x.v, tm ? x.v / tm : 0]) };
 
         const opMes = [...new Set([cur, ...reqs.map(key)])].filter(k => k <= add(cur, H)).sort((a, b) => b - a);
         const seletor = `<select id="fr" aria-label="Mês de referência">${opMes.map(k => `<option value="${k}" ${k === mr ? 'selected' : ''}>${lbl(k)}</option>`).join('')}</select>`;
-        const params = `<div class="tw scroll"><table><thead><tr><th>Contrato</th><th>Teto mensal (R$)</th><th>Trabalhadores</th></tr></thead><tbody>
+        const params = `<div class="tw scroll"><table><thead><tr><th>Contrato</th><th>Teto mensal (R$)</th><th>Trabalhadores</th><th>Coordenador</th></tr></thead><tbody>
           ${todos.map(s => `<tr><td>${esc(nomeC(s.c))}</td><td><input type="number" min="0" step="any" data-c="${esc(s.c.num)}" data-k="teto" value="${s.teto || ''}" placeholder="Sem teto"></td>
-            <td><input type="number" min="0" step="1" data-c="${esc(s.c.num)}" data-k="trab" value="${s.trab || ''}" placeholder="-"></td></tr>`).join('') || '<tr><td colspan="3" class="empty">Sem contratos</td></tr>'}</tbody></table></div>`;
+            <td><input type="number" min="0" step="1" data-c="${esc(s.c.num)}" data-k="trab" value="${s.trab || ''}" placeholder="-"></td>
+            <td><input type="text" data-c="${esc(s.c.num)}" data-k="coord" value="${esc((cfg[s.c.num] || {}).coord || '')}" placeholder="${esc(s.coord)}"></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Sem contratos</td></tr>'}</tbody></table></div>`;
         const chartHtml = grafico(meses, meses.map(totMes), meses.map(corMes), unico ? unico.teto : 0);
         fat.pre = seletor;
         const rk = stats.filter(s => s.atual > 0).sort((a, b) => b.atual - a.atual).slice(0, 6);
         const rkHtml = rk.length ? `<div class="hbars">${rk.map(s => `<div class="hb"><span class="hl">${esc(nomeC(s.c))}</span><span class="hv">${R$(s.atual)}${vAt ? ' · ' + pct(s.atual / vAt) : ''}</span><span class="ht"><i style="width:${Math.max(2, 100 * s.atual / rk[0].atual)}%"></i></span></div>`).join('')}</div>` : '<p class="empty">Sem gasto no mês atual.</p>';
-        return { kpis, chartHtml, secoes: [porC, piv, fat, sol, { nome: 'Parâmetros', tela: true, sub: 'teto mensal (orçamento) e nº de trabalhadores alocados em cada contrato', custom: params }],
+        return { kpis, chartHtml, secoes: [porC, porCoord, piv, fat, sol, { nome: 'Parâmetros', tela: true, sub: 'teto mensal (orçamento), nº de trabalhadores e coordenador de cada contrato', custom: params }],
           paineis: [painel('Mensais por mês', chartHtml, 'realizado, mês atual, programado e previsão', 'w8'), painel('Maiores gastos no mês', rkHtml, lbl(cur), 'w4')] };
       }
 
       /* ================= PREVISÃO ================= */
       function previsao() {
-        const achar = CFO.casarEpi(CFO.store.get('epi', [])), it = new Map();
+        const achar = CFO.casarEpi(CFO.store.get('epi', [])), it = new Map(), estBase = new Map();
+        CFO.store.get('epi', []).forEach(e => { const k = CFO.norm(CFO.baseEpi(e.item)); estBase.set(k, (estBase.get(k) || 0) + (+e.qtd || 0)); });   // estoque de todos os tamanhos somado
         reqs.forEach(r => r.itens.forEach(i => {
-          const x = it.get(i.item) || { nome: i.item, q: new Map(), preco: 0, ult: 0 }, k = key(r);
-          x.q.set(k, (x.q.get(k) || 0) + i.qa); if (k >= x.ult && i.preco) { x.ult = k; x.preco = i.preco; } it.set(i.item, x);
+          const b = CFO.baseEpi(i.item), x = it.get(b) || { nome: b, q: new Map(), preco: 0, ult: 0 }, k = key(r);   // todos os tamanhos do item contam juntos
+          x.q.set(k, (x.q.get(k) || 0) + i.qa); if (k >= x.ult && i.preco) { x.ult = k; x.preco = i.preco; } it.set(b, x);
         }));
         const PR = { 'Falta': 0, 'Atenção': 1, 'Sem cadastro': 2, 'Excesso': 3, 'Sem giro': 4, 'OK': 5 };
         const itens = [...it.values()].map(x => {
-          const proj = projetar(x.q), md = media3(x.q), pq = proj.reduce((a, b) => a + b, 0), row = achar(x.nome), est = row ? +row.qtd || 0 : null;
+          const proj = projetar(x.q), md = media3(x.q), pq = proj.reduce((a, b) => a + b, 0), row = achar(x.nome), est = estBase.has(CFO.norm(x.nome)) ? estBase.get(CFO.norm(x.nome)) : row ? +row.qtd || 0 : null;
           const cob = est != null && md > 0 ? est / md : null, sug = est == null ? Math.ceil(pq) : Math.max(0, Math.ceil(pq - est));
           const sit = est == null ? 'Sem cadastro' : md === 0 && est > 0 ? 'Sem giro' : cob != null && cob < 1 ? 'Falta' : cob != null && cob < 2 ? 'Atenção' : cob != null && cob > 6 ? 'Excesso' : 'OK';
           return { nome: x.nome, md, proj, pq, est, cob, sug, val: sug * x.preco, sit };
@@ -202,6 +222,7 @@
         }));
         dup.forEach(x => { if (x.ids.size > 1) al.push({ tipo: 'Duplicidade', c: x.r.contrato, k: key(x.r), d: `${x.i.item}${x.i.tam ? ' (' + x.i.tam + ')' : ''} · ${x.r.sol || '(sem nome)'} em ${x.ids.size} requisições: ${[...x.ids].join(', ')}` }); });
         passados.forEach(r => r.itens.forEach(i => { if (i.qs > 0 && i.qa > i.qs) al.push({ tipo: 'Aprovado > solicitado', c: r.contrato, k: key(r), d: `Req. ${r.id}: ${i.item} - solicitado ${N(i.qs)}, aprovado ${N(i.qa)}` }); }));
+        passados.forEach(r => r.itens.forEach(i => { if (i.qa > 0 && !(i.preco > 0)) al.push({ tipo: 'Sem preço', c: r.contrato, k: key(r), d: `Req. ${r.id}: ${i.item}${i.tam ? ' (' + i.tam + ')' : ''} - ${N(i.qa)} un. sem preço (não entra nos valores)` }); }));
         stats.forEach(s => {
           const kq = [...s.c.q.keys()].filter(k => k <= cur).sort((a, b) => a - b);
           kq.forEach((k, idx) => {
@@ -213,20 +234,20 @@
           });
           if (s.teto) s.c.v.forEach((v, k) => { if (k <= cur && k >= lim && v > s.teto) al.push({ tipo: 'Acima do teto', c: s.c.num, k, d: `${R$(v)} para teto de ${R$(s.teto)} (${pct(v / s.teto)})` }); });
         });
-        const ORD = ['Acima do teto', 'Fora do padrão', 'Duplicidade', 'Aprovado > solicitado'];
+        const ORD = ['Acima do teto', 'Fora do padrão', 'Duplicidade', 'Aprovado > solicitado', 'Sem preço'];
         al.sort((a, b) => ORD.indexOf(a.tipo) - ORD.indexOf(b.tipo) || b.k - a.k || numCmp(a.c, b.c));
         const pend = passados.filter(r => !comp[r.id]).length, qtdTipo = t => al.filter(x => x.tipo === t).length;
         const kpis = [{ t: 'Alertas', v: al.length, s: 'últimos 12 meses' }, { t: 'Duplicidades', v: qtdTipo('Duplicidade') }, { t: 'Consumo fora do padrão', v: qtdTipo('Fora do padrão'), s: 'acima de 150% da média' },
-          { t: 'Acima do teto', v: qtdTipo('Acima do teto') }, { t: 'Recibos pendentes', v: pend, s: `de ${passados.length} requisições` }];
+          { t: 'Acima do teto', v: qtdTipo('Acima do teto') }, { t: 'Itens sem preço', v: qtdTipo('Sem preço'), s: 'valor subestimado' }, { t: 'Recibos pendentes', v: pend, s: `de ${passados.length} requisições` }];
         const tA = { nome: 'Alertas', scroll: true, cab: [['Alerta', 't'], ['Contrato', 't'], ['Mês', 't'], ['Detalhe', 't']], linhas: al.map(x => [x.tipo, x.c, lbl(x.k), x.d]) };
         const tT = { nome: 'Consumo por trabalhador', scroll: true, cab: [['Contrato', 't'], ['Trabalhadores', 'n'], ['Itens no mês atual', 'n'], ['Itens/trabalhador', 'n'], ['Média 3 meses', 'n'], ['Valor/trabalhador', '$']],
           linhas: stats.map(s => [nomeC(s.c), s.trab || '', s.c.q.get(cur) || 0, s.trab ? (s.c.q.get(cur) || 0) / s.trab : '', s.trab ? media3(s.c.q) / s.trab : '', s.trab ? s.atual / s.trab : '']) };
         const lista = [...passados].sort((a, b) => key(b) - key(a) || numCmp(b.id, a.id)), mostra = lista.slice(0, 150);
         const tR = { nome: 'Recibos', scroll: true, cab: [['Requisição', 't'], ['Contrato', 't'], ['Solicitante', 't'], ['Mês', 't'], ['Valor', '$'], ['Recibo conferido', 'c']],
           linhas: mostra.map(r => [r.id, r.contrato, r.sol, lbl(key(r)), valor(r), { id: r.id, ok: !!comp[r.id] }]) };
-        tA.sub = 'duplicidades, consumo fora do padrão, acima do teto e aprovado acima do solicitado'; tT.sub = 'informe o nº de trabalhadores em Financeiro > Parâmetros';
+        tA.sub = 'duplicidades, consumo fora do padrão, acima do teto, aprovado acima do solicitado e itens sem preço'; tT.sub = 'informe o nº de trabalhadores em Financeiro > Parâmetros';
         tR.sub = (lista.length > 150 ? 'mostrando as 150 mais recentes · ' : '') + 'marque quando o recibo assinado bater com a requisição';
-        const tipos = ['Acima do teto', 'Fora do padrão', 'Duplicidade', 'Aprovado > solicitado'], mx = Math.max(1, ...tipos.map(qtdTipo));
+        const tipos = ['Acima do teto', 'Fora do padrão', 'Duplicidade', 'Aprovado > solicitado', 'Sem preço'], mx = Math.max(1, ...tipos.map(qtdTipo));
         const hb = (rot, txt, w) => `<div class="hb"><span class="hl">${esc(rot)}</span><span class="hv">${txt}</span><span class="ht"><i style="width:${w}%"></i></span></div>`;
         const alHtml = `<div class="hbars">${tipos.map(t => hb(t, qtdTipo(t), Math.max(2, 100 * qtdTipo(t) / mx))).join('')}</div>`;
         const okN = passados.length - pend, recHtml = `<div class="hbars">${hb('Recibos conferidos', `${okN} de ${passados.length}`, passados.length ? Math.max(2, 100 * okN / passados.length) : 0)}</div>`;
@@ -248,7 +269,7 @@
       body.querySelectorAll('.subtabs button').forEach(b => b.onclick = () => keep(() => { det[aba] = b.dataset.d; render(); }));
       const fr = $('#fr'); if (fr) fr.onchange = e => keep(() => { f.m = +e.target.value; render(); });
       body.querySelectorAll('input[data-k]').forEach(el => el.onchange = () => {
-        const c = CFO.store.get('mensal:cfg', {}); c[el.dataset.c] = { ...(c[el.dataset.c] || {}), [el.dataset.k]: +el.value || 0 }; CFO.store.set('mensal:cfg', c); keep(render);
+        const c = CFO.store.get('mensal:cfg', {}); c[el.dataset.c] = { ...(c[el.dataset.c] || {}), [el.dataset.k]: el.dataset.k === 'coord' ? el.value.trim() : +el.value || 0 }; CFO.store.set('mensal:cfg', c); keep(render);
       });
       body.querySelectorAll('input[data-r]').forEach(el => el.onchange = () => {
         const c = CFO.store.get('mensal:comprov', {}); if (el.checked) c[el.dataset.r] = true; else delete c[el.dataset.r]; CFO.store.set('mensal:comprov', c); keep(render);
@@ -258,8 +279,8 @@
     /* ---------- Exportar o que está na tela ---------- */
     const txtSel = id => { const e = $(id); return e && e.selectedOptions[0] ? e.selectedOptions[0].text : ''; };
     const agora = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-    const titulo = () => 'Controle de mensal - ' + { fin: 'Financeiro', prev: 'Previsão', aud: 'Auditoria' }[ultimo.aba];
-    const filtros = () => [['Contrato', txtSel('#fc')], ['Tipo', txtSel('#ft')], ['Previsão', txtSel('#fh')], ['Valores', txtSel('#fv')], ...(ultimo.aba === 'fin' ? [['Mês de referência', lbl(f.m || curKey())]] : [])];
+    const titulo = () => 'Controle mensal - ' + { fin: 'Financeiro', prev: 'Previsão', aud: 'Revisão' }[ultimo.aba];
+    const filtros = () => [['Contrato', txtSel('#fc')], ['Tipo', txtSel('#ft')], ['Previsão', txtSel('#fh')], ['Contratos', txtSel('#fq')], ['Valores', txtSel('#fv')], ...(ultimo.aba === 'fin' ? [['Mês de referência', lbl(f.m || curKey())]] : [])];
     const cel = (v, t) => v === '' || v == null ? '' : t === '$' ? { t: 'n', v: +v, z: '"R$" #,##0.00' } : t === 'n' ? { t: 'n', v: +v, z: '#,##0.0' } : t === '%' ? { t: 'n', v: +v, z: '0.0%' } : t === 'c' ? (v.ok ? 'Sim' : 'Não') : String(v);
     const usados = new Set();
     const aba31 = nome => { let n = nome.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31).trim() || 'Planilha', i = 2; while (usados.has(n)) n = n.slice(0, 28) + ' ' + i++; usados.add(n); return n; };
@@ -279,7 +300,7 @@
         const aoa = [s.cab.map(c => c[0]), ...s.linhas.map(l => l.map((v, i) => cel(v, s.cab[i][1])))];
         folhas.push({ nome: s.sheet || s.nome, aoa, cabRow: 0, cols: s.cab.map((c, i) => Math.min(60, Math.max(10, c[0].length, ...s.linhas.map(l => String(typeof l[i] === 'number' ? '99.999,99' : l[i] ?? '').length)) + 2)) });
       });
-      CFO.xlsxSalvar(`controle-de-mensal-${{ fin: 'financeiro', prev: 'previsao', aud: 'auditoria' }[ultimo.aba]}-${new Date().toISOString().slice(0, 10)}.xlsx`, folhas, { logo, svgs: sel.has('graf') ? CFO.extraiSvgs(ultimo.chartHtml) : [] });
+      CFO.xlsxSalvar(`controle-mensal-${{ fin: 'financeiro', prev: 'previsao', aud: 'revisao' }[ultimo.aba]}-${new Date().toISOString().slice(0, 10)}.xlsx`, folhas, { logo, svgs: sel.has('graf') ? CFO.extraiSvgs(ultimo.chartHtml) : [] });
     }
     function pdf(sel, logo, secs) {
       const limpa = CFO.limpaCores;
@@ -296,6 +317,7 @@
     $('#fc').onchange = e => { f.c = e.target.value; render(); };
     $('#ft').onchange = e => { f.t = e.target.value; render(); };
     $('#fv').onchange = e => { f.v = e.target.value; render(); };
+    $('#fq').onchange = e => { f.q = e.target.value; render(); };
     $('#fh').onchange = e => { f.h = +e.target.value; render(); };
     opcoes(); render();
   };

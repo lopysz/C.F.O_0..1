@@ -18,7 +18,7 @@
     </div>`;
 
   // Nomes sugeridos ao escrever o EPI: Planilha EPI + itens das requisições
-  const nomesEpi = () => [...new Set([...CFO.store.get('epi', []).map(e => e.item), ...CFO.store.get('requisicoes', []).flatMap(r => r.itens.map(i => i.item))].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const nomesEpi = () => [...new Set([...CFO.store.get('epi', []).map(e => e.item), ...CFO.store.get('requisicoes', []).flatMap(r => r.itens.map(i => i.item))].filter(Boolean).map(CFO.baseEpi))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   CFO.modules.etiquetas = body => {
     let list = [];
@@ -61,7 +61,7 @@
         b.innerHTML = `<div class="ed">
           <label>Foto do item</label>
           <div class="photo"><img id="ph" alt="" ${f.foto ? `src="${f.foto}"` : 'hidden'}><button id="pick" class="ghost">Escolher foto</button><input id="pf" type="file" accept="image/*" hidden></div>
-          <label>Ou escreva o nome do EPI<input id="epi" list="epiNomes" placeholder="Ex.: Luva de vaqueta" value="${esc(f.epi || '')}"></label>
+          <label>Ou escreva o nome do EPI (todos os tamanhos contam juntos)<input id="epi" list="epiNomes" placeholder="Ex.: Luva de vaqueta" value="${esc(f.epi || '')}"></label>
           <datalist id="epiNomes">${nomesEpi().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
           <label>C.A.<input id="ca" value="${esc(f.ca)}"></label>
           <label>Denominações</label><div id="den"></div><button id="addDen" class="ghost">+ Adicionar denominação</button>
@@ -107,6 +107,7 @@
           const achados = CFO.contratosDoEpi(nome);
           if (!achados.length) { alert(`Nenhum contrato usa "${nome}" nas requisições importadas. Confira o nome do EPI.`); return; }
           sel.clear(); achados.forEach(n => sel.add(n)); q('#cq').value = ''; drawC();
+          q('#selc').textContent = `${sel.size} contrato(s) usam "${CFO.baseEpi(nome)}" (todos os tamanhos juntos)`;
         };
         q('#none').onclick = () => { shown().forEach(n => sel.delete(n)); drawC(); };
         q('#addC').onclick = () => { const n = q('#manual').value.trim(); if (n) { sel.add(n); q('#manual').value = ''; drawC(); } };

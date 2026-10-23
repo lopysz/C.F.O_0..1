@@ -6,7 +6,9 @@ CFO.casarEpi = rows => {
   return nome => {
     const n = CFO.norm(nome); if (exato.has(n)) return exato.get(n);
     let best = null, top = .5;
-    idx.forEach(x => { if (x.n.includes(n) || n.includes(x.n)) { const s = Math.min(x.n.length, n.length) / Math.max(x.n.length, n.length); if (s >= top) { top = s; best = x.r; } } });
+    const tn = CFO.tamEpi(nome);
+    idx.forEach(x => { const tx = CFO.tamEpi(x.r.item); if (tn && tx && tn !== tx) return;   // tamanhos diferentes não são o mesmo item
+      if (x.n.includes(n) || n.includes(x.n)) { const s = Math.min(x.n.length, n.length) / Math.max(x.n.length, n.length); if (s >= top) { top = s; best = x.r; } } });
     return best;
   };
 };

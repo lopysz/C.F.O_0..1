@@ -64,7 +64,7 @@
   CFO.modules.controle_gastos = body => {
     let aba = 'fin', f = { c: '', s: '', v: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
-    body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tlog" class="ghost">Logística</button></div>
+    body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Controle de gastos</b> é para <b>analisar o que passou</b>: quanto cada contrato, solicitante e EPI custou (aba Financeiro) e como o estoque gira, com cobertura e Curva ABC (aba Logística). Vale para qualquer período e todos os tipos de pedido.</p><p>Já o <b>Controle mensal</b> é para <b>acompanhar e planejar</b> os pedidos MENSAIS de cada contrato: mês atual, previsão, teto e revisão de erros.</p></details><div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tlog" class="ghost">Logística</button></div>
       <div class="bar"><select id="fc"></select><select id="fs"></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select>${P.html()}${CFO.motivo.html()}
         <label class="chk" id="metaL">Meta mensal (R$) <input id="meta" type="number" min="0" step="any" title="Meta mensal de gasto (opcional)" style="width:8rem"></label>
         <span class="exp"><button id="exp" class="ghost" title="Exportar o que está na tela em Excel ou PDF">Exportar</button></span></div>
@@ -77,7 +77,7 @@
       const rs = todas(), m = new Map();
       rs.forEach(r => { if (!m.has(r.contrato)) m.set(r.contrato, r.contrato + (r.contratoNome ? ' - ' + r.contratoNome : '')); });
       $('#fc').innerHTML = '<option value="">Todos os contratos</option>' + [...m].sort((a, b) => numCmp(a[0], b[0])).map(([k, t]) => `<option value="${esc(k)}" ${k === f.c ? 'selected' : ''}>${esc(t)}</option>`).join('');
-      const sols = [...new Set(rs.filter(r => !f.c || r.contrato === f.c).map(r => r.sol || '(sem nome)'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const sols = [...new Map(rs.filter(r => !f.c || r.contrato === f.c).map(r => [CFO.norm(r.sol || '(sem nome)'), r.sol || '(sem nome)'])).values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
       if (f.s && !sols.includes(f.s)) f.s = '';
       $('#fs').innerHTML = '<option value="">Todos os solicitantes</option>' + sols.map(s => `<option ${s === f.s ? 'selected' : ''}>${esc(s)}</option>`).join('');
       P.fill(body, rs); CFO.motivo.fill(body, rs);
@@ -88,7 +88,7 @@
       $('#tfin').classList.toggle('on', aba === 'fin'); $('#tlog').classList.toggle('on', aba === 'log'); $('#metaL').hidden = aba !== 'fin';
       const m = $('#fm').value, y = $('#fa').value;
       // base: contrato + solicitante · tendência: + ano (todos os meses) · rs: + mês (o que os totais e rankings usam)
-      const base = todas().filter(r => (!f.c || r.contrato === f.c) && (!f.s || (r.sol || '(sem nome)') === f.s) && CFO.motivo.fn($('#ft').value)(r));
+      const base = todas().filter(r => (!f.c || r.contrato === f.c) && (!f.s || CFO.norm(r.sol || '(sem nome)') === CFO.norm(f.s)) && CFO.motivo.fn($('#ft').value)(r));
       const tend = base.filter(P.fn('', y)), rs = tend.filter(P.fn(m, y));
       const key = r => P.key(r.mes);
 
@@ -104,9 +104,9 @@
 
       const grp = (lista, ch, nm) => { const mp = new Map(); lista.forEach(r => { const k = ch(r), x = mp.get(k) || { k, nome: nm(r), n: 0, valor: 0, qtd: 0 }; x.n++; x.valor += valor(r); x.qtd += qtd(r); mp.set(k, x); }); return [...mp.values()]; };
       const porContrato = campo => grp(rs, r => r.contrato, r => r.contrato + (r.contratoNome ? ' - ' + r.contratoNome : '')).filter(x => !f.v || x.valor > 0).sort((a, b) => b[campo] - a[campo]);
-      const porSol = campo => grp(rs, r => r.sol || '(sem nome)', r => r.sol || '(sem nome)').sort((a, b) => b[campo] - a[campo]);
+      const porSol = campo => grp(rs, r => CFO.norm(r.sol || '(sem nome)'), r => r.sol || '(sem nome)').sort((a, b) => b[campo] - a[campo]);
       const itens = new Map();
-      rs.forEach(r => r.itens.forEach(i => { const x = itens.get(i.item) || { nome: i.item, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; itens.set(i.item, x); }));
+      rs.forEach(r => r.itens.forEach(i => { const b = CFO.baseEpi(i.item), x = itens.get(b) || { nome: b, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; itens.set(b, x); }));   // todos os tamanhos juntos
       const porItem = campo => [...itens.values()].sort((a, b) => b[campo] - a[campo]);
       const semMes = rs.filter(r => !key(r)).length;
       const aviso = semMes ? `<p class="log">${semMes} requisição(ões) sem mês reconhecido não entram nos gráficos mensais.</p>` : '';
@@ -155,6 +155,10 @@
         const cel = new Map(); tend.forEach(r => { const k = r.contrato + '|' + key(r); cel.set(k, (cel.get(k) || 0) + valor(r)); });
         const mx = Math.max(1, ...top10.flatMap(c => mm.map(k => cel.get(c.k + '|' + k) || 0)));
 
+        // Curva ABC por custo (como na planilha CURVA ABC): classe pelo % acumulado do custo - até 80% = A, até 95% = B, resto = C
+        let acC = 0; const abcC = its.filter(x => x.valor > 0).map((x, i) => { acC += x.valor; const p = totV ? acC / totV : 0; return { ...x, p, cls: i === 0 || p <= .8 ? 'A' : p <= .95 ? 'B' : 'C' }; });
+        const resC = ['A', 'B', 'C'].map(k => { const l = abcC.filter(x => x.cls === k); return `Classe ${k}: ${l.length} item(ns) = ${pct(totV ? l.reduce((a, x) => a + x.valor, 0) / totV : 0)} do custo`; }).join(' · ');
+        detalhes['Curva ABC (custo)'] = `<p class="log">${resC}</p>` + tab(['#', 'EPI', 'Qtd', 'Custo', '% do total', '% acum.', 'Classe'], abcC.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.nome)}</td><td>${N(x.qtd)}</td><td>${R$(x.valor)}</td><td>${pct(totV ? x.valor / totV : 0)}</td><td>${pct(x.p)}</td><td><b>${x.cls}</b></td></tr>`));
         detalhes['Resumo mensal'] = tab(['Mês', 'Req.', 'Itens', 'Gasto', 'Var. mês ant.', 'Acumulado no ano', ...(meta ? ['% da meta'] : [])], linhasMes);
         if (!f.c) detalhes['Por contrato'] = tab(['Contrato', 'Req.', 'Gasto', '% do total', '% acumulado'], linhasC);
         if (!f.s) detalhes['Por solicitante'] = tab(['Solicitante', 'Req.', 'Gasto', '% do total'], sols.map(x => `<tr><td>${esc(x.nome)}</td><td>${x.n}</td><td>${R$(x.valor)}</td><td>${pct(totV ? x.valor / totV : 0)}</td></tr>`));
@@ -193,7 +197,7 @@
           tile('Itens retirados', N(totQ), `<small>${rs.length} requisição(ões)</small>`),
           tile(`Mês de referência${mesRef ? ' (' + lbl(mesRef) + ')' : ''}`, N(mesRef ? mQ.get(mesRef) || 0 : 0), mesRef ? delta(mQ.get(mesRef) || 0, mQ.get(prevKey(mesRef)) || 0) : ''),
           tile('Entradas no período', f.c || f.s ? '-' : N(totEnt), `<small>${f.c || f.s ? 'não são por contrato' : 'Planilha EPI'}</small>`),
-          tile('Giro do estoque', epi.length ? giro.toFixed(2).replace('.', ',') + 'x' : '-', '<small>saídas ÷ estoque atual</small>'),
+          tile('Giro do estoque', epi.length ? giro.toFixed(2).replace('.', ',') + 'x' : '-', '<small>saídas do período ÷ estoque atual</small>'),
           tile('Cobertura crítica', epi.length ? crit : '-', '<small>menos de 1 mês</small>'),
           tile('Itens sem giro', epi.length ? parados : '-', '<small>sem saída no período</small>')];
 
@@ -201,7 +205,7 @@
         const bars = [{ nome: 'Saídas (requisições)', cor: COR.a, vals: saidas }, ...(ent.size ? [{ nome: 'Entradas (estoque)', cor: COR.c, vals: mesesE.map(k => ent.get(k) || 0) }] : [])];
 
         const abc = porItem('qtd').filter(x => x.qtd > 0); let ac = 0;
-        const abcL = abc.map(x => { const antes = totQ ? ac / totQ : 0; ac += x.qtd; return { ...x, p: totQ ? ac / totQ : 0, cls: antes < .8 ? 'A' : antes < .95 ? 'B' : 'C' }; });
+        const abcL = abc.map((x, i) => { ac += x.qtd; const p = totQ ? ac / totQ : 0; return { ...x, p, cls: i === 0 || p <= .8 ? 'A' : p <= .95 ? 'B' : 'C' }; });
         const nCls = c => abcL.filter(x => x.cls === c).length, cod = nome => (achar(nome) || {}).codigo || '-';
 
         // Situação do estoque: contagem por situação + os 5 mais urgentes
@@ -213,6 +217,20 @@
 
         detalhes['Posição de estoque'] = epi.length ? tab(['Código', 'EPI', 'Estoque', 'Saiu', 'Média/mês', 'Cobertura', 'Situação'], pos.map(p => `<tr><td>${esc(p.e.codigo)}</td><td>${esc(p.e.item)}</td><td>${N(p.e.qtd)}</td><td>${N(p.s)}</td><td>${N(p.med)}</td><td>${p.cob === Infinity ? '-' : N(p.cob) + ' mês(es)'}</td><td>${tag(p.sit)}</td></tr>`))
           + `<p class="log">Cobertura = estoque atual ÷ média mensal de saídas. Crítico: menos de 1 mês · Atenção: menos de 2.${sem.size ? ` ${sem.size} item(ns) das requisições não existem na Planilha EPI.` : ''}</p>` : '<p class="empty">Importe a Planilha EPI.</p>';
+        // Movimento do mês por EPI (planilha Estoque EPI): saldo = aprovado no MENSAL + entradas - saídas (troca regular, troca por dano, admissão e retirada mensal)
+        {
+          const cm = CFO.motivo.canon, SAI = new Set(['trocaregular', 'trocadano', 'admissao', 'retiradamensal']), mv = new Map();
+          const lin = b => { const k = CFO.norm(b); if (!mv.has(k)) mv.set(k, { nome: b, mensal: 0, ent: 0, sai: 0 }); return mv.get(k); };
+          if (mesRef) {
+            todas().filter(r => (!f.c || r.contrato === f.c) && key(r) === mesRef).forEach(r => r.itens.forEach(i => { const x = lin(CFO.baseEpi(i.item)), t = cm(r.motivo); if (t === 'mensal') x.mensal += i.qa; else if (SAI.has(t)) x.sai += i.qa; }));
+            if (!f.c && !f.s) movs.filter(x => x.tipo === 'Entrada').forEach(x => { const d = x.data.slice(0, 7).split('-'); if (+d[0] * 100 + +d[1] === mesRef) lin(CFO.baseEpi(x.item)).ent += +x.qtd || 0; });
+          }
+          const L = [...mv.values()].filter(x => x.mensal || x.ent || x.sai).sort((a, b) => b.sai - a.sai || b.mensal - a.mensal);
+          const T = L.reduce((a, x) => ({ m: a.m + x.mensal, e: a.e + x.ent, s: a.s + x.sai }), { m: 0, e: 0, s: 0 });
+          detalhes['Movimento do mês'] = `<p class="log">${mesRef ? lbl(mesRef) : ''} · saldo = aprovado no MENSAL + entradas - saídas (troca regular, troca por dano, admissão e retirada mensal)${f.c || f.s ? ' · entradas não são por contrato/solicitante e ficam de fora com esse filtro' : ''}</p>`
+            + tab(['EPI', 'Aprovado no mensal', 'Entrada', 'Saída', 'Saldo do mês'], [...L.map(x => `<tr><td>${esc(x.nome)}</td><td>${N(x.mensal)}</td><td>${N(x.ent)}</td><td>${N(x.sai)}</td><td class="${x.mensal + x.ent - x.sai < 0 ? 'down' : ''}">${N(x.mensal + x.ent - x.sai)}</td></tr>`),
+              ...(L.length ? [`<tr><td><b>TOTAL</b></td><td><b>${N(T.m)}</b></td><td><b>${N(T.e)}</b></td><td><b>${N(T.s)}</b></td><td><b>${N(T.m + T.e - T.s)}</b></td></tr>`] : [])]);
+        }
         detalhes['Curva ABC'] = tab(['#', 'Código', 'EPI', 'Qtd', '% do total', '% acum.', 'Classe'], abcL.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(cod(x.nome))}</td><td>${esc(x.nome)}</td><td>${N(x.qtd)}</td><td>${pct(x.qtd / totQ)}</td><td>${pct(x.p)}</td><td><b>${x.cls}</b></td></tr>`));
         if (!f.c) detalhes['Por contrato'] = tab(['Contrato', 'Req.', 'Itens'], porContrato('qtd').map(x => `<tr><td>${esc(x.nome)}</td><td>${x.n}</td><td>${N(x.qtd)}</td></tr>`));
         if (!f.s) detalhes['Por solicitante'] = tab(['Solicitante', 'Req.', 'Itens'], porSol('qtd').map(x => `<tr><td>${esc(x.nome)}</td><td>${x.n}</td><td>${N(x.qtd)}</td></tr>`));

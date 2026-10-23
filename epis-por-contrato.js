@@ -44,11 +44,12 @@
     ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qa}</td></tr>`).join('')}</tbody></table></div></div>`;
 
   // Contratos que usam um EPI (pelo nome), com base nas requisições. Nome igual tem prioridade; senão, nome parecido.
+  // Todos os tamanhos do item contam juntos: "Botina de couro" (ou "Botina de couro (42)") -> contratos que usam qualquer tamanho dela.
   CFO.contratosDoEpi = nome => {
-    const n = CFO.norm(nome); if (!n) return [];
+    const n = CFO.norm(CFO.baseEpi(nome)); if (!n) return [];
     const reqs = CFO.store.get('requisicoes', []), nomes = new Set(reqs.flatMap(r => r.itens.map(i => i.item)));
-    const igual = [...nomes].filter(x => CFO.norm(x) === n);
-    const usa = igual.length ? igual : [...nomes].filter(x => { const m = CFO.norm(x); return m.includes(n) || (m.length > 3 && n.includes(m)); });
+    const igual = [...nomes].filter(x => CFO.norm(CFO.baseEpi(x)) === n);
+    const usa = igual.length ? igual : [...nomes].filter(x => { const m = CFO.norm(CFO.baseEpi(x)); return m.includes(n) || (m.length > 3 && n.includes(m)); });
     const set = new Set(usa);
     return [...new Set(reqs.filter(r => r.contrato && r.itens.some(i => set.has(i.item))).map(r => String(r.contrato)))].sort(numCmp);
   };

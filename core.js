@@ -113,10 +113,13 @@ CFO.periodo = (() => {
 
 // Filtro de Tipo da requisição (coluna Motivo): TODOS, ADMISSÃO, EVENTUAL, MENSAL... (usado em EPI, Requisição, EPIs por contrato e Controle de gastos)
 CFO.motivo = (() => {
-  const LISTA = ['ADMISSÃO', 'EVENTUAL', 'MENSAL', 'RETIRADA DE MENSAL', 'TROCA (DANO)', 'TROCA (REGULAR)', 'TROCA POR DANO / DEFEITO'];
-  const igual = (a, b) => CFO.norm(a) === CFO.norm(b);
+  const LISTA = ['ADMISSÃO', 'EVENTUAL', 'MENSAL', 'RETIRADA MENSAL', 'TROCA (DANO)', 'TROCA (REGULAR)'];
+  // Nomes diferentes do mesmo tipo contam juntos (ex.: "RETIRADA DE MENSAL" = "RETIRADA MENSAL", "USO EVENTUAL" = "EVENTUAL")
+  const ALIAS = { retiradademensal: 'retiradamensal', usoeventual: 'eventual', trocapordanodefeito: 'trocadano' };
+  const canon = s => { const n = CFO.norm(s); return ALIAS[n] || n; };
+  const igual = (a, b) => canon(a) === canon(b);
   return {
-    LISTA,
+    LISTA, canon,
     html: (id = 'ft') => `<select id="${id}" aria-label="Tipo da requisição"><option value="">TODOS</option>${LISTA.map(n => `<option>${CFO.esc(n)}</option>`).join('')}</select>`,
     // Mantém a lista e acrescenta tipos que existem nas requisições importadas mas não estão nela; mantém o que estava escolhido (ou keep)
     fill(root, reqs, id = 'ft', keep) {
@@ -129,3 +132,9 @@ CFO.motivo = (() => {
     test(root, id = 'ft') { return this.fn(root.querySelector('#' + id).value); }
   };
 })();
+
+
+/* ----- Itens com tamanho: "BOTINA DE COURO (42)" e "BOTINA DE COURO (38)" são o MESMO item em tamanhos diferentes ----- */
+CFO.TAM_RE = /^(\d{1,3}([.,]\d)?|P{1,2}|M|G{1,2}|XG{1,2}|EG{1,2}|XXG|XXL|XL|S|L|U|UNICO|ÚNICO|UNICA|ÚNICA|N\/A)$/i;
+CFO.tamEpi = nome => { const m = String(nome ?? '').match(/\(([^)]+)\)\s*$/); return m && CFO.TAM_RE.test(m[1].trim()) ? CFO.norm(m[1]) : ''; };
+CFO.baseEpi = nome => { const s = String(nome ?? '').trim(), m = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/); return m && m[1] && CFO.TAM_RE.test(m[2].trim()) ? m[1].trim() : s; };
