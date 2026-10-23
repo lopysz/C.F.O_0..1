@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C.F.O - Caixa de Ferramentas Operacional</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><div><h1>C.F.O</h1><p>Caixa de Ferramentas Operacional</p></div><div class="topbtns"><button id="imp" class="ghost">Importar planilhas</button><button id="env" class="ghost">☁️ Nuvem</button></div></header>
+<main id="home"></main>
+<div id="screens"></div>
+
+<!-- Biblioteca para importar/exportar planilhas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Biblioteca para exportar Excel com gráficos (contagem de estoque) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+
+<!-- Núcleo (manter nesta ordem) -->
+<script src="core.js"></script>
+<script src="login.js"></script>
+<script src="exportar.js"></script>
+<script src="planilhas.js"></script>
+<script src="importar-pasta.js"></script>
+<script src="supabase-config.js"></script>
+<script src="supabase-import.js"></script>
+<script src="supabase-enviar.js"></script>
+<script src="supabase-sync.js"></script>
+
+<!-- Funções: um arquivo para cada. Para criar uma nova, adicione uma linha aqui -->
+<script src="epi.js"></script>
+<script src="contratos.js"></script>
+<script src="requisicoes.js"></script>
+<script src="epis-por-contrato.js"></script>
+<script src="controle-gastos.js"></script>
+<script src="controle-mensal.js"></script>
+<script src="foto-separacao.js"></script>
+<script src="gerador-identificacao.js"></script>
+<script src="contagem-estoque.js"></script>
+<script src="wl-config.js"></script>
+<script src="wl-sync.js"></script>
+
+<!-- Gavetas e inicialização (sempre por último) -->
+<script src="app.js"></script>
+</body>
+</html>

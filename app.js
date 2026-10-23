@@ -4,7 +4,7 @@ const DRAWERS = [
   { name: 'Almoxarifado Operacional', short: 'Almox. Op.',
     subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
   { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
-  { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }] }
+  { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Sincronizar WL', m: 'wl' }] }
 ];
 
 // Abre a função escolhida (tela cheia)
