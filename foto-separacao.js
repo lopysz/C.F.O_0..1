@@ -61,6 +61,8 @@ CFO.modules.fotos = body => {
   };
   $('#q').oninput = e => { q = e.target.value; render(); };
   $('#day').onchange = e => { day = e.target.value; render(); };
+  const re = () => { if (body.isConnected) load(); else document.removeEventListener('cfo-sync', re); };
+  document.addEventListener('cfo-sync', re);
   $('#clr').onclick = async () => { if (confirm('Apagar TODAS as fotos? Não dá para desfazer.')) { await CFO.db.clear('fotos'); await CFO.db.clear('imgs'); load(); } };
   load();
 };

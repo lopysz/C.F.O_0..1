@@ -7,7 +7,8 @@
 (() => {
   const c = window.CFO_SUPABASE || {};
   const btn = document.getElementById('env');
-  const pasta = (c.pastaEnvio || 'CFO').replace(/^\/+|\/+$/g, '') + '/dados';
+  const raiz = (c.pastaEnvio || 'CFO').replace(/^\/+|\/+$/g, '');
+  const pasta = raiz + '/dados', dbRaiz = raiz + '/db', STORES = ['fotos', 'imgs', 'fichas'];
   const ativo = !!(c.url && c.bucket && c.anonKey);
   const base = ativo ? (/^https?:/.test(c.url) ? c.url : `https://${c.url}.supabase.co`).replace(/\/+$/, '') : '';
   const H = ativo ? { apikey: c.anonKey, Authorization: 'Bearer ' + c.anonKey } : {};
@@ -15,8 +16,9 @@
 
   // controle local (não entra no backup: não começa com "cfo:")
   const MK = 'cfo_sync';
-  const meta = (() => { try { return { mod: {}, seen: {}, dirty: {}, synced: false, ...JSON.parse(localStorage.getItem(MK) || '{}') }; } catch { return { mod: {}, seen: {}, dirty: {}, synced: false }; } })();
+  const meta = (() => { try { return { mod: {}, seen: {}, dirty: {}, dbDirty: {}, synced: false, ...JSON.parse(localStorage.getItem(MK) || '{}') }; } catch { return { mod: {}, seen: {}, dirty: {}, dbDirty: {}, synced: false }; } })();
   const salvaMeta = () => { try { localStorage.setItem(MK, JSON.stringify(meta)); } catch {} };
+  const nomeDb = (st, id) => `${dbRaiz}/${st}/${String(id).replace(/[^A-Za-z0-9_-]/g, '_')}.json`;
   const nomeObj = k => `${pasta}/${k.replace(/[^A-Za-z0-9_-]/g, '_')}.json`;
   const chavesLocais = () => { const r = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('cfo:')) r.push(k.slice(4)); } return r; };
 
@@ -27,11 +29,11 @@
     btn.title = m || ({ off: 'Sincronização desligada', ok: 'Sincronizado', work: 'Sincronizando...', err: 'Erro ao sincronizar' }[e]);
   };
 
-  const listar = async () => {
+  const listar = async (prefix = pasta) => {
     const r = await fetch(`${base}/storage/v1/object/list/${bk}`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, cache: 'no-store',
-      body: JSON.stringify({ prefix: pasta, limit: 1000, offset: 0 }) });
+      body: JSON.stringify({ prefix, limit: 1000, offset: 0 }) });
     if (!r.ok) throw new Error('listar ' + r.status);
-    const m = new Map(); (await r.json()).forEach(o => { if (o.id !== null && /\.json$/.test(o.name)) m.set(pasta + '/' + o.name, o.updated_at || o.created_at || ''); });
+    const m = new Map(); (await r.json()).forEach(o => { if (o.id !== null && /\.json$/.test(o.name)) m.set(prefix + '/' + o.name, o.updated_at || o.created_at || ''); });
     return m;
   };
   const baixar = async nome => {
@@ -45,6 +47,23 @@
   const aplica = (d, nome, upd) => {                      // grava direto no navegador, sem marcar como alteração
     localStorage.setItem('cfo:' + d.key, JSON.stringify(d.value));
     meta.mod[d.key] = d.updatedAt || 0; delete meta.dirty[d.key]; meta.seen[nome] = upd;
+  };
+
+  // Banco de fotos (IndexedDB): cada foto/ficha vira um arquivo em <pasta>/db/<grupo>/<id>.json
+  const raw = { put: CFO.db.put, del: CFO.db.del, clear: CFO.db.clear, get: CFO.db.get, all: CFO.db.all };
+  const envObj = (nome, obj) => CFO.supaEnviar(nome, new Blob([JSON.stringify(obj)], { type: 'application/json' }), 'application/json', true);
+  let t = null;
+  const agendar = () => { if (ativo && meta.synced) { clearTimeout(t); t = setTimeout(sync, 2500); } };
+  const marca = (st, id, op) => { if (STORES.includes(st) && id !== undefined) { meta.dbDirty[st + '/' + id] = { op, ts: Date.now() }; salvaMeta(); agendar(); } };
+  CFO.db.put = async (st, v) => { const r = await raw.put(st, v); marca(st, v && v.id, 'put'); return r; };
+  CFO.db.del = async (st, id) => { const r = await raw.del(st, id); marca(st, id, 'del'); return r; };
+  CFO.db.clear = async st => { const todos = await raw.all(st); const r = await raw.clear(st); todos.forEach(x => marca(st, x.id, 'del')); return r; };
+  CFO.db.get = async (st, id) => {                        // foto completa: se não estiver neste aparelho, baixa da nuvem na hora
+    let r = await raw.get(st, id);
+    if (!r && st === 'imgs' && ativo) {
+      try { const d = await baixar(nomeDb('imgs', id)); if (d && !d.deleted && d.value) { await raw.put('imgs', d.value); r = d.value; } } catch {}
+    }
+    return r;
   };
 
   let rodando = null, pendente = false, avisoMudou = false;
@@ -70,9 +89,34 @@
           }
         }
         if (nomesEnv.length) { const novo = await listar(); nomesEnv.forEach(n => { if (novo.has(n)) meta.seen[n] = novo.get(n); }); }
+        // --- Fotos e fichas (banco do navegador) ---
+        const remotoDb = new Map();
+        for (const st of STORES) (await listar(`${dbRaiz}/${st}`)).forEach((u, n) => remotoDb.set(n, { u, st }));
+        for (const [nome, { u, st }] of remotoDb) {
+          if (st === 'imgs') continue;                      // foto completa só é baixada quando alguém abre a foto
+          if (!forcar && meta.seen[nome] === u) continue;
+          const d = await baixar(nome); if (!d || d.id === undefined) continue;
+          const dk = st + '/' + d.id, loc = meta.dbDirty[dk];
+          if (loc && meta.synced && loc.ts > (d.updatedAt || 0)) continue;   // alteração local mais nova: será enviada
+          if (d.deleted) { await raw.del(st, d.id); if (st === 'fotos') await raw.del('imgs', d.id); }
+          else if (d.value) await raw.put(st, d.value);
+          delete meta.dbDirty[dk]; meta.seen[nome] = u; mudou = true;
+        }
+        const nomesDb = [];
+        for (const [dk, op] of Object.entries(meta.dbDirty)) {
+          const i = dk.indexOf('/'), st = dk.slice(0, i), id = dk.slice(i + 1), nome = nomeDb(st, id);
+          const rec = op.op === 'put' ? await raw.get(st, id) : null;
+          await envObj(nome, rec ? { store: st, id: rec.id, updatedAt: op.ts, value: rec } : { store: st, id, deleted: true, updatedAt: op.ts });
+          delete meta.dbDirty[dk]; nomesDb.push(nome);
+        }
+        for (const st of STORES) for (const rec of await raw.all(st)) {   // fotos antigas ainda não enviadas
+          const nome = nomeDb(st, rec.id);
+          if (!remotoDb.has(nome) && !nomesDb.includes(nome)) { await envObj(nome, { store: st, id: rec.id, updatedAt: Date.now(), value: rec }); nomesDb.push(nome); }
+        }
+        if (nomesDb.length) for (const st of STORES) (await listar(`${dbRaiz}/${st}`)).forEach((u, n) => { if (nomesDb.includes(n)) meta.seen[n] = u; });
         meta.synced = true; salvaMeta();
         mostra('ok', 'Sincronizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (mudou ? ' (dados novos recebidos)' : ''));
-        if (mudou) avisoMudou = true;
+        if (mudou) { avisoMudou = true; document.dispatchEvent(new Event('cfo-sync')); }
         if (mudou && (manual || forcar)) alert('Dados baixados da nuvem. Se alguma tela estiver aberta, feche e abra de novo para ver as mudanças.');
         else if (mudou && !CFO.screens.length) { /* nenhuma tela aberta: já aparece atualizado ao abrir */ }
         else if (mudou) mostra('ok', 'Dados novos recebidos — feche e abra a tela para ver');
@@ -86,12 +130,11 @@
   }
 
   // Toda gravação do sistema marca o conjunto como alterado e agenda o envio
-  let t = null;
   const gravaOriginal = CFO.store.set;
   CFO.store.set = (k, v) => {
     gravaOriginal(k, v);
     meta.mod[k] = Date.now(); meta.dirty[k] = 1; salvaMeta();
-    if (ativo && meta.synced) { clearTimeout(t); t = setTimeout(sync, 2500); }
+    agendar();
   };
 
   // Botão da nuvem
