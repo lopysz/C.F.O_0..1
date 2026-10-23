@@ -28,7 +28,7 @@
   async function sincronizar({ completa = false } = {}) {
     if (rodando) return { erro: 'Já está sincronizando.' };
     rodando = true;
-    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, amostraItem: null, amostraCat: null };
+    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, amostraItem: null, amostraCat: null };
     try {
       const desde = completa ? '' : '&date=gte.' + ISO(new Date(Date.now() - C.diasAuto * 864e5));
       const [reqs, cat] = await Promise.all([ler(C.tabela, desde + '&order=created_at.desc,id.asc'), ler(C.catalogo).catch(() => [])]);
@@ -58,17 +58,19 @@
           const jaTem = new RegExp('\\(' + tam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\)\\s*$', 'i').test(nome);
           return { item: nome + (tam && ntam !== 'na' && !jaTem ? ` (${tam})` : ''), tam: tam || 'N/A', qs: qs === undefined ? q : num(qs), qa: qa === undefined ? q : num(qa), preco };
         });
-        mapa.has(id) ? res.upd++ : res.add++;
-        mapa.set(id, { id, sol: String(w.requester || '').trim(), motivo: String(w.motive || '').trim(), contrato: c.num, contratoNome: c.nome, mes, itens, origem: 'WL' });
+        const novo = { id, sol: String(w.requester || '').trim(), motivo: String(w.motive || '').trim(), contrato: c.num, contratoNome: c.nome, mes, itens, origem: 'WL' };
+        const antigo = mapa.get(id);
+        if (!antigo) res.add++; else if (JSON.stringify(antigo) !== JSON.stringify(novo)) res.upd++; else { res.iguais++; return; }
+        mapa.set(id, novo);
       });
-      CFO.store.set('requisicoes', [...mapa.values()]);
+      if (res.add || res.upd) CFO.store.set('requisicoes', [...mapa.values()]);   // só grava (e só envia à nuvem) se mudou algo
       res.ok = true; res.total = reqs.length;
     } catch (e) {
       res.erro = (e && e.message) || String(e);
       if (/fetch|network|cors/i.test(res.erro)) res.erro += ' (confira a internet; se persistir, o WL pode ter bloqueado a leitura)';
     } finally { rodando = false; }
     res.quando = new Date().toISOString(); res.seg = Math.round((Date.now() - t0) / 100) / 10; res.completa = completa;
-    CFO.store.set('wl:ultimo', res);
+    try { localStorage.setItem('cfo_wl_ultimo', JSON.stringify(res)); } catch {}
     document.dispatchEvent(new CustomEvent('cfo-wl', { detail: res }));
     return res;
   }
@@ -83,11 +85,11 @@
     $('#au').checked = CFO.store.get('wl:auto', true);
     $('#au').onchange = e => CFO.store.set('wl:auto', e.target.checked);
     function mostrar() {
-      const r = CFO.store.get('wl:ultimo', null);
+      const r = (() => { try { return JSON.parse(localStorage.getItem('cfo_wl_ultimo')); } catch { return null; } })();
       $('#st').innerHTML = !r ? '<p class="empty">Ainda não sincronizou. Toque em "Atualizar agora".</p>' : r.erro
         ? `<p class="log down">Última tentativa (${fmt(r.quando)}): ${esc(r.erro)}</p>`
         : `<div class="cards kpis"><div class="card"><small>Última sincronização</small><b>${fmt(r.quando)}</b><small>${r.completa ? 'completa' : 'últimos ' + C.diasAuto + ' dias'} · ${r.seg}s</small></div>
-           <div class="card"><small>Novas</small><b>${r.add}</b></div><div class="card"><small>Atualizadas</small><b>${r.upd}</b></div><div class="card"><small>Ignoradas</small><b>${r.ignoradas}</b><small>${r.canc || 0} canceladas · ${r.naoEpi || 0} de outro tipo${r.tipos && Object.keys(r.tipos).length ? ' (' + esc(Object.entries(r.tipos).map(([k, v]) => k + ': ' + v).join(', ')) + ')' : ''}</small></div></div>`
+           <div class="card"><small>Novas</small><b>${r.add}</b></div><div class="card"><small>Atualizadas</small><b>${r.upd}</b><small>${r.iguais || 0} sem mudança</small></div><div class="card"><small>Ignoradas</small><b>${r.ignoradas}</b><small>${r.canc || 0} canceladas · ${r.naoEpi || 0} de outro tipo${r.tipos && Object.keys(r.tipos).length ? ' (' + esc(Object.entries(r.tipos).map(([k, v]) => k + ': ' + v).join(', ')) + ')' : ''}</small></div></div>`
         + (r.semNome || r.semPreco ? `<p class="log down">Atenção: ${r.semNome} item(ns) sem nome e ${r.semPreco} sem preço. Campos dos itens no WL: ${esc(r.amostraItem || '-')} · Campos do catálogo: ${esc(r.amostraCat || '-')}. Me mande esses nomes para eu ajustar.</p>` : '');
     }
     const rodar = async completa => { $('#ag').disabled = $('#cp').disabled = true; $('#st').innerHTML = '<p class="log">Sincronizando com o WL...</p>'; await sincronizar({ completa }); $('#ag').disabled = $('#cp').disabled = false; mostrar(); };

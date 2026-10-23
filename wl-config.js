@@ -6,6 +6,6 @@ window.CFO_WL = {
   key: 'sb_publishable_lmpHsrMcwU5m7tONJBTuXA_feZTewwf',
   tabela: 'requisitions',     // requisições
   catalogo: 'epi_catalog',    // nomes e preços dos EPIs (ligados pelo código epi_code)
-  diasAuto: 45,               // sincronização automática busca os últimos N dias (a completa busca tudo)
+  diasAuto: 14,               // sincronização automática busca os últimos N dias (a completa busca tudo)
   minutosAuto: 30             // de quanto em quanto tempo atualiza sozinho enquanto o sistema estiver aberto
 };
