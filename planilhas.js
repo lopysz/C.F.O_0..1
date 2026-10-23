@@ -119,8 +119,14 @@ CFO.sheet = cfg => {
                  movs.push({ item: r[first.k], tipo: d.tipo, qtd: n, resp: d.resp, data: new Date().toISOString() }); save(); });
       });
       $('#exp').onclick = () => {
-        const ws = XLSX.utils.json_to_sheet(rows.map(r => Object.fromEntries([...cfg.columns.map(c => [c.label, r[c.k]]), ...calcular().cols.map(c => [c.label, c.get(r)])])));
-        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, K); XLSX.writeFile(wb, K + '.xlsx');
+        const cols = [...cfg.columns.map(c => ({ label: c.label, get: r => r[c.k] })), ...calcular().cols.map(c => ({ label: c.label, get: c.get }))];
+        const itens = cols.map((c, i) => ({ id: i, nome: c.label }));
+        CFO.exportar({ titulo: 'Exportar - ' + K, itens, run: (fmt, sel, { logo }) => {
+          const cs = cols.filter((c, i) => sel.has(i)), cab = cs.map(c => c.label), dados = rows.map(r => cs.map(c => c.get(r)));
+          if (fmt === 'xlsx') CFO.xlsxSalvar(K + '.xlsx', [{ nome: K, aoa: [cab, ...dados], cabRow: 0, cols: cab.map((h, i) => Math.min(50, Math.max(String(h).length, ...dados.map(l => String(l[i] ?? '').length)) + 3)) }], { logo });
+          else CFO.print(`<style>@page{size:A4 landscape;margin:10mm}</style><div class="rel">${CFO.cabecalhoPdf(K, logo)}<p class="meta">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+            <table><thead><tr>${cab.map(h => `<th>${CFO.esc(h)}</th>`).join('')}</tr></thead><tbody>${dados.map(l => `<tr>${l.map(v => `<td>${CFO.esc(v ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        } });
       };
       $('#clr').onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(); } };
       $('#imp').onclick = () => $('#file').click();

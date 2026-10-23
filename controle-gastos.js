@@ -67,7 +67,7 @@
     body.innerHTML = `<div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tlog" class="ghost">Logística</button></div>
       <div class="bar"><select id="fc"></select><select id="fs"></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select>${P.html()}${CFO.motivo.html()}
         <label class="chk" id="metaL">Meta mensal (R$) <input id="meta" type="number" min="0" step="any" title="Meta mensal de gasto (opcional)" style="width:8rem"></label>
-        <span class="exp"><button id="xls" class="ghost" title="Baixar o que está na tela em Excel">Exportar Excel</button><button id="pdf" class="ghost" title="Gerar PDF do que está na tela">Exportar PDF</button></span></div>
+        <span class="exp"><button id="exp" class="ghost" title="Exportar o que está na tela em Excel ou PDF">Exportar</button></span></div>
       <div id="out"></div>`;
     const $ = s => body.querySelector(s);
     const todas = () => CFO.store.get('requisicoes', []);
@@ -254,40 +254,40 @@
     const abaNome = (nome, usados) => { let n = nome.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31).trim() || 'Planilha', i = 2; while (usados.has(n)) n = n.slice(0, 28) + ' ' + i++; usados.add(n); return n; };
     const largura = aoa => aoa[0].map((_, c) => ({ wch: Math.min(60, Math.max(8, ...aoa.map(r => { const x = r[c]; return String(x && x.t === 'n' ? '99.999,99' : x ?? '').length; }) ) + 2) }));
 
-    function exportarExcel() {
+    function exportar() {
       if (!ultimo) return;
-      if (typeof XLSX === 'undefined') { alert('A biblioteca de Excel não carregou (verifique a internet) e tente de novo.'); return; }
-      const wb = XLSX.utils.book_new(), usados = new Set();
-      const cards = [...dom(ultimo.kpis.join('')).querySelectorAll('.card')].map(c => { const sm = [...c.querySelectorAll('small')]; return [sm[0].textContent, c.querySelector('b').textContent, sm.slice(1).map(x => x.textContent).join(' ')]; });
-      const resumo = [[tituloRel()], ['Gerado em', agora()], [], ['Filtros aplicados'], ...ultimo.filtros.map(([k, v]) => [k, v]), [], ['Indicador', 'Valor', 'Observação'], ...cards];
-      const ws = XLSX.utils.aoa_to_sheet(resumo); ws['!cols'] = [{ wch: 30 }, { wch: 28 }, { wch: 46 }];
-      XLSX.utils.book_append_sheet(wb, ws, abaNome('Resumo', usados));
+      const itens = [{ id: 'kpi', nome: 'Indicadores (resumo)' }, { id: 'graf', nome: 'Gráficos e painéis' }, ...Object.keys(ultimo.detalhes).map(n => ({ id: 'd:' + n, nome: n }))];
+      CFO.exportar({ titulo: 'Exportar - ' + tituloRel(), itens, run: (fmt, sel, { logo }) => fmt === 'xlsx' ? excel(sel, logo) : pdf(sel, logo) });
+    }
+    function excel(sel, logo) {
+      const usados = new Set(), folhas = [];
+      if (sel.has('kpi')) {
+        const cards = [...dom(ultimo.kpis.join('')).querySelectorAll('.card')].map(c => { const sm = [...c.querySelectorAll('small')]; return [sm[0].textContent, c.querySelector('b').textContent, sm.slice(1).map(x => x.textContent).join(' ')]; });
+        folhas.push({ nome: 'Resumo', cabRow: 5 + ultimo.filtros.length, cols: [30, 28, 46], aoa: [[tituloRel()], ['Gerado em', agora()], [], ['Filtros aplicados'], ...ultimo.filtros.map(([k, v]) => [k, v]), [], ['Indicador', 'Valor', 'Observação'], ...cards] });
+      }
       Object.entries(ultimo.detalhes).forEach(([nome, html]) => {
+        if (!sel.has('d:' + nome)) return;
         const t = dom(html).querySelector('table'); if (!t) return;
         const cab = [...t.rows[0].cells].map(c => c.textContent.trim());
         const aoa = [cab, ...[...t.tBodies[0].rows].map(r => [...r.cells].map((c, i) => celula(c, cab[i])))];
         if (aoa.length === 2 && aoa[1].length === 1) return;   // "Sem dados"
-        const sh = XLSX.utils.aoa_to_sheet(aoa); sh['!cols'] = largura(aoa);
-        XLSX.utils.book_append_sheet(wb, sh, abaNome(nome, usados));
+        folhas.push({ nome, aoa, cabRow: 0, cols: largura(aoa) });
       });
-      XLSX.writeFile(wb, `controle-de-gastos-${ultimo.aba === 'fin' ? 'financeiro' : 'logistica'}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      CFO.xlsxSalvar(`controle-de-gastos-${ultimo.aba === 'fin' ? 'financeiro' : 'logistica'}-${new Date().toISOString().slice(0, 10)}.xlsx`, folhas, { logo, svgs: sel.has('graf') ? CFO.extraiSvgs(ultimo.paineis) : [] });
     }
-
-    function exportarPDF() {
-      if (!ultimo) return;
-      const limpa = h => h.replace(/var\(--line\)/g, '#cbd5e1').replace(/var\(--muted\)/g, '#475569').replace(/var\(--text\)/g, '#0f172a');
-      const tabelas = Object.entries(ultimo.detalhes).map(([nome, html]) => `<div class="sub">${esc(nome)}</div>${limpa(html)}`).join('');
+    function pdf(sel, logo) {
+      const limpa = CFO.limpaCores;
+      const tabelas = Object.entries(ultimo.detalhes).filter(([nome]) => sel.has('d:' + nome)).map(([nome, html]) => `<div class="sub">${esc(nome)}</div>${limpa(html)}`).join('');
       CFO.print(`<style>@page{size:A4 landscape;margin:10mm}</style><div class="rel">
-        <h1>${esc(tituloRel())}</h1>
+        ${CFO.cabecalhoPdf(tituloRel(), logo)}
         <p class="meta">${ultimo.filtros.filter(x => x[1]).map(([k, v]) => `<b>${esc(k)}:</b> ${esc(v)}`).join(' &nbsp;·&nbsp; ')}</p>
         <p class="meta">Gerado em ${esc(agora())}</p>
-        <div class="cards">${ultimo.kpis.join('')}</div>
-        <div class="dash">${limpa(ultimo.paineis)}</div>
-        <h2>Detalhamento</h2>${tabelas}</div>`);
+        ${sel.has('kpi') ? `<div class="cards">${ultimo.kpis.join('')}</div>` : ''}
+        ${sel.has('graf') ? `<div class="dash">${limpa(ultimo.paineis)}</div>` : ''}
+        ${tabelas ? `<h2>Detalhamento</h2>${tabelas}` : ''}</div>`);
     }
 
-    $('#xls').onclick = exportarExcel;
-    $('#pdf').onclick = exportarPDF;
+    $('#exp').onclick = exportar;
     $('#tfin').onclick = () => { aba = 'fin'; render(); };
     $('#tlog').onclick = () => { aba = 'log'; render(); };
     $('#fc').onchange = e => { f.c = e.target.value; opcoes(); render(); };

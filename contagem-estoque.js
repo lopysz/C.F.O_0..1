@@ -121,25 +121,25 @@ CFO.modules.contagem = (() => {
     i.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(g.svg);
   });
 
-  async function exportarXlsx(arquivo, tabelas, graf) {
+  async function exportarXlsx(arquivo, tabelas, graf, logo) {
     const nomeAba = n => n.replace(/[\\/?*[\]:]/g, '-').slice(0, 31);
     if (!window.ExcelJS) {                                                // sem a biblioteca (ex.: sem internet): só as tabelas
       const wb = XLSX.utils.book_new();
       tabelas.forEach(t => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([t.cab, ...t.linhas]), nomeAba(t.nome)));
       XLSX.writeFile(wb, arquivo);
-      if (graf.length) alert('Os gráficos não puderam ser incluídos no Excel (biblioteca não carregada). Use o PDF para levar os gráficos.');
+      if (graf.length || logo) alert('A logo e os gráficos não puderam ser incluídos no Excel (biblioteca não carregada). Use o PDF para levar a logo e os gráficos.');
       return;
     }
     const wb = new ExcelJS.Workbook();
     tabelas.forEach(t => {
-      const ws = wb.addWorksheet(nomeAba(t.nome));
+      const ws = wb.addWorksheet(nomeAba(t.nome)), off = logo ? CFO.xlsxLogo(wb, ws) : 0;
       ws.addRow(t.cab).eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF16294A' } }; });
       t.linhas.forEach(l => ws.addRow(l));
       t.cab.forEach((h, i) => { ws.getColumn(i + 1).width = Math.min(50, Math.max(String(h).length, ...t.linhas.map(l => String(l[i] ?? '').length)) + 3); });
-      ws.views = [{ state: 'frozen', ySplit: 1 }];
+      ws.views = [{ state: 'frozen', ySplit: off + 1 }];
     });
     if (graf.length) {
-      const ws = wb.addWorksheet('Gráficos'); let row = 1;
+      const ws = wb.addWorksheet('Gráficos'); let row = logo ? CFO.xlsxLogo(wb, ws) + 1 : 1;
       for (const g of graf) {
         const p = await png(g); if (!p) continue;
         ws.addImage(wb.addImage({ base64: p, extension: 'png' }), { tl: { col: 0, row: row - 1 }, ext: { width: g.w, height: g.h } });
@@ -152,30 +152,28 @@ CFO.modules.contagem = (() => {
   // PDF: usa a impressão do navegador (escolha "Salvar como PDF")
   const celula = (h, v) => v === '' || v == null ? '' : typeof v !== 'number' ? v : /Diferen|Varia/.test(h) ? sg(v) : fmt(v);
   const tabHtml = t => `<table><thead><tr>${t.cab.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${t.linhas.map(l => `<tr>${l.map((c, j) => `<td class="${typeof c === 'number' ? 'n' : ''}">${esc(celula(t.cab[j], c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  const pdf = (titulo, tabs, graf) => CFO.print(`<div class="cnt-pdf"><h1>${esc(titulo)}</h1><p class="sub">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+  const pdf = (titulo, tabs, graf, logo) => CFO.print(`<div class="cnt-pdf">${CFO.cabecalhoPdf(titulo, logo)}<p class="sub">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
     ${graf.map(g => `<div class="gr">${g.svg}</div>`).join('')}${tabs.map(t => `<h2>${esc(t.nome)}</h2>${tabHtml(t)}`).join('')}</div>`);
 
-  const exportarContagem = (all, i, tipo) => {
+  // Abre a janela de exportação: o usuário escolhe formato, o que levar e se quer a logo
+  const janelaExport = (titulo, tabs, graf, arquivoXlsx, tituloPdf, tabsPdf) => {
+    const itens = [...(graf.length ? [{ id: 'g', nome: 'Gráficos' }] : []), ...tabs.map((t, k) => ({ id: 't' + k, nome: t.nome }))];
+    CFO.exportar({ titulo, itens, run: (fmt, sel, { logo }) => {
+      const g = sel.has('g') ? graf : [];
+      if (fmt === 'xlsx') exportarXlsx(arquivoXlsx, tabs.filter((t, k) => sel.has('t' + k)), g, logo);
+      else pdf(tituloPdf, (tabsPdf || tabs).filter((t, k) => sel.has('t' + k)), g, logo);
+    } });
+  };
+  const exportarContagem = (all, i) => {
     const graf = graficos(all, all.slice(0, i + 1), i, TH.light), tabs = [tabDetalhe(all, i)];
-    if (tipo === 'xlsx') exportarXlsx(`contagem-${all[i].dia}.xlsx`, tabs, graf);
-    else pdf('Contagem de estoque - ' + dBR(all[i].dia), tabs, graf);
+    janelaExport('Exportar contagem', tabs, graf, `contagem-${all[i].dia}.xlsx`, 'Contagem de estoque - ' + dBR(all[i].dia));
   };
   // extras: funções (tema) => gráfico, ex.: o gráfico do item escolhido
-  const exportarPeriodo = (all, L, extras, tipo) => {
+  const exportarPeriodo = (all, L, extras) => {
     if (!L.length) return alert('Nenhuma contagem no período escolhido.');
     const graf = [...graficos(all, L, all.indexOf(L[L.length - 1]), TH.light), ...extras.map(f => f(TH.light)).filter(Boolean)];
-    if (tipo === 'xlsx') exportarXlsx('contagens-estoque.xlsx', [tabResumo(all, L), tabHist(L)], graf);
-    else pdf('Contagem de estoque - histórico', [tabResumo(all, L), tabHist(L.slice(-8))], graf);   // PDF: últimas 8 contagens (o Excel leva todas)
-  };
-  const escolherExport = cb => {
-    const d = document.createElement('dialog'); d.className = 'imp';
-    d.innerHTML = `<form method="dialog"><h3>Exportar</h3>
-      <button type="button" data-a="xlsx">📗 Excel (.xlsx) - planilha e gráficos</button>
-      <button type="button" data-a="pdf">📄 PDF - planilha e gráficos</button>
-      <button value="cancel" class="ghost" formnovalidate>Cancelar</button></form>`;
-    d.onclose = () => d.remove();
-    d.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { d.close(); cb(b.dataset.a); });
-    document.body.append(d); d.showModal();
+    // PDF: últimas 8 contagens no histórico (o Excel leva todas)
+    janelaExport('Exportar histórico', [tabResumo(all, L), tabHist(L)], graf, 'contagens-estoque.xlsx', 'Contagem de estoque - histórico', [tabResumo(all, L), tabHist(L.slice(-8))]);
   };
 
   /* ---------- Nova contagem ---------- */
@@ -276,7 +274,7 @@ CFO.modules.contagem = (() => {
           ${L.map(x => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.item)}${x.novo ? ' <span class="nv">Novo</span>' : ''}</td><td>${x.sis == null ? '-' : fmt(x.sis)}</td><td><b>${fmt(x.qtd)}</b></td>
             <td class="${cls(x.dif)}">${sg(x.dif)}</td><td>${x.ant == null ? '-' : fmt(x.ant)}</td><td class="${cls(x.v)}">${x.v == null ? '-' : seta(x.v) + ' ' + sg(x.v)}</td></tr>`).join('')}
         </tbody></table></div>`;
-      b.querySelector('#ex').onclick = () => escolherExport(tipo => exportarContagem(all, i, tipo));
+      b.querySelector('#ex').onclick = () => exportarContagem(all, i);
       b.querySelector('#del').onclick = () => {
         if (!confirm('Excluir esta contagem do histórico?\n\nO estoque da Planilha EPI não é alterado.')) return;
         CFO.store.set('contagens', all.filter(x => x.id !== c.id)); CFO.close(); refresh();
@@ -298,7 +296,7 @@ CFO.modules.contagem = (() => {
           + g.map(x => `<div class="gr">${x.svg}</div>`).join('');
       };
       b.querySelector('#it').onchange = e => { rid = e.target.value; draw(); };
-      b.querySelector('#ex').onclick = () => escolherExport(tipo => exportarPeriodo(all, L, rid ? [gi] : [], tipo));
+      b.querySelector('#ex').onclick = () => exportarPeriodo(all, L, rid ? [gi] : []);
       draw();
     });
   }
@@ -323,7 +321,7 @@ CFO.modules.contagem = (() => {
       body.querySelector('#fa').onchange = e => { per.y = e.target.value; draw(); };
       body.querySelector('#nova').onclick = () => nova(draw);
       body.querySelector('#gr').onclick = () => L.length ? graficosTela(all, L) : alert('Nenhuma contagem no período escolhido.');
-      body.querySelector('#ex').onclick = () => L.length ? escolherExport(tipo => exportarPeriodo(all, L, [], tipo)) : alert('Nenhuma contagem no período escolhido.');
+      body.querySelector('#ex').onclick = () => L.length ? exportarPeriodo(all, L, []) : alert('Nenhuma contagem no período escolhido.');
       body.querySelectorAll('.cnt').forEach(el => el.onclick = () => detalhe(all, +el.dataset.i, draw));
     }
     draw();
