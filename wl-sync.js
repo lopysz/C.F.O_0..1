@@ -28,7 +28,7 @@
   async function sincronizar({ completa = false } = {}) {
     if (rodando) return { erro: 'Já está sincronizando.' };
     rodando = true;
-    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, amostraItem: null, amostraCat: null };
+    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, status: {}, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, amostraItem: null, amostraCat: null };
     try {
       const desde = completa ? '' : '&date=gte.' + ISO(new Date(Date.now() - C.diasAuto * 864e5));
       const [reqs, cat] = await Promise.all([ler(C.tabela, desde + '&order=created_at.desc,id.asc'), ler(C.catalogo).catch(() => [])]);
@@ -44,6 +44,7 @@
         const tipo = norm(w.requisition_type || 'epi');
         const canc = w.cancellation_reason || /cancel/i.test(w.status || '');
         if (tipo !== 'epi' || canc) { res.ignoradas++; if (canc) res.canc++; else res.naoEpi++; if (tipo !== 'epi') res.tipos[w.requisition_type] = (res.tipos[w.requisition_type] || 0) + 1; return; }
+        const st = String(w.status || '-').trim(); res.status[st] = (res.status[st] || 0) + 1;
         const c = parseContrato(w.contract_name || w.cost_center);
         const mes = w.month && w.year ? `${w.month} ${w.year}` : String(w.date || '');
         const itens = (Array.isArray(w.items) ? w.items : []).map(it => {
@@ -90,6 +91,7 @@
         ? `<p class="log down">Última tentativa (${fmt(r.quando)}): ${esc(r.erro)}</p>`
         : `<div class="cards kpis"><div class="card"><small>Última sincronização</small><b>${fmt(r.quando)}</b><small>${r.completa ? 'completa' : 'últimos ' + C.diasAuto + ' dias'} · ${r.seg}s</small></div>
            <div class="card"><small>Novas</small><b>${r.add}</b></div><div class="card"><small>Atualizadas</small><b>${r.upd}</b><small>${r.iguais || 0} sem mudança</small></div><div class="card"><small>Ignoradas</small><b>${r.ignoradas}</b><small>${r.canc || 0} canceladas · ${r.naoEpi || 0} de outro tipo${r.tipos && Object.keys(r.tipos).length ? ' (' + esc(Object.entries(r.tipos).map(([k, v]) => k + ': ' + v).join(', ')) + ')' : ''}</small></div></div>`
+        + (r.status && Object.keys(r.status).length ? `<p class="log">Status das requisições lidas: ${esc(Object.entries(r.status).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ': ' + v).join(' · '))}</p>` : '')
         + (r.semNome || r.semPreco ? `<p class="log down">Atenção: ${r.semNome} item(ns) sem nome e ${r.semPreco} sem preço. Campos dos itens no WL: ${esc(r.amostraItem || '-')} · Campos do catálogo: ${esc(r.amostraCat || '-')}. Me mande esses nomes para eu ajustar.</p>` : '');
     }
     const rodar = async completa => { $('#ag').disabled = $('#cp').disabled = true; $('#st').innerHTML = '<p class="log">Sincronizando com o WL...</p>'; await sincronizar({ completa }); $('#ag').disabled = $('#cp').disabled = false; mostrar(); };
