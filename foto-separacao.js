@@ -23,9 +23,18 @@ CFO.modules.fotos = body => {
     const v = list.filter(f => (!day || f.dia === day) && CFO.norm(`${f.req} ${f.obs} ${fmt(f.ts)}`).includes(CFO.norm(q)));
     $('#count').textContent = `${v.length} foto(s)` + (v.length !== list.length ? ` de ${list.length}` : '');
     $('#lst').innerHTML = v.map(f => `
-      <div class="foto" data-id="${f.id}"><img src="${f.th}" alt="Foto de separação">
-        <div><b>${fmt(f.ts)}</b><br>${f.req ? 'Requisição: ' + CFO.esc(f.req) : '<small>Sem nº de requisição</small>'}${f.obs ? `<br><small>${CFO.esc(f.obs)}</small>` : ''}</div></div>`).join('')
+      <div class="foto${f.ret ? ' ret' : ''}" data-id="${f.id}">
+        <label class="fchk" title="Marcar como retirado"><input type="checkbox" class="rt" ${f.ret ? 'checked' : ''}></label>
+        <span class="fimg"><img src="${f.th}" alt="Foto de separação"></span>
+        <div class="ftxt"><b>${fmt(f.ts)}</b><br>${f.req ? 'Requisição: ' + CFO.esc(f.req) : '<small>Sem nº de requisição</small>'}${f.obs ? `<br><small>${CFO.esc(f.obs)}</small>` : ''}</div>
+        ${f.ret ? `<span class="fok">✔ RETIRADO${f.retTs ? `<small>${fmt(f.retTs)}</small>` : ''}</span>` : ''}</div>`).join('')
       || '<p class="empty">Nenhuma foto. Toque em "Tirar foto" para registrar uma separação.</p>';
+    body.querySelectorAll('.foto .fchk').forEach(l => l.onclick = e => e.stopPropagation());
+    body.querySelectorAll('.foto .rt').forEach(c => c.onchange = async () => {
+      const id = c.closest('.foto').dataset.id, f = list.find(x => x.id === id); if (!f) return;
+      f.ret = c.checked; f.retTs = c.checked ? new Date().toISOString() : '';
+      await CFO.db.put('fotos', f); render();
+    });
     body.querySelectorAll('.foto').forEach(el => el.onclick = () => view(el.dataset.id));
   }
 
@@ -33,7 +42,7 @@ CFO.modules.fotos = body => {
     CFO.open('Foto de separação', async b => {
       const f = list.find(x => x.id === id), full = (await CFO.db.get('imgs', id))?.img || f.th;
       b.innerHTML = `<div class="full"><img src="${full}" alt="Foto de separação">
-        <p><b>${fmt(f.ts)}</b><br>${f.req ? 'Requisição: ' + CFO.esc(f.req) : ''}${f.obs ? '<br>' + CFO.esc(f.obs) : ''}</p>
+        <p><b>${fmt(f.ts)}</b><br>${f.req ? 'Requisição: ' + CFO.esc(f.req) : ''}${f.obs ? '<br>' + CFO.esc(f.obs) : ''}${f.ret ? '<br><b class="okt">✔ RETIRADO</b>' : ''}</p>
         <div class="bar"><a id="dl" class="btn" download="separacao-${f.dia}-${f.ts.slice(11, 19).replace(/:/g, '')}.jpg" href="${full}">Baixar</a>
         <button id="del" class="ghost danger">Excluir</button></div></div>`;
       b.querySelector('#del').onclick = async () => {

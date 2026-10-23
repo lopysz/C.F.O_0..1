@@ -21,6 +21,9 @@
   const add = (k, n) => { for (; n > 0; n--) k = nextKey(k); for (; n < 0; n++) k = prevKey(k); return k; };
   const diff = (k, b) => (Math.floor(k / 100) - Math.floor(b / 100)) * 12 + k % 100 - b % 100;
   const curKey = () => { const d = new Date(); return d.getFullYear() * 100 + d.getMonth() + 1; };
+  // Pedido MENSAL é aprovado num mês e retirado/faturado no mês seguinte (ex.: mensal de setembro = outubro), igual à planilha MENSAL GERAL.
+  // Os demais tipos (admissão, eventual, troca...) ficam no próprio mês da requisição.
+  const mesRetirada = r => { const k = P.key(r.mes); return k && CFO.motivo.canon(r.motivo) === 'mensal' ? nextKey(k) : k; };
 
   const SC = { 'Acima': 'bad', 'Falta': 'bad', 'Previsto acima': 'warn', 'Atenção': 'warn', 'Excesso': 'warn', 'Sem giro': 'warn', 'Sem cadastro': 'warn', 'OK': 'ok', 'Dentro': 'ok' };
   const COR = { passado: '#3d8bfd', atual: '#f5b84a', prog: '#4cc38a', prev: '#8fa3c4', teto: '#ff8a8f' };
@@ -56,7 +59,7 @@
   CFO.modules.controle_mensal = body => {
     let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0, v: '', q: '' }, det = {}, ultimo = null;
     body.style.maxWidth = '1280px';
-    body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Controle mensal</b> é para <b>acompanhar e planejar</b> os pedidos <b>MENSAIS</b> de cada contrato: quanto já foi, quanto é este mês, quanto ainda vem (programado e previsão pela média), o teto de cada contrato e o que comprar. A aba <b>Revisão</b> aponta erros e alertas (duplicidade, consumo fora do padrão, acima do teto, item sem preço, recibo pendente).</p><p>Já o <b>Controle de gastos</b> é para <b>analisar o que passou</b>: quanto cada contrato, solicitante e EPI custou (Financeiro) e como o estoque gira (Logística), em qualquer período e para todos os tipos de pedido.</p></details>
+    body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Controle mensal</b> é para <b>acompanhar e planejar</b> os pedidos <b>MENSAIS</b> de cada contrato: quanto já foi, quanto é este mês, quanto ainda vem (programado e previsão pela média), o teto de cada contrato e o que comprar. <b>Regra do mês:</b> o pedido MENSAL conta no mês da <b>retirada</b>, ou seja, o mês da requisição + 1 (mensal de outubro entra em novembro). A aba <b>Revisão</b> aponta erros e alertas (duplicidade, consumo fora do padrão, acima do teto, item sem preço, recibo pendente).</p><p>Já o <b>Controle de gastos</b> é para <b>analisar o que passou</b>: quanto cada contrato, solicitante e EPI custou (Financeiro) e como o estoque gira (Logística), em qualquer período e para todos os tipos de pedido.</p></details>
       <div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tprev" class="ghost">Previsão</button><button id="taud" class="ghost">Revisão</button></div>
       <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fq" aria-label="Filtrar por saídas"><option value="">Todos os contratos</option><option value="1">Só contratos com saídas</option></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select><select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
         <span class="exp"><button id="exp" class="ghost">Exportar</button></span></div>
@@ -74,7 +77,7 @@
 
     function render() {
       ['fin', 'prev', 'aud'].forEach(a => $('#t' + a).classList.toggle('on', aba === a));
-      const cur = curKey(), H = f.h, hTxt = H === 1 ? '1 mês' : H + ' meses', key = r => P.key(r.mes), mr = f.m || cur;
+      const cur = curKey(), H = f.h, hTxt = H === 1 ? '1 mês' : H + ' meses', key = mesRetirada, mr = f.m || cur;
       const cfg = CFO.store.get('mensal:cfg', {}), comp = CFO.store.get('mensal:comprov', {});
       const base = CFO.store.get('requisicoes', []).filter(r => (!f.c || r.contrato === f.c) && CFO.motivo.fn(f.t)(r));
       const reqs = base.filter(key), semMes = base.length - reqs.length;

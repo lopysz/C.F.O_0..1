@@ -254,3 +254,15 @@ dialog.expd{width:min(92vw,360px)}
 details.sobre{margin-bottom:.8rem;border:1px solid var(--line);border-radius:10px;padding:.5rem .8rem;background:var(--panel)}
 details.sobre summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 details.sobre p{margin:.5rem 0 0;font-size:.9rem;line-height:1.4}
+
+/* Foto de separação: marcar como retirado */
+.foto{position:relative}
+.foto .fchk{display:flex;align-items:center;justify-content:center;padding:.5rem;margin:-.5rem 0 -.5rem -.3rem;flex:none;cursor:pointer}
+.foto .fchk input{width:26px;height:26px;margin:0;cursor:pointer;accent-color:#2ecc71}
+.foto .fimg{position:relative;display:block;flex:none;width:84px;height:84px}
+.foto.ret .fimg img{opacity:.5}
+.foto.ret .fimg::after{content:"";position:absolute;inset:0;border-radius:10px;background:linear-gradient(to top right,transparent calc(50% - 2px),#2ecc71 calc(50% - 2px),#2ecc71 calc(50% + 2px),transparent calc(50% + 2px))}
+.foto.ret .ftxt{text-decoration:line-through;opacity:.6}
+.foto .fok{position:absolute;top:.4rem;right:.6rem;color:#2ecc71;font-weight:700;font-size:.8rem;text-align:right;line-height:1.1;text-shadow:0 0 4px rgba(0,0,0,.6)}
+.foto .fok small{display:block;font-weight:400;font-size:.65rem;opacity:.85}
+.okt{color:#2ecc71}
