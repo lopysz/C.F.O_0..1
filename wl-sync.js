@@ -28,7 +28,7 @@
   async function sincronizar({ completa = false } = {}) {
     if (rodando) return { erro: 'Já está sincronizando.' };
     rodando = true;
-    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, ignoradas: 0, semNome: 0, semPreco: 0, amostraItem: null, amostraCat: null };
+    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, amostraItem: null, amostraCat: null };
     try {
       const desde = completa ? '' : '&date=gte.' + ISO(new Date(Date.now() - C.diasAuto * 864e5));
       const [reqs, cat] = await Promise.all([ler(C.tabela, desde + '&order=created_at.desc,id.asc'), ler(C.catalogo).catch(() => [])]);
@@ -42,19 +42,21 @@
       reqs.forEach(w => {
         const id = String(w.number || '').trim(); if (!id) return;
         const tipo = norm(w.requisition_type || 'epi');
-        if (tipo !== 'epi' || w.cancellation_reason || /cancel/i.test(w.status || '')) { res.ignoradas++; return; }
+        const canc = w.cancellation_reason || /cancel/i.test(w.status || '');
+        if (tipo !== 'epi' || canc) { res.ignoradas++; if (canc) res.canc++; else res.naoEpi++; if (tipo !== 'epi') res.tipos[w.requisition_type] = (res.tipos[w.requisition_type] || 0) + 1; return; }
         const c = parseContrato(w.contract_name || w.cost_center);
         const mes = w.month && w.year ? `${w.month} ${w.year}` : String(w.date || '');
         const itens = (Array.isArray(w.items) ? w.items : []).map(it => {
           if (!res.amostraItem) res.amostraItem = Object.keys(it).join(', ');
           const cg = porCod.get(String(it.epi_code ?? '').trim()) || {};
           const nome = String(pick(it, ['name', 'item_name', 'description', 'epi_name', 'nome', 'item', 'title']) ?? cg.nome ?? it.epi_code ?? '').trim();
-          const preco = num(pick(it, ['unit_price', 'price', 'unit_value', 'value', 'preco', 'cost']) ?? cg.preco);
+          const preco = num(pick(it, ['unit_price', 'price', 'unit_value', 'value', 'preco', 'cost'])) || num(cg.preco);
           const q = num(pick(it, ['quantity', 'qty'])), qa = pick(it, ['approved_quantity', 'quantity_approved', 'approved_qty']), qs = pick(it, ['requested_quantity', 'quantity_requested', 'requested_qty']);
           const tam = String(it.size ?? '').trim(), ntam = norm(tam);
           if (!nome || nome === String(it.epi_code ?? '').trim()) res.semNome++;
           if (!preco) res.semPreco++;
-          return { item: nome + (tam && ntam !== 'na' ? ` (${tam})` : ''), tam: tam || 'N/A', qs: qs === undefined ? q : num(qs), qa: qa === undefined ? q : num(qa), preco };
+          const jaTem = new RegExp('\\(' + tam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\)\\s*$', 'i').test(nome);
+          return { item: nome + (tam && ntam !== 'na' && !jaTem ? ` (${tam})` : ''), tam: tam || 'N/A', qs: qs === undefined ? q : num(qs), qa: qa === undefined ? q : num(qa), preco };
         });
         mapa.has(id) ? res.upd++ : res.add++;
         mapa.set(id, { id, sol: String(w.requester || '').trim(), motivo: String(w.motive || '').trim(), contrato: c.num, contratoNome: c.nome, mes, itens, origem: 'WL' });
@@ -85,7 +87,7 @@
       $('#st').innerHTML = !r ? '<p class="empty">Ainda não sincronizou. Toque em "Atualizar agora".</p>' : r.erro
         ? `<p class="log down">Última tentativa (${fmt(r.quando)}): ${esc(r.erro)}</p>`
         : `<div class="cards kpis"><div class="card"><small>Última sincronização</small><b>${fmt(r.quando)}</b><small>${r.completa ? 'completa' : 'últimos ' + C.diasAuto + ' dias'} · ${r.seg}s</small></div>
-           <div class="card"><small>Novas</small><b>${r.add}</b></div><div class="card"><small>Atualizadas</small><b>${r.upd}</b></div><div class="card"><small>Ignoradas</small><b>${r.ignoradas}</b><small>canceladas ou não EPI</small></div></div>`
+           <div class="card"><small>Novas</small><b>${r.add}</b></div><div class="card"><small>Atualizadas</small><b>${r.upd}</b></div><div class="card"><small>Ignoradas</small><b>${r.ignoradas}</b><small>${r.canc || 0} canceladas · ${r.naoEpi || 0} de outro tipo${r.tipos && Object.keys(r.tipos).length ? ' (' + esc(Object.entries(r.tipos).map(([k, v]) => k + ': ' + v).join(', ')) + ')' : ''}</small></div></div>`
         + (r.semNome || r.semPreco ? `<p class="log down">Atenção: ${r.semNome} item(ns) sem nome e ${r.semPreco} sem preço. Campos dos itens no WL: ${esc(r.amostraItem || '-')} · Campos do catálogo: ${esc(r.amostraCat || '-')}. Me mande esses nomes para eu ajustar.</p>` : '');
     }
     const rodar = async completa => { $('#ag').disabled = $('#cp').disabled = true; $('#st').innerHTML = '<p class="log">Sincronizando com o WL...</p>'; await sincronizar({ completa }); $('#ag').disabled = $('#cp').disabled = false; mostrar(); };
