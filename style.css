@@ -378,3 +378,7 @@ dialog.mp-dlg .row{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-en
 .mp-sg{padding:.2rem .6rem;font-size:.8rem;margin-left:.3rem}.mp-sg.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 
 .mp-3d canvas{height:50vh;min-height:320px}
+
+/* Mapa 3D no celular: barra de pesquisa sobre o modelo */
+.mp-3d{position:relative}
+.mp-3d .mp-bar{position:absolute;top:.5rem;left:.5rem;right:.5rem;z-index:3;margin:0;padding:.4rem;border-radius:12px;background:rgba(28,31,36,.85);backdrop-filter:blur(4px)}

@@ -114,7 +114,7 @@ CFO.mapa3d = (canvas, api) => {
       const w = ctx.measureText(t).width + 18, h = tam * 1.7;
       for (let k = 0; k < 7; k++) {
         const cx = top.x, cy = top.y - h / 2 - 2 - k * (h + 3), x0 = cx - w / 2, y0 = cy - h / 2;
-        if (k < 6 && !forte && usados.some(u => x0 < u[2] && x0 + w > u[0] && y0 < u[3] && y0 + h > u[1])) continue;
+        if (k < 6 && usados.some(u => x0 < u[2] && x0 + w > u[0] && y0 < u[3] && y0 + h > u[1])) continue;
         ctx.globalAlpha = 1; ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(cx, cy + h / 2); ctx.stroke();       // haste
         ctx.beginPath(); ctx.arc(base.x, base.y, 3, 0, 7); ctx.fillStyle = '#cbd5e1'; ctx.fill();
         ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, w, h, 7) : ctx.rect(x0, y0, w, h);                                                                      // placa
@@ -243,6 +243,15 @@ CFO.modules.mapa = body => {
     <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><button class="ghost" id="m3r">↻ Girar</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
   const $ = s => body.querySelector(s);
 
+  // Celular + 3D: a barra de pesquisa fica sobre o topo do modelo (no computador continua no lugar de sempre)
+  const barra = $('.mp-bar'), marca = document.createComment('mp-bar'), tela3d = $('#mp-3d'), cel = window.matchMedia ? matchMedia('(max-width: 700px)') : { matches: false };
+  barra.before(marca);
+  const ajustaBarra = () => {
+    if (v3 && cel.matches) { if (barra.parentNode !== tela3d) tela3d.append(barra); }
+    else if (barra.parentNode === tela3d) marca.after(barra);
+  };
+  if (cel.addEventListener) cel.addEventListener('change', ajustaBarra);
+
   /* ---------- Busca ---------- */
   const resultados = () => {
     const todos = rows(), palavras = nrm(q).split(/\s+/).filter(Boolean);
@@ -302,6 +311,7 @@ CFO.modules.mapa = body => {
   };
 
   function desenhar() {
+    ajustaBarra();
     $('#mg').classList.toggle('on', edit);
     const com = new Set(D.locais.filter(l => fil(l.f)).map(l => l.rid)), todos = rows();
     const sem = todos.filter(r => !com.has(r.id)).length;
