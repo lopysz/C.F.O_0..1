@@ -8,13 +8,13 @@
    Estantes = fileiras (comprimento = prateleiras, altura = andares). Arrastar gira · roda/pinça aproxima · Shift/botão direito/2 dedos move.
    api = { layout(), locais(), foco(), sel(), corredor(idFileira), onTap(f, p) } */
 CFO.mapa3d = (canvas, api) => {
-  const ctx = canvas.getContext('2d'), HA = .9, DF = 1, DC = 2.2, TF = Math.tan(25 * Math.PI / 180);
+  const ctx = canvas.getContext('2d'), HA = .9, DF = 1.5, GAP = .5, DC = 2.2, TF = Math.tan(25 * Math.PI / 180);
   const cam = { yaw: 0, pitch: .6, dist: 30, tx: 0, ty: 1.5, tz: 0 };
   let W = 320, Hh = 320, pend = 0, anim = null;
 
   const geo = () => {
     let z = 0, maxP = 1; const rows = [];
-    api.layout().forEach(r => { const d = r.t === 'f' ? DF : DC; rows.push({ r, z, d }); z += d; if (r.t === 'f') maxP = Math.max(maxP, r.p); });
+    api.layout().forEach(r => { const d = r.t === 'f' ? DF + GAP : DC; rows.push({ r, z, d }); z += d; if (r.t === 'f') maxP = Math.max(maxP, r.p); });
     return { rows, maxP, zt: z };
   };
   const basis = () => {
@@ -71,10 +71,16 @@ CFO.mapa3d = (canvas, api) => {
     const ativas = hit.size ? new Set([...hit].map(k => k.split('|')[0])) : null;   // com item procurado, as outras fileiras ficam "fantasmas"
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
       const { r, z } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1, aco = [150, 160, 172], pst = [100, 108, 120];
-      addBox(L, 0, 0, z, r.p, alt, z + .02, [62, 68, 78], .2 * g);                                                    // fundo da estante
-      for (let a = 0; a <= r.a; a++) { const y = a * HA; addBox(L, 0, y - .03, z, r.p, y + .03, z + .07, aco, g); addBox(L, 0, y - .03, z + DF - .07, r.p, y + .03, z + DF, aco, g); }   // vigas de cada andar
+      const lat = [78, 86, 98];
+      addBox(L, 0, 0, z, r.p, alt, z + .04, lat, .55 * g);                                                           // painel do fundo
+      addBox(L, -.08, 0, z, 0, alt, z + DF, lat, .6 * g); addBox(L, r.p, 0, z, r.p + .08, alt, z + DF, lat, .6 * g);   // laterais
+      for (let a = 0; a <= r.a; a++) {
+        const y = a * HA;
+        addBox(L, 0, y - .05, z, r.p, y + .05, z + DF, aco, .45 * g);                                               // tampo da prateleira (corpo inteiro)
+        addBox(L, 0, y - .05, z, r.p, y + .05, z + .09, aco, g); addBox(L, 0, y - .05, z + DF - .09, r.p, y + .05, z + DF, aco, g);   // vigas frente e fundo
+      }
       const px = []; for (let p = 0; p <= r.p; p += 5) px.push(p); if (r.p % 5) px.push(r.p);
-      px.forEach(p => { addBox(L, p - .04, 0, z, p + .04, alt, z + .08, pst, g); addBox(L, p - .04, 0, z + DF - .08, p + .04, alt, z + DF, pst, g); });   // montantes
+      px.forEach(p => { addBox(L, p - .08, 0, z, p + .08, alt, z + .15, pst, g); addBox(L, p - .08, 0, z + DF - .15, p + .08, alt, z + DF, pst, g); });   // montantes mais grossos
       for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
         const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k);
         if (h) addBox(L, p - .92, (a - 1) * HA + .05, z + .08, p - .08, a * HA - .05, z + DF - .06, [245, 158, 11], 1, '#fff');
@@ -83,17 +89,31 @@ CFO.mapa3d = (canvas, api) => {
       }
     });
     L.sort((a, b) => b.d - a.d).forEach(f => poly(f.pts, f.fill, f.alpha, f.stroke));
-    // nomes
-    G.rows.forEach(x => {
-      if (x.r.t === 'c') { const p = proj([G.maxP / 2, .05, x.z + x.d / 2]); if (p) texto(x.r.nome.toUpperCase(), p, Math.max(9, Math.min(16, fpx() * .5 / p.z)), '#e5e8ec'); }
-      else { const p = proj([0, x.r.a * HA + .3, x.z + DF / 2]); if (p) texto(x.r.nome, p, Math.max(9, Math.min(15, fpx() * .42 / p.z)), '#fff', 'left'); }
-    });
-    // marcador do item procurado
+    // nomes: cada rótulo só é desenhado se não encobrir outro (se não couber, tenta acima/abaixo; senão some até aproximar o zoom)
+    const usados = [];
+    const rotulo = (t, p, tam, cor, alin, fundo, forcar) => {
+      ctx.font = `700 ${tam}px system-ui,Arial,sans-serif`;
+      const w = ctx.measureText(t).width + (fundo ? 14 : 6), h = tam * 1.5;
+      for (const dy of [0, -h, h, -2 * h, 2 * h]) {
+        const x0 = alin === 'center' ? p.x - w / 2 : alin === 'right' ? p.x - w : p.x, y0 = p.y + dy - h / 2;
+        if (forcar || !usados.some(u => x0 < u[2] && x0 + w > u[0] && y0 < u[3] && y0 + h > u[1])) { usados.push([x0, y0, x0 + w, y0 + h]); texto(t, { x: p.x, y: p.y + dy }, tam, cor, alin, fundo); return true; }
+      }
+      return false;
+    };
+    // marcador do item procurado (sempre aparece)
     hit.forEach(k => {
       const [f, p, a] = k.split('|'), x = G.rows.find(q => q.r.id === f); if (!x) return;
       const top = proj([+p - .5, x.r.a * HA + 1.1, x.z + DF / 2]), base = proj([+p - .5, +a * HA - HA / 2, x.z + DF / 2]);
-      if (top && base) { ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke(); texto(`Prat. ${p} · Andar ${a}`, { x: top.x, y: top.y - 10 }, 12, '#1a1200', 'center', '#f59e0b'); }
+      if (top && base) { ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke(); rotulo(`Prat. ${p} · Andar ${a}`, { x: top.x, y: top.y - 10 }, 12, '#1a1200', 'center', '#f59e0b', true); }
     });
+    // fileiras: nomes alternados nas duas pontas (esquerda/direita) para não ficarem colados; com item procurado só as fileiras dele
+    let n = 0;
+    G.rows.filter(x => x.r.t === 'f').forEach(x => {
+      const esq = n++ % 2 === 0, forte = ativas && ativas.has(x.r.id); if (ativas && !forte) return;
+      const p = proj([esq ? -.3 : x.r.p + .3, x.r.a * HA + .25, x.z + DF / 2]);
+      if (p) rotulo(x.r.nome, p, Math.max(9, Math.min(13, fpx() * .34 / p.z)), '#fff', esq ? 'right' : 'left', null, forte);
+    });
+    G.rows.filter(x => x.r.t === 'c').forEach(x => { const p = proj([G.maxP / 2, .05, x.z + x.d / 2]); if (p) rotulo(x.r.nome.toUpperCase(), p, Math.max(9, Math.min(12, fpx() * .4 / p.z)), '#e5e8ec', 'center'); });
   }
   const pedir = () => { if (!pend) pend = requestAnimationFrame(passo); };
   function passo(now) {
@@ -172,7 +192,7 @@ CFO.modules.mapa = body => {
   if (!Array.isArray(D.locais)) D.locais = [];
   const salvar = () => CFO.store.set(K, D);
 
-  let q = '', semLocal = false, edit = false, foco = null, sel = null, v3 = false, mundo = null;
+  let q = '', semLocal = false, edit = false, foco = null, sel = null, v3 = false, mundo = null, sug = true;   // sug: lista de sugestões (sempre desligada ao entrar no 3D)
   const rows = () => CFO.store.get('epi', []);
   const rowOf = rid => rows().find(r => r.id === rid);
   const fil = id => D.layout.find(x => x.id === id && x.t === 'f');
@@ -189,9 +209,9 @@ CFO.modules.mapa = body => {
 
   body.style.maxWidth = '1280px';
   body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Mapa almoxarifado</b> mostra onde cada item está guardado: digite o nome ou o código e o mapa destaca a prateleira, com o <b>corredor</b>, a <b>fileira</b>, a <b>prateleira</b> e o <b>andar</b>. Toque na <b>⚙️ engrenagem</b> para configurar: toque numa prateleira e escolha os itens de cada andar, ou use <b>Definir local</b> no resultado da busca. Em <b>Layout</b> você muda o desenho (fileiras, corredores, prateleiras e andares).</p></details>
-    <div class="bar mp-bar"><input id="mq" type="search" placeholder="🔎 Pesquisar item ou código..." autocomplete="off"><button id="m3" class="ghost" aria-label="Ver em 3D" title="Alternar entre mapa 2D e 3D">🧊 3D</button><button id="mg" class="ghost" aria-label="Configurar" title="Configurar o mapa">⚙️</button></div>
-    <div id="mp-info"></div><div id="mp-out"></div><div id="mp-2d"></div>
-    <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><datalist id="mp-dl"></datalist>`;
+    <div class="bar mp-bar"><input id="mq" type="search" placeholder="🔎 Pesquisar item" autocomplete="off"><button id="m3" class="ghost" aria-label="Ver em 3D" title="Alternar entre mapa 2D e 3D">🧊 3D</button><button id="mg" class="ghost" aria-label="Configurar" title="Configurar o mapa">⚙️</button></div>
+    <div id="mp-info"></div><div id="mp-out"></div><div id="mp-pan"></div><div id="mp-2d"></div>
+    <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
   const $ = s => body.querySelector(s);
 
   /* ---------- Busca ---------- */
@@ -201,7 +221,26 @@ CFO.modules.mapa = body => {
     if (!palavras.length) return [];
     return todos.filter(r => { const t = nrm(r.item + ' ' + (r.codigo || '')); return palavras.every(w => t.includes(w)); }).slice(0, 40);
   };
+  // Item que o texto digitado identifica sem precisar de lista: nome completo (ou o único resultado)
+  const alvoBusca = () => {
+    const t = nrm(q).trim(); if (!t) return null; const rs = resultados();
+    return rs.find(r => nrm(r.item).trim() === t) || (rs.length === 1 ? rs[0] : null);
+  };
+  // No 3D sem sugestões: só uma linha com o item achado (e botões para alternar entre os locais dele)
+  const statusHTML = () => {
+    if (!nrm(q).trim()) return '';
+    if (foco) {
+      const r = rowOf(foco), ls = doItem(foco); if (!r) return '';
+      const i = Math.max(0, ls.findIndex(l => sel && l.f === sel.f && l.p === sel.p));
+      return `<div class="mp-st"><div class="mp-t"><b>${esc(r.item)}</b><small>${r.codigo ? esc(r.codigo) + ' · ' : ''}estoque ${r.qtd ?? '-'}</small></div>
+        ${ls.length ? `<div class="mp-nav">${ls.length > 1 ? `<button class="ghost" data-nav="-1" aria-label="Local anterior">◀</button><span>${i + 1}/${ls.length}</span><button class="ghost" data-nav="1" aria-label="Próximo local">▶</button>` : ''}<span>📍 ${esc(textoLocal(ls[i]))}</span></div>`
+          : `<div class="mp-nav"><span>sem local definido</span><button class="ghost mp-def" data-def="${esc(r.id)}">+ local</button></div>`}</div>`;
+    }
+    const n = resultados().length;
+    return `<p class="empty">${n ? `${n === 1 ? '1 item parecido' : n + ' itens parecidos'}. Escreva o nome completo ou toque em "Mostrar sugestões".` : 'Nenhum item encontrado.'}</p>`;
+  };
   const resHTML = () => {
+    if (v3 && !sug && !semLocal) return statusHTML();
     const rs = resultados(), todos = rows();
     if (semLocal) { if (!rs.length) return '<p class="empty">Todos os itens da Planilha EPI já têm local.</p>'; }
     else if (!nrm(q).trim()) return todos.length ? '' : '<p class="empty">A Planilha EPI está vazia. Cadastre ou importe os itens em Almoxarifado Operacional > Planilha EPI.</p>';
@@ -238,13 +277,15 @@ CFO.modules.mapa = body => {
     const com = new Set(D.locais.filter(l => fil(l.f)).map(l => l.rid)), todos = rows();
     const sem = todos.filter(r => !com.has(r.id)).length;
     $('#mp-info').innerHTML = (edit ? `<div class="mp-edit"><span>⚙️ Modo configurar: toque numa prateleira para escolher os itens de cada andar.</span><button class="ghost" id="ml">Layout</button></div>` : '')
-      + `<p class="mp-sum"><span>${com.size} item(ns) com local</span> · <button class="lnk${semLocal ? ' on' : ''}" id="ms">${sem} sem local${semLocal ? ' (mostrando)' : ''}</button></p>`;
-    $('#mp-out').innerHTML = resHTML() + painelHTML();
+      + `<p class="mp-sum"><span>${com.size} item(ns) com local</span> · <button class="lnk${semLocal ? ' on' : ''}" id="ms">${sem} sem local${semLocal ? ' (mostrando)' : ''}</button>${v3 ? ` <button class="ghost mp-sg${sug ? ' on' : ''}" id="msg">💡 ${sug ? 'Sugestões ligadas' : 'Mostrar sugestões'}</button>` : ''}</p>`;
+    const pn = painelHTML();
+    $('#mp-out').innerHTML = resHTML(); $('#mp-pan').innerHTML = v3 ? '' : pn; $('#mp-pan3').innerHTML = v3 ? pn : '';   // no 3D o painel da prateleira fica embaixo do modelo
     $('#mp-2d').innerHTML = mapaHTML(); $('#mp-2d').hidden = v3; $('#mp-3d').hidden = !v3; $('#m3').classList.toggle('on', v3);
     if (v3 && mundo) mundo.render();
     $('#mp-dl').innerHTML = edit ? todos.map(r => `<option value="${esc(r.item)}">`).join('') : '';
     const ml = $('#ml'); if (ml) ml.onclick = layout;
     $('#ms').onclick = () => { semLocal = !semLocal; foco = null; desenhar(); };
+    const sg = $('#msg'); if (sg) sg.onclick = () => { sug = !sug; if (!sug) { const a = alvoBusca(); if (a) foco = a.id; } desenhar(); };
   }
 
   const abrir = (l, rolar) => { foco = l.rid; sel = { f: l.f, p: l.p }; desenhar(); if (v3 && mundo) { mundo.focar(l); return; } if (rolar) { const c = body.querySelector(`.mp-c[data-f="${l.f}"][data-p="${l.p}"]`); c && c.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); } };
@@ -304,17 +345,24 @@ CFO.modules.mapa = body => {
   }
 
   /* ---------- Eventos ---------- */
-  $('#mq').oninput = e => { q = e.target.value; if (q) semLocal = false; foco = null; desenhar(); };
+  $('#mq').oninput = e => {
+    q = e.target.value; if (q) semLocal = false; const antes = foco; foco = null;
+    if (v3 && !sug) { const a = alvoBusca(); if (a) { foco = a.id; const ls = doItem(a.id); if (a.id !== antes && ls.length) return abrir(ls[0]); } }   // 3D: o nome completo já destaca o item no modelo
+    desenhar();
+  };
   $('#mg').onclick = () => { edit = !edit; desenhar(); };
   $('#m3').onclick = () => {
-    v3 = !v3;
+    v3 = !v3; sug = !v3;                                    // 3D sempre começa com as sugestões desligadas
     if (v3 && !mundo) mundo = CFO.mapa3d($('#mp-3d canvas'), {
       layout: () => D.layout, locais: () => D.locais.filter(l => fil(l.f)), foco: () => foco, sel: () => sel,
       corredor: id => corredorDe(id),
-      onTap: (f, p) => { sel = { f, p }; if (!at(f, p).some(l => l.rid === foco)) foco = null; desenhar(); }
+      onTap: (f, p) => { sel = { f, p }; if (!(v3 && !sug) && !at(f, p).some(l => l.rid === foco)) foco = null; desenhar(); }
     });
+    if (v3) { const a = alvoBusca(); foco = a ? a.id : null; }
+    const l = v3 && foco ? (sel && D.locais.find(x => x.rid === foco && x.f === sel.f && x.p === sel.p)) || doItem(foco)[0] : null;
+    if (l) sel = { f: l.f, p: l.p };
     desenhar();
-    if (v3) { mundo.resize(); const l = foco && sel ? D.locais.find(x => x.rid === foco && x.f === sel.f && x.p === sel.p) || doItem(foco)[0] : null; l ? mundo.focar(l) : mundo.geral(false); }
+    if (v3) { mundo.resize(); l ? mundo.focar(l) : mundo.geral(false); }
   };
   $('#m3g').onclick = () => mundo && mundo.geral();
   $('#m3c').onclick = () => mundo && mundo.cima();
@@ -322,6 +370,7 @@ CFO.modules.mapa = body => {
     const t = e.target.closest('button, .mp-it'); if (!t || !body.contains(t)) return;
     if (t.dataset.l) return abrir(D.locais.find(l => l.id === t.dataset.l), true);
     if (t.dataset.def) return definirLocal(rowOf(t.dataset.def));
+    if (t.dataset.nav) { const ls = doItem(foco), i = Math.max(0, ls.findIndex(l => sel && l.f === sel.f && l.p === sel.p)); return ls.length && abrir(ls[(i + +t.dataset.nav + ls.length) % ls.length]); }
     if (t.dataset.x) { sel = null; return desenhar(); }
     if (t.dataset.del) { D.locais = D.locais.filter(l => l.id !== t.dataset.del); salvar(); return desenhar(); }
     if (t.dataset.ad) {
