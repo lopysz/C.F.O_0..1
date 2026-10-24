@@ -376,3 +376,5 @@ dialog.mp-dlg .row{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-en
 .mp-st{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center;justify-content:space-between;margin:.6rem 0;padding:.55rem .75rem;border:1px solid #f59e0b;border-radius:10px;background:var(--panel)}
 .mp-nav{display:flex;gap:.4rem;align-items:center;font-size:.8rem;color:var(--muted)}.mp-nav button{padding:.15rem .55rem}
 .mp-sg{padding:.2rem .6rem;font-size:.8rem;margin-left:.3rem}.mp-sg.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+
+.mp-3d canvas{height:50vh;min-height:320px}

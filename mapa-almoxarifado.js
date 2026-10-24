@@ -9,7 +9,8 @@
    api = { layout(), locais(), foco(), sel(), corredor(idFileira), onTap(f, p) } */
 CFO.mapa3d = (canvas, api) => {
   const ctx = canvas.getContext('2d'), HA = .9, DF = 1.5, GAP = .5, DC = 2.2, TF = Math.tan(25 * Math.PI / 180);
-  const cam = { yaw: 0, pitch: .6, dist: 30, tx: 0, ty: 1.5, tz: 0 };
+  const cam = { yaw: -.55, pitch: .6, dist: 30, tx: 0, ty: 1.5, tz: 0 };
+  let vista = -.55;                                          // ângulo de entrada (diagonal); "Girar" passa para o próximo canto
   let W = 320, Hh = 320, pend = 0, anim = null;
 
   const geo = () => {
@@ -106,14 +107,29 @@ CFO.mapa3d = (canvas, api) => {
       const top = proj([+p - .5, x.r.a * HA + 1.1, x.z + DF / 2]), base = proj([+p - .5, +a * HA - HA / 2, x.z + DF / 2]);
       if (top && base) { ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke(); rotulo(`Prat. ${p} · Andar ${a}`, { x: top.x, y: top.y - 10 }, 12, '#1a1200', 'center', '#f59e0b', true); }
     });
-    // fileiras: nomes alternados nas duas pontas (esquerda/direita) para não ficarem colados; com item procurado só as fileiras dele
+    // fileiras: plaquinha numa haste sobre a ponta da estante (alterna esquerda/direita); se encostar em outra, a haste sobe
+    const placa = (t, base, top, forte) => {
+      const tam = Math.max(10, Math.min(16, fpx() * .5 / top.z));
+      ctx.font = `700 ${tam}px system-ui,Arial,sans-serif`;
+      const w = ctx.measureText(t).width + 18, h = tam * 1.7;
+      for (let k = 0; k < 7; k++) {
+        const cx = top.x, cy = top.y - h / 2 - 2 - k * (h + 3), x0 = cx - w / 2, y0 = cy - h / 2;
+        if (k < 6 && !forte && usados.some(u => x0 < u[2] && x0 + w > u[0] && y0 < u[3] && y0 + h > u[1])) continue;
+        ctx.globalAlpha = 1; ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(cx, cy + h / 2); ctx.stroke();       // haste
+        ctx.beginPath(); ctx.arc(base.x, base.y, 3, 0, 7); ctx.fillStyle = '#cbd5e1'; ctx.fill();
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, w, h, 7) : ctx.rect(x0, y0, w, h);                                                                      // placa
+        ctx.fillStyle = forte ? '#f59e0b' : 'rgba(15,23,42,.94)'; ctx.fill(); ctx.strokeStyle = forte ? '#fff' : '#cbd5e1'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = forte ? '#1a1200' : '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, cx, cy + 1);
+        usados.push([x0, y0, x0 + w, y0 + h]); return;
+      }
+    };
     let n = 0;
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
       const esq = n++ % 2 === 0, forte = ativas && ativas.has(x.r.id); if (ativas && !forte) return;
-      const p = proj([esq ? -.3 : x.r.p + .3, x.r.a * HA + .25, x.z + DF / 2]);
-      if (p) rotulo(x.r.nome, p, Math.max(9, Math.min(13, fpx() * .34 / p.z)), '#fff', esq ? 'right' : 'left', null, forte);
+      const alt = x.r.a * HA, px = esq ? .6 : x.r.p - .6, base = proj([px, alt, x.z + DF / 2]), top = proj([px, alt + 1.3, x.z + DF / 2]);
+      if (base && top) placa(x.r.nome, base, top, forte);
     });
-    G.rows.filter(x => x.r.t === 'c').forEach(x => { const p = proj([G.maxP / 2, .05, x.z + x.d / 2]); if (p) rotulo(x.r.nome.toUpperCase(), p, Math.max(9, Math.min(12, fpx() * .4 / p.z)), '#e5e8ec', 'center'); });
+    G.rows.filter(x => x.r.t === 'c').forEach(x => { const p = proj([G.maxP / 2, .05, x.z + x.d / 2]); if (p) rotulo(x.r.nome.toUpperCase(), p, Math.max(9, Math.min(11, fpx() * .35 / p.z)), '#c9ced6', 'center'); });
   }
   const pedir = () => { if (!pend) pend = requestAnimationFrame(passo); };
   function passo(now) {
@@ -126,6 +142,18 @@ CFO.mapa3d = (canvas, api) => {
     }
     draw(); if (anim) pend = requestAnimationFrame(passo);
   }
+  const caixa = () => { const G = geo(), alt = Math.max(1, ...api.layout().filter(r => r.t === 'f').map(r => r.a * HA)); return { G, cx: G.maxP / 2, cz: G.zt / 2, top: alt + 2.4 }; };
+  const cabe = (yaw, pitch, d, c) => {
+    Object.assign(cam, { yaw, pitch, dist: d, tx: c.cx, ty: c.top / 2, tz: c.cz }); B = basis();
+    for (const x of [-1.5, c.G.maxP + 1.5]) for (const y of [0, c.top]) for (const z of [-1.5, c.G.zt + 1.5]) { const p = proj([x, y, z]); if (!p || p.x < 14 || p.x > W - 14 || p.y < 14 || p.y > Hh - 14) return false; }
+    return true;
+  };
+  const ajustar = (yaw, pitch) => {                          // menor distância em que a caixa do almoxarifado cabe inteira na tela
+    const salvo = { ...cam }, c = caixa(); let lo = 6, hi = 400;
+    for (let i = 0; i < 22; i++) { const m = (lo + hi) / 2; if (cabe(yaw, pitch, m, c)) hi = m; else lo = m; }
+    Object.assign(cam, salvo); B = basis();
+    return { yaw, pitch, dist: hi, tx: c.cx, ty: c.top / 2, tz: c.cz };
+  };
   const ir = (to, dur = 700) => { anim = { from: { ...cam }, to: { ...cam, ...to }, t0: 0, dur }; pedir(); };
 
   const api3 = {
@@ -134,9 +162,10 @@ CFO.mapa3d = (canvas, api) => {
       const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 320, h = canvas.clientHeight || 320;
       W = w; Hh = h; canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); pedir();
     },
-    geral(animar = true) { const G = geo(), asp = W / Hh, d = Math.max(G.maxP / (2 * TF * Math.min(asp, 2.2)), G.zt * .9 / (2 * TF)) * 1.35 + 5;
-      const to = { yaw: 0, pitch: .95, dist: Math.max(12, d), tx: G.maxP / 2, ty: 1, tz: G.zt / 2 }; animar ? ir(to) : (Object.assign(cam, to), pedir()); },
-    cima() { const G = geo(); ir({ yaw: 0, pitch: 1.5, dist: Math.max(12, Math.max(G.maxP / (2 * TF * Math.min(W / Hh, 2.2)), G.zt / (2 * TF)) * 1.2 + 4), tx: G.maxP / 2, ty: 0, tz: G.zt / 2 }); },
+    // Enquadra o almoxarifado inteiro (com as plaquinhas) no canvas, olhando pela diagonal
+    geral(animar = true) { const to = ajustar(vista, .6); animar ? ir(to) : (Object.assign(cam, to), pedir()); },
+    girar() { vista += Math.PI / 2; ir(ajustar(vista, .6)); },
+    cima() { ir(ajustar(vista, 1.5)); },
     focar(l) {
       const G = geo(), x = G.rows.find(q => q.r.id === l.f); if (!x) return;
       const c = api.corredor(l.f), cz = c ? (G.rows.find(q => q.r.id === c.id) || {}).z : null;
@@ -211,7 +240,7 @@ CFO.modules.mapa = body => {
   body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Mapa almoxarifado</b> mostra onde cada item está guardado: digite o nome ou o código e o mapa destaca a prateleira, com o <b>corredor</b>, a <b>fileira</b>, a <b>prateleira</b> e o <b>andar</b>. Toque na <b>⚙️ engrenagem</b> para configurar: toque numa prateleira e escolha os itens de cada andar, ou use <b>Definir local</b> no resultado da busca. Em <b>Layout</b> você muda o desenho (fileiras, corredores, prateleiras e andares).</p></details>
     <div class="bar mp-bar"><input id="mq" type="search" placeholder="🔎 Pesquisar item" autocomplete="off"><button id="m3" class="ghost" aria-label="Ver em 3D" title="Alternar entre mapa 2D e 3D">🧊 3D</button><button id="mg" class="ghost" aria-label="Configurar" title="Configurar o mapa">⚙️</button></div>
     <div id="mp-info"></div><div id="mp-out"></div><div id="mp-pan"></div><div id="mp-2d"></div>
-    <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
+    <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><button class="ghost" id="m3r">↻ Girar</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
   const $ = s => body.querySelector(s);
 
   /* ---------- Busca ---------- */
@@ -366,6 +395,7 @@ CFO.modules.mapa = body => {
   };
   $('#m3g').onclick = () => mundo && mundo.geral();
   $('#m3c').onclick = () => mundo && mundo.cima();
+  $('#m3r').onclick = () => mundo && mundo.girar();
   body.addEventListener('click', e => {
     const t = e.target.closest('button, .mp-it'); if (!t || !body.contains(t)) return;
     if (t.dataset.l) return abrir(D.locais.find(l => l.id === t.dataset.l), true);
