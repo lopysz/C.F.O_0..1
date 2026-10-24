@@ -36,6 +36,47 @@
     return { add, dup: 0, upd };
   };
 
+  // Impressão / PDF da requisição (modelo "Relatório de Requisição"): cabeçalho com logo, dados, resumo dos itens aprovados e aviso.
+  // Não mostra nome de colaborador - só código, item, tamanho e quantidade.
+  const relatorio = r => {
+    const achar = CFO.casarEpi(CFO.store.get('epi', []));
+    const resumo = new Map();
+    r.itens.filter(i => i.qa > 0).forEach(i => { const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = resumo.get(k) || { item: i.item, tam: i.tam || 'N/A', qa: 0 }; x.qa += i.qa; resumo.set(k, x); });
+    const linhas = [...resumo.values()], vS = r.itens.reduce((a, i) => a + i.qs * i.preco, 0);
+    const card = (t, v, cls = '') => `<div class="rq-c"><small>${t}</small><b class="${cls}">${v}</b></div>`;
+    const html = `<style>
+      .rq{padding:14mm 12mm;font-family:Arial,Helvetica,sans-serif;color:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .rq-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.rq-top img{height:64px;max-width:160px;object-fit:contain}
+      .rq-top h1{margin:0;font-size:20px;color:#058a5b;text-transform:uppercase;text-align:right}
+      .rq-g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+      .rq-c{border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;break-inside:avoid}.rq-c small{display:block;font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:#7b889c;margin-bottom:5px}
+      .rq-c b{font-size:13px}.rq-c b.ok{color:#058a5b}
+      .rq-box{border:1px solid #058a5b;border-radius:8px;padding:10px 12px;margin-bottom:14px}.rq-box h2{margin:0 0 8px;font-size:11px;color:#058a5b;text-transform:uppercase}
+      .rq table{width:100%;border-collapse:collapse;font-size:11px}.rq th{background:#f4f6fa;border:1px solid #cbd5e1;padding:8px;font-size:9px;text-transform:uppercase}
+      .rq td{border:1px solid #cbd5e1;padding:10px 8px;text-align:center;white-space:normal}.rq td.l{text-align:left;font-weight:700}.rq td.q{font-weight:700;color:#058a5b;font-size:14px}
+      .rq tr{break-inside:avoid}
+      .rq-av{border:1px solid #e5646b;background:#fdf0f0;color:#b91c1c;border-radius:8px;padding:12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase}
+      .rq-ft{margin-top:24px;border-top:4px solid #0f172a}
+    </style>
+    <div class="rq">
+      <div class="rq-top"><img src="${CFO.LOGO}" alt=""><h1>C.F.O - Relatório de Requisição</h1></div>
+      <div class="rq-g">
+        ${card('Solicitante', esc(r.sol || '-'))}${card('Número requisição', '# ' + esc(r.id))}
+        ${card('Contrato / Unidade', esc(r.contrato) + (r.contratoNome ? ' - ' + esc(r.contratoNome) : ''))}${card('Mês / Ano', esc(r.mes || '-'))}
+        ${card('Valor total solicitado', R$(vS))}${card('Valor total aprovado', R$(total(r)), 'ok')}
+      </div>
+      <div class="rq-box"><h2>Quadro de resumo total de itens aprovados</h2>
+        <table><thead><tr><th>Código</th><th>Item / Descrição</th><th>Tamanho</th><th>Total aprovado</th></tr></thead><tbody>
+        ${linhas.map(x => `<tr><td>${esc((achar(x.item) || {}).codigo || '-')}</td><td class="l">${esc(x.item)}</td><td>${esc(x.tam)}</td><td class="q">${x.qa}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum item aprovado</td></tr>'}
+        </tbody></table></div>
+      <div class="rq-av">⚠ Atenção: você tem o prazo de 5 dias para retirar. Se não retirar, o produto irá voltar para o estoque. Obrigado.</div>
+      <div class="rq-ft"></div>
+    </div>`;
+    const antes = document.title; document.title = 'Requisicao ' + r.id;
+    window.addEventListener('afterprint', () => { document.title = antes; }, { once: true });
+    CFO.print(html);
+  };
+
   const api = body => {
     let q = '';
     const all = () => CFO.store.get('requisicoes', []).sort((a, b) => mesKey(b.mes).localeCompare(mesKey(a.mes)) || numCmp(b.id, a.id));
@@ -68,7 +109,8 @@
           <div class="tw"><table><thead><tr><th>Item</th><th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
           ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(i.preco)}</td><td>${R$(i.qa * i.preco)}</td></tr>`).join('')}
           <tr><th>Totais</th><th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
-          <div class="bar" style="margin-top:1rem"><button id="del" class="ghost danger">Excluir requisição</button></div>`;
+          <div class="bar" style="margin-top:1rem"><button id="prn">🖨 Imprimir / PDF</button><button id="del" class="ghost danger">Excluir requisição</button></div>`;
+        b.querySelector('#prn').onclick = () => relatorio(r);
         b.querySelector('#del').onclick = () => {
           if (!confirm('Excluir esta requisição?')) return;
           CFO.store.set('requisicoes', CFO.store.get('requisicoes', []).filter(x => x.id !== r.id)); CFO.close(); render();
