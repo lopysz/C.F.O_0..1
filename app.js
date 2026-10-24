@@ -15,6 +15,7 @@ const IC = {
   scale: '<path d="M12 4v16M6 20h12M5 8h14"/><path d="M5 8l-2.5 6a3 3 0 005 0zM19 8l-2.5 6a3 3 0 005 0z"/>',
   tool: '<path d="M14.5 6.5a4 4 0 005 5L10 21a2.1 2.1 0 01-3-3z"/><path d="M14.5 6.5l3-3 3 3-3 3"/>',
   chev: '<path d="M9 6l6 6-6 6"/>', doc: '<path d="M7 4h7l4 4v12H7z"/><path d="M14 4v4h4"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
   back: '<path d="M15 6l-6 6 6 6"/>', more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'
 };
@@ -26,6 +27,7 @@ let ctx = null, aberto = null;
 
 // Abre a função escolhida (substitui as telas abertas)
 function ir(d, s) {
+  if (!CFO.pode('abrir', s.m)) return;
   while (CFO.screens.length) CFO.close();
   ctx = d;
   CFO.open(s.name, CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
@@ -39,17 +41,21 @@ rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramen
 tabbar.innerHTML = navHTML(false);
 back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#theme').innerHTML = svg('moon');
 
-// Início
-inicio.innerHTML = `<div class="wrap"><h1>C.F.O</h1><p class="sub">Caixa de Ferramentas Operacional</p>
+// Início (funções sem permissão para o perfil aparecem apagadas, com cadeado)
+function renderInicio() {
+  inicio.innerHTML = `<div class="wrap"><p class="sub" style="margin-top:0">Caixa de Ferramentas Operacional</p>
   <div class="sec">Escolha uma função</div>
-  <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}">${s.name}${svg('chev')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
-inicio.querySelectorAll('.short button').forEach(b => b.onclick = () => { const d = DRAWERS.find(x => x.id === b.dataset.d); ir(d, d.subs[+b.dataset.i]); });
+  <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}${d.subs.every(s => !CFO.pode('abrir', s.m)) ? '<span class="tag" style="margin-left:auto">Sem acesso</span>' : ''}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}"${CFO.pode('abrir', s.m) ? '' : ' disabled'}>${s.name}${svg(CFO.pode('abrir', s.m) ? 'chev' : 'lock')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
+  inicio.querySelectorAll('.short button:not(:disabled)').forEach(b => b.onclick = () => { const d = DRAWERS.find(x => x.id === b.dataset.d); ir(d, d.subs[+b.dataset.i]); });
+}
+CFO.onUser = () => { renderInicio(); fechar(); };
+renderInicio();
 
 // Barra superior e destaque do menu conforme as telas abertas
 function atualizar() {
   const n = CFO.screens.length;
   back.hidden = n === 0;
-  const partes = n ? [ctx?.name, ...CFO.screens.map(s => s.dataset.title)].filter(Boolean) : ['C.F.O', 'Início'];
+  const partes = n ? [ctx?.name, ...CFO.screens.map(s => s.dataset.title)].filter(Boolean) : ['C.F.O'];
   crumb.innerHTML = partes.map((p, i) => i === partes.length - 1 ? `<b>${CFO.esc(p)}</b>` : `<span class="p">${CFO.esc(p)} / </span>`).join('');
   document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', n ? b.dataset.d === ctx?.id : b.hasAttribute('data-home')));
   barra.classList.remove('more');
@@ -62,14 +68,14 @@ $('#more').onclick = e => { e.stopPropagation(); barra.classList.toggle('more');
 function fechar() { fan.classList.remove('open'); aberto = null; document.querySelectorAll('.nav[data-d]').forEach(b => b.setAttribute('aria-expanded', 'false')); }
 function abrirLeque(btn) {
   const d = DRAWERS.find(x => x.id === btn.dataset.d), n = d.subs.length, m = mobile();
-  fl.innerHTML = d.subs.map((s, i) => `<button class="fi" role="menuitem">${svg('doc')}${s.name}</button>`).join('');
+  fl.innerHTML = d.subs.map(s => { const ok = CFO.pode('abrir', s.m); return `<button class="fi" role="menuitem"${ok ? '' : ' disabled aria-disabled="true" title="Sem acesso"'}>${svg(ok ? 'doc' : 'lock')}${s.name}</button>`; }).join('');
   fan.classList.remove('open');
   const r = btn.getBoundingClientRect(), h = fan.offsetHeight, w = fan.offsetWidth;
   let x, y;
   if (m) { x = Math.min(Math.max(r.left + r.width / 2 - w / 2, 12), innerWidth - w - 12); y = Math.max(r.top - h - 12, 64); }
   else { x = r.right + 14; y = Math.min(Math.max(r.top + r.height / 2 - h / 2, 70), innerHeight - h - 12); }
   fan.style.left = x + 'px'; fan.style.top = y + 'px';
-  fl.querySelectorAll('.fi').forEach((f, i) => { f.style.setProperty('--d', ((m ? n - 1 - i : i) * 45) + 'ms'); f.onclick = () => { fechar(); ir(d, d.subs[i]); }; });
+  fl.querySelectorAll('.fi').forEach((f, i) => { f.style.setProperty('--d', ((m ? n - 1 - i : i) * 45) + 'ms'); if (!f.disabled) f.onclick = () => { fechar(); ir(d, d.subs[i]); }; });
   btn.setAttribute('aria-expanded', 'true'); aberto = d.id;
   requestAnimationFrame(() => fan.classList.add('open'));
 }

@@ -84,12 +84,12 @@ CFO.sheet = cfg => {
           <button id="add">+ Adicionar</button>
           <button id="imp" class="ghost">Importar</button>
           <button id="exp" class="ghost">Exportar</button>
-          <button id="clr" class="ghost danger">Limpar tudo</button>
+          ${CFO.pode('apagar', K) ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
           <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
         </div>
         <div class="tw"><table><thead><tr>${cfg.columns.map(c => `<th>${c.label}</th>`).join('')}${cx.cols.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>
           ${list.map(r => `<tr>${cfg.columns.map(c => `<td>${CFO.esc(r[c.k])}</td>`).join('')}${cx.cols.map(c => `<td>${CFO.esc(c.get(r))}</td>`).join('')}
-            <td class="act">${cfg.moves ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}<button data-e="${r.id}" title="Editar">✎</button><button data-d="${r.id}" title="Excluir">🗑</button></td></tr>`).join('')
+            <td class="act">${cfg.moves ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}<button data-e="${r.id}" title="Editar">✎</button>${CFO.pode('apagar', K) ? `<button data-d="${r.id}" title="Excluir">🗑</button>` : ''}</td></tr>`).join('')
             || '<tr><td colspan="99" class="empty">Nenhum registro. Adicione um item ou importe uma planilha.</td></tr>'}
         </tbody></table></div>
         ${cfg.moves && movs.length ? `<ul class="log"><b>Últimas movimentações</b>${movs.slice(-5).reverse().map(m => `<li>${m.tipo}: ${CFO.esc(m.item)} (${m.qtd}) - ${CFO.esc(m.resp)} - ${m.data.slice(0, 10)}</li>`).join('')}</ul>` : ''}`;
@@ -128,7 +128,7 @@ CFO.sheet = cfg => {
             <table><thead><tr>${cab.map(h => `<th>${CFO.esc(h)}</th>`).join('')}</tr></thead><tbody>${dados.map(l => `<tr>${l.map(v => `<td>${CFO.esc(v ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
         } });
       };
-      $('#clr').onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(); } };
+      ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(); } };
       $('#imp').onclick = () => $('#file').click();
       $('#file').onchange = async e => {
         const f = e.target.files[0]; e.target.value = ''; if (!f) return;

@@ -87,7 +87,7 @@
       <div class="cards" id="cards"></div>
       <div class="bar"><input id="q" type="search" placeholder="Buscar nº, contrato, solicitante ou item...">
         ${CFO.periodo.html()}${CFO.motivo.html()}
-        <button id="imp" class="ghost">Importar</button><button id="clr" class="ghost danger">Limpar tudo</button>
+        <button id="imp" class="ghost">Importar</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
         <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden></div>
       <div id="lst"></div>`;
     const $ = s => body.querySelector(s);
@@ -112,9 +112,9 @@
           <div class="tw"><table><thead><tr><th>Item</th><th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
           ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(i.preco)}</td><td>${R$(i.qa * i.preco)}</td></tr>`).join('')}
           <tr><th>Totais</th><th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
-          <div class="bar" style="margin-top:1rem"><button id="prn">🖨 Imprimir / PDF</button><button id="del" class="ghost danger">Excluir requisição</button></div>`;
+          <div class="bar" style="margin-top:1rem"><button id="prn">🖨 Imprimir / PDF</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="del" class="ghost danger">Excluir requisição</button>' : ''}</div>`;
         b.querySelector('#prn').onclick = () => relatorio(r);
-        b.querySelector('#del').onclick = () => {
+        (b.querySelector('#del') || {}).onclick = () => {
           if (!confirm('Excluir esta requisição?')) return;
           CFO.store.set('requisicoes', CFO.store.get('requisicoes', []).filter(x => x.id !== r.id)); CFO.close(); render();
         };
@@ -131,7 +131,7 @@
       const r = importData(s.data); render();
       alert(`${r.add} requisição(ões) nova(s)` + (r.upd ? `, ${r.upd} atualizada(s)` : '') + '.');
     };
-    $('#clr').onclick = () => { if (confirm('Apagar TODO o histórico de requisições?')) { CFO.store.set('requisicoes', []); render(); } };
+    ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODO o histórico de requisições?')) { CFO.store.set('requisicoes', []); render(); } };
     render();
   };
   CFO.modules.requisicoes = Object.assign(api, { cfg: { title: 'Requisição', hints: ['requisic', 'aprovac'] }, score, importData });

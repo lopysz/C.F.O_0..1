@@ -26,12 +26,30 @@
   CFO.sha256 = sha256;
 
   const USUARIOS = {
-    rafael:   { nome: 'Rafael',   h: '17b0efd9ab3c75a398574ee900efc9a26b4207fa6222007502cacce62e238078' },
-    aprendiz: { nome: 'Aprendiz', h: '8018fc30c1a0af469ac65a3551d2f65cf7155fc855982718d3c441acc63a2b63' },
-    robson:   { nome: 'Robson',   h: 'cef4d6fa0dd2858f97018eb8f3372b368bd6ebd65500d2cd2687c1cdb1cb5e0b' }
+    rafael:   { nome: 'Rafael',   perfil: 'total', h: '17b0efd9ab3c75a398574ee900efc9a26b4207fa6222007502cacce62e238078' },
+    aprendiz: { nome: 'Aprendiz', perfil: 'aprendiz', h: '8018fc30c1a0af469ac65a3551d2f65cf7155fc855982718d3c441acc63a2b63' },
+    robson:   { nome: 'Robson',   perfil: 'total', h: 'cef4d6fa0dd2858f97018eb8f3372b368bd6ebd65500d2cd2687c1cdb1cb5e0b' }
   };
   const SK = 'cfo_login';
   const atual = () => { try { const u = localStorage.getItem(SK); return USUARIOS[u] ? u : null; } catch { return null; } };
+
+
+  /* ----- Permissões por perfil (valem só na tela: não são segurança de servidor) -----
+     total    = pode tudo
+     aprendiz = usa Ferramentas e Almoxarifado, mas NÃO apaga Planilha EPI, Contratos e Requisições; a gaveta Jurídico aparece sem funções
+     Para criar um perfil novo, acrescente aqui e use  perfil: 'nome'  no usuário. */
+  const PERFIS = {
+    total: {},
+    aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal'], semApagar: ['epi', 'contratos', 'requisicoes'] }
+  };
+  // CFO.pode('abrir', 'controle_mensal')  |  CFO.pode('apagar', 'contratos')
+  CFO.pode = (acao, area) => {
+    const u = atual(), p = u && PERFIS[USUARIOS[u].perfil];
+    if (!p) return false;
+    if (acao === 'abrir') return !(p.bloquear || []).includes(area);
+    if (acao === 'apagar') return !(p.semApagar || []).includes(area);
+    return true;
+  };
 
   const ov = document.createElement('div'); ov.id = 'login';
   ov.innerHTML = `<div class="lg-top"><h1>Bem vindo</h1><h2>C.F.O</h2></div>
@@ -48,12 +66,12 @@
 
   const entrar = u => {
     localStorage.setItem(SK, u); ov.hidden = true; document.body.classList.remove('locked');
-    sair.textContent = 'Sair · ' + USUARIOS[u].nome; sair.hidden = false;
+    sair.textContent = 'Sair · ' + USUARIOS[u].nome; sair.hidden = false; CFO.onUser?.();
   };
   const bloquear = () => {
     localStorage.removeItem(SK); while (CFO.screens.length) CFO.close();
     ov.hidden = false; document.body.classList.add('locked'); sair.hidden = true;
-    ov.querySelector('#lg-p').value = ''; ov.querySelector('#lg-e').textContent = '';
+    ov.querySelector('#lg-p').value = ''; ov.querySelector('#lg-e').textContent = ''; CFO.onUser?.();
     setTimeout(() => ov.querySelector('#lg-u').focus(), 50);
   };
   sair.onclick = bloquear;
