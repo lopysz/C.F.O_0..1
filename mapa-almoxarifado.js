@@ -61,7 +61,7 @@ CFO.modules.mapa = body => {
   const hitAndares = (f, p) => foco ? D.locais.filter(l => l.rid === foco && l.f === f && l.p === p).map(l => l.a) : [];
   const mapaHTML = () => `<div class="mp-map">${D.layout.map(r => r.t === 'c'
     ? `<div class="mp-cor">${esc(r.nome)}</div>`
-    : `<div class="mp-fil"><div class="mp-nome">${esc(r.nome)}</div><div class="mp-grade">${Array.from({ length: r.p }, (_, i) => {
+    : `<div class="mp-fil"><div class="mp-grade"><span class="mp-nome" title="${esc(r.nome)}">${esc(r.nome)}</span>${Array.from({ length: r.p }, (_, i) => {
         const p = i + 1, n = at(r.id, p).length, h = hitAndares(r.id, p);
         return `<button class="mp-c${n ? ' has' : ''}${h.length ? ' hit' : ''}${sel && sel.f === r.id && sel.p === p ? ' sel' : ''}${p % 5 === 0 && p < r.p ? ' gap' : ''}" data-f="${r.id}" data-p="${p}" title="${esc(r.nome)} · prateleira ${p}${n ? ' · ' + n + ' item(ns)' : ''}">${p}${h.length ? `<i>A${h.join(',')}</i>` : ''}</button>`;
       }).join('')}</div></div>`).join('')}</div>
