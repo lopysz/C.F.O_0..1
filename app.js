@@ -6,7 +6,7 @@ const DRAWERS = [
   { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
     subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
   { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
-    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Sincronizar WL', m: 'wl' }] }
+    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Sincronizar WL', m: 'wl' }] }
 ];
 
 const IC = {
@@ -37,7 +37,7 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 // Menus (a mesma lista alimenta a lateral e a barra inferior)
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? d.name : d.short}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
-rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261024a</div>`;
+rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261024b</div>`;
 tabbar.innerHTML = navHTML(false);
 back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#theme').innerHTML = svg('moon');
 

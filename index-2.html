@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>C.F.O - Caixa de Ferramentas Operacional</title>
+<link rel="stylesheet" href="style.css?v=20261024b">
+</head>
+<body>
+<div class="app">
+  <aside class="rail" id="rail"></aside>
+  <header class="bar">
+    <button class="ico" id="back" aria-label="Voltar" hidden></button>
+    <div class="crumb" id="crumb"></div>
+    <div class="topbtns"><button id="imp" class="ghost">Importar planilhas</button><button id="env" class="ghost">☁️ Nuvem</button></div>
+    <button class="ico" id="more" aria-label="Mais opções"></button>
+    <button class="ico" id="theme" aria-label="Alternar tema claro/escuro"></button>
+  </header>
+  <main id="home"></main>
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+<div id="screens"></div>
+<div class="fan" id="fan" role="menu"><div class="fl" id="fl"></div></div>
+
+<!-- Biblioteca para importar/exportar planilhas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Biblioteca para exportar Excel com gráficos (contagem de estoque) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+
+<!-- Núcleo (manter nesta ordem) -->
+<script src="core.js?v=20261024a"></script>
+<script src="login.js?v=20261024a"></script>
+<script src="exportar.js?v=20261024a"></script>
+<script src="planilhas.js?v=20261024a"></script>
+<script src="importar-pasta.js?v=20261024a"></script>
+<script src="supabase-config.js?v=20261024a"></script>
+<script src="supabase-import.js?v=20261024a"></script>
+<script src="supabase-enviar.js?v=20261024a"></script>
+<script src="supabase-sync.js?v=20261024a"></script>
+
+<!-- Funções: um arquivo para cada. Para criar uma nova, adicione uma linha aqui -->
+<script src="epi.js?v=20261024a"></script>
+<script src="contratos.js?v=20261024a"></script>
+<script src="requisicoes.js?v=20261024a"></script>
+<script src="epis-por-contrato.js?v=20261024a"></script>
+<script src="controle-gastos.js?v=20261024a"></script>
+<script src="controle-mensal.js?v=20261024a"></script>
+<script src="foto-separacao.js?v=20261024a"></script>
+<script src="gerador-identificacao.js?v=20261024a"></script>
+<script src="contagem-estoque.js?v=20261024a"></script>
+<script src="mapa-almoxarifado.js?v=20261024b"></script>
+<script src="wl-config.js?v=20261024a"></script>
+<script src="wl-sync.js?v=20261024a"></script>
+
+<!-- Gavetas e inicialização (sempre por último) -->
+<script src="app.js?v=20261024b"></script>
+</body>
+</html>
