@@ -15,14 +15,14 @@ CFO.store = {
 // Abre uma tela cobrindo a atual (com X para voltar)
 CFO.open = (title, render) => {
   const s = document.createElement('section');
-  s.className = 'screen';
+  s.className = 'screen'; s.dataset.title = title;
   s.innerHTML = `<header><button class="x" aria-label="Voltar">✕</button><h2>${CFO.esc(title)}</h2></header><div class="body"></div>`;
   s.querySelector('.x').onclick = CFO.close;
   document.getElementById('screens').append(s);
-  CFO.screens.push(s);
+  CFO.screens.push(s); CFO.onChange?.();
   render(s.querySelector('.body'));
 };
-CFO.close = () => CFO.screens.pop()?.remove();
+CFO.close = () => { CFO.screens.pop()?.remove(); CFO.onChange?.(); };
 
 // Janela de formulário
 CFO.dialog = (title, fields, onOk) => {

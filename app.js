@@ -1,57 +1,99 @@
-/* ===== Gavetas e tela inicial =====
-   Para criar uma subgaveta nova: registre o módulo em js/modules/ e adicione { name, m } em subs. */
+/* ===== Navegação: menu lateral (PC) / barra inferior (celular) + leque =====
+   Para criar uma subgaveta nova: registre o módulo (CFO.modules.<nome>) e adicione { name, m } em subs. */
 const DRAWERS = [
-  { name: 'Almoxarifado Operacional', short: 'Almox. Op.',
+  { id: 'a', icon: 'box', name: 'Almoxarifado Operacional', short: 'Almox. Op.',
     subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }] },
-  { name: 'Jurídico Operacional', short: 'Jurídico Op.', subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
-  { name: 'Ferramentas', short: 'Ferramentas', subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Sincronizar WL', m: 'wl' }] }
+  { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
+    subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
+  { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
+    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Sincronizar WL', m: 'wl' }] }
 ];
 
-// Abre a função escolhida (tela cheia)
-function abrir(s) {
+const IC = {
+  home: '<path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1z"/>',
+  box: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>',
+  scale: '<path d="M12 4v16M6 20h12M5 8h14"/><path d="M5 8l-2.5 6a3 3 0 005 0zM19 8l-2.5 6a3 3 0 005 0z"/>',
+  tool: '<path d="M14.5 6.5a4 4 0 005 5L10 21a2.1 2.1 0 01-3-3z"/><path d="M14.5 6.5l3-3 3 3-3 3"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>', doc: '<path d="M7 4h7l4 4v12H7z"/><path d="M14 4v4h4"/>',
+  back: '<path d="M15 6l-6 6 6 6"/>', more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'
+};
+const svg = (n, cls = '') => `<svg viewBox="0 0 24 24"${cls ? ` class="${cls}"` : ''}>${IC[n]}</svg>`;
+const $ = s => document.querySelector(s);
+const rail = $('#rail'), tabbar = $('#tabbar'), fan = $('#fan'), fl = $('#fl'), inicio = $('#home'), crumb = $('#crumb'), back = $('#back'), barra = $('.bar');
+const mobile = () => matchMedia('(max-width:900px)').matches;
+let ctx = null, aberto = null;
+
+// Abre a função escolhida (substitui as telas abertas)
+function ir(d, s) {
+  while (CFO.screens.length) CFO.close();
+  ctx = d;
   CFO.open(s.name, CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
 }
+function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 
-// Início: quadrados na lateral; ao tocar em um, abre um "leque" com as funções ao lado dele
-const home = document.getElementById('home');
-home.classList.add('fanhome');
-let aberto = null;
-function fechar() { if (aberto) { aberto.classList.remove('open'); aberto.querySelector('.drawer').setAttribute('aria-expanded', 'false'); aberto = null; } }
-function posicionar(fan) {            // mantém o leque inteiro dentro da tela
-  fan.style.setProperty('--dy', '0px');
-  const topo = 70, fim = innerHeight - 12;
-  fan.style.maxHeight = (fim - topo) + 'px';
-  const r = fan.getBoundingClientRect();
-  let dy = 0;
-  if (r.bottom > fim) dy = fim - r.bottom;
-  if (r.top + dy < topo) dy = topo - r.top;
-  fan.style.setProperty('--dy', dy + 'px');
+// Menus (a mesma lista alimenta a lateral e a barra inferior)
+const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
+  DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? d.name : d.short}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
+rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261024a</div>`;
+tabbar.innerHTML = navHTML(false);
+back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#theme').innerHTML = svg('moon');
+
+// Início
+inicio.innerHTML = `<div class="wrap"><h1>Início</h1><p class="sub">Escolha uma função</p>
+  <div class="cols">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}">${s.name}${svg('chev')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
+inicio.querySelectorAll('.short button').forEach(b => b.onclick = () => { const d = DRAWERS.find(x => x.id === b.dataset.d); ir(d, d.subs[+b.dataset.i]); });
+
+// Barra superior e destaque do menu conforme as telas abertas
+function atualizar() {
+  const n = CFO.screens.length;
+  back.hidden = n === 0;
+  const partes = n ? [ctx?.name, ...CFO.screens.map(s => s.dataset.title)].filter(Boolean) : ['C.F.O', 'Início'];
+  crumb.innerHTML = partes.map((p, i) => i === partes.length - 1 ? `<b>${CFO.esc(p)}</b>` : `<span class="p">${CFO.esc(p)} / </span>`).join('');
+  document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', n ? b.dataset.d === ctx?.id : b.hasAttribute('data-home')));
+  barra.classList.remove('more');
 }
-DRAWERS.forEach(d => {
-  const w = document.createElement('div'); w.className = 'dw';
-  const b = document.createElement('button');
-  b.className = 'drawer'; b.textContent = d.name; b.setAttribute('aria-expanded', 'false');
-  const fan = document.createElement('div'); fan.className = 'fan'; fan.setAttribute('role', 'menu');
-  const fl = document.createElement('div'); fl.className = 'fl'; fan.append(fl);
-  const con = document.createElement('i'); con.className = 'con';
-  d.subs.forEach((s, i) => {
-    const f = document.createElement('button');
-    f.className = 'fi'; f.textContent = s.name; f.setAttribute('role', 'menuitem'); f.style.setProperty('--i', i);
-    f.onclick = () => { fechar(); abrir(s); };
-    fl.append(f);
-  });
-  b.onclick = e => {
-    e.stopPropagation();
-    const mesmo = aberto === w; fechar();
-    if (mesmo) return;
-    w.classList.add('open'); b.setAttribute('aria-expanded', 'true'); aberto = w; posicionar(fan);
-  };
-  w.append(b, con, fan); home.append(w);
+CFO.onChange = atualizar;
+back.onclick = () => CFO.close();
+$('#more').onclick = e => { e.stopPropagation(); barra.classList.toggle('more'); };
+
+// Leque
+function fechar() { fan.classList.remove('open'); aberto = null; document.querySelectorAll('.nav[data-d]').forEach(b => b.setAttribute('aria-expanded', 'false')); }
+function abrirLeque(btn) {
+  const d = DRAWERS.find(x => x.id === btn.dataset.d), n = d.subs.length, m = mobile();
+  fl.innerHTML = d.subs.map((s, i) => `<button class="fi" role="menuitem">${svg('doc')}${s.name}</button>`).join('');
+  fan.classList.remove('open');
+  const r = btn.getBoundingClientRect(), h = fan.offsetHeight, w = fan.offsetWidth;
+  let x, y;
+  if (m) { x = Math.min(Math.max(r.left + r.width / 2 - w / 2, 12), innerWidth - w - 12); y = Math.max(r.top - h - 12, 64); }
+  else { x = r.right + 14; y = Math.min(Math.max(r.top + r.height / 2 - h / 2, 70), innerHeight - h - 12); }
+  fan.style.left = x + 'px'; fan.style.top = y + 'px';
+  fl.querySelectorAll('.fi').forEach((f, i) => { f.style.setProperty('--d', ((m ? n - 1 - i : i) * 45) + 'ms'); f.onclick = () => { fechar(); ir(d, d.subs[i]); }; });
+  btn.setAttribute('aria-expanded', 'true'); aberto = d.id;
+  requestAnimationFrame(() => fan.classList.add('open'));
+}
+document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
+document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
+document.addEventListener('pointerdown', e => {
+  if (aberto && !e.target.closest('.fan, .nav[data-d]')) fechar();
+  if (barra.classList.contains('more') && !e.target.closest('.topbtns, #more')) barra.classList.remove('more');
 });
-// Tocar em qualquer lugar fora de um botão fecha o leque
-document.addEventListener('pointerdown', e => { if (aberto && !e.target.closest('.drawer, .fan')) fechar(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
-addEventListener('resize', () => { if (aberto) posicionar(aberto.querySelector('.fan')); });
+addEventListener('resize', fechar);
+
+// Alturas da barra superior/inferior (as telas das funções encaixam entre elas)
+const medidas = () => { const s = document.documentElement.style; s.setProperty('--bar-h', barra.offsetHeight + 'px'); s.setProperty('--tab-h', (mobile() ? tabbar.offsetHeight : 0) + 'px'); };
+new ResizeObserver(medidas).observe(barra); new ResizeObserver(medidas).observe(tabbar); medidas();
+
+// Tema claro/escuro (a escolha fica salva no aparelho)
+const raiz = document.documentElement;
+try { const t = localStorage.getItem('cfo_tema'); if (t) raiz.dataset.theme = t; } catch {}
+$('#theme').onclick = () => {
+  const escuro = raiz.dataset.theme ? raiz.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+  raiz.dataset.theme = escuro ? 'light' : 'dark';
+  try { localStorage.setItem('cfo_tema', raiz.dataset.theme); } catch {}
+};
+atualizar();
 
 // Botão "Importar planilhas" (topo): escolhe de onde vêm as planilhas e distribui cada uma para a função certa
 const input = (extra = {}) => {

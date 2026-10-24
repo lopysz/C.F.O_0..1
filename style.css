@@ -1,26 +1,57 @@
-/* ===== 1. Tokens ===== */
-:root{--bg:#0a1424;--panel:#101f38;--panel2:#16294a;--line:#24406b;--accent:#3d8bfd;--text:#e8eef9;--muted:#8fa3c4;--warn:#f5b84a;--r:14px}
+/* ===== 1. Tokens (tema claro/escuro) ===== */
+:root{--bg:#f6f6f4;--panel:#fff;--panel2:#eef3f2;--line:#e5e5e1;--accent:#0f766e;--on-accent:#fff;--text:#16181d;--muted:#6b7280;--warn:#b45309;--r:12px;--shadow:0 12px 32px rgba(16,24,40,.12);--rail-w:248px;--bar-h:64px;--tab-h:0px;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1013;--panel:#16191e;--panel2:#1d2229;--line:#262a31;--accent:#3dbfb3;--on-accent:#06201d;--text:#eceef2;--muted:#8d95a3;--warn:#f5b84a;--shadow:0 12px 32px rgba(0,0,0,.55)}}
+:root[data-theme="dark"]{--bg:#0e1013;--panel:#16191e;--panel2:#1d2229;--line:#262a31;--accent:#3dbfb3;--on-accent:#06201d;--text:#eceef2;--muted:#8d95a3;--warn:#f5b84a;--shadow:0 12px 32px rgba(0,0,0,.55)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
 /* ===== 2. Base ===== */
 *{box-sizing:border-box;margin:0}
-body{display:flex;flex-direction:column;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent);padding:.55rem .9rem;border-radius:10px}
+html,body{height:100%}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:var(--on-accent);cursor:pointer;border:1px solid var(--accent);background:var(--accent);padding:.55rem .9rem;border-radius:10px}
 button.danger:hover{border-color:#e5646b;color:#ff9aa0}
-button.ghost{background:transparent;border-color:var(--line)}
+button.ghost{background:transparent;border-color:var(--line);color:var(--text)}
+button.link,.act button,.x,.tabs button:not(.on),.subtabs button:not(.on){color:var(--text)}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:.55rem .7rem;width:100%}
-/* ===== 3. Início (gavetas) ===== */
-.top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:1.6rem 1.2rem .8rem}
-.top h1{font-size:1.9rem;letter-spacing:.12em}
-.top p{color:var(--muted);margin-top:.2rem}
-#home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1rem 1.2rem 3rem}
-.drawer{width:min(56vw,180px);aspect-ratio:1;display:grid;place-items:center;text-align:center;font-size:1.05rem;font-weight:600;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1rem}
-.drawer:hover{border-color:var(--accent);background:var(--panel2)}
-/* ===== 4. Telas sobrepostas ===== */
-.screen{position:fixed;inset:0;background:var(--bg);overflow:auto;z-index:10}
-.screen>header{position:sticky;top:0;display:flex;align-items:center;gap:.8rem;padding:.8rem 1rem;background:var(--panel);border-bottom:1px solid var(--line);z-index:2}
-.screen h2{font-size:1.05rem}
-.x{width:2.3rem;height:2.3rem;padding:0;background:transparent;border-color:var(--line)}
-.body{padding:1rem;max-width:1000px;margin:auto}
+/* ===== 3. Estrutura (menu lateral, barra superior, barra inferior) ===== */
+svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.app{height:100%;display:grid;grid-template-columns:var(--rail-w) 1fr;grid-template-rows:auto 1fr}
+.rail{grid-row:1/3;display:flex;flex-direction:column;gap:4px;padding:20px 14px;border-right:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 22px;font-weight:650;letter-spacing:.02em}
+.brand i{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:700}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--muted);letter-spacing:0;line-height:1.2}
+.nav{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--muted);text-align:left;transition:background .15s,color .15s}
+.nav:hover{background:var(--bg);color:var(--text)}
+.nav.on,.nav[aria-expanded="true"]{background:var(--panel2);color:var(--accent)}
+.nav b{font-weight:550;font-size:14px;flex:1}
+.nav .chev{width:16px;height:16px;opacity:.5}
+.rail .sp{flex:1}
+.ver{padding:10px;border-top:1px solid var(--line);margin-top:8px;color:var(--muted);font-size:12px}
+.bar{position:relative;z-index:20;display:flex;align-items:center;gap:12px;min-height:var(--bar-h);padding:12px 32px;border-bottom:1px solid var(--line);background:var(--bg)}
+.crumb{flex:1;min-width:0;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crumb b{color:var(--text);font-weight:600}
+.topbtns{display:flex;gap:8px;align-items:center}
+.topbtns button{padding:.45rem .8rem;font-size:14px}
+.ico{width:38px;height:38px;padding:0;border-radius:10px;display:grid;place-items:center;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+.ico:hover{color:var(--text)}
+#back[hidden],#more{display:none}
+#home{overflow:auto;min-height:0;padding:32px}
+.wrap{max-width:1120px;margin:0 auto}
+.wrap h1{font-size:26px;font-weight:650;letter-spacing:-.01em}
+.sub{color:var(--muted);margin-top:2px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:24px}
+.cols .card h3{font-size:15px;font-weight:600;display:flex;align-items:center;gap:10px}
+.cols .card h3 svg{color:var(--accent)}
+.short{display:flex;flex-direction:column;gap:2px;margin-top:10px}
+.short button{display:flex;justify-content:space-between;align-items:center;margin:0 -10px;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--text);font-size:14px;text-align:left}
+.short button:hover{background:var(--bg)}
+.short svg{width:14px;height:14px;opacity:.4}
+.tabbar{display:none}
+/* ===== 4. Telas das funções (abrem sobre a área principal) ===== */
+.screen{position:fixed;top:var(--bar-h);left:var(--rail-w);right:0;bottom:0;background:var(--bg);overflow:auto;z-index:10}
+.screen>header{display:none}
+.body{padding:28px 32px;max-width:1120px;margin:auto}
 /* ===== 5. Hub de subgavetas ===== */
 .hub{position:relative;width:min(94vw,calc(100dvh - 120px));max-width:900px;aspect-ratio:1;margin:0 auto;container-type:inline-size}
 .core{position:absolute;left:50%;top:50%;width:30%;aspect-ratio:1;transform:translate(-50%,-50%);display:grid;place-items:center;text-align:center;font-weight:700;font-size:max(12px,3.6cqw);background:var(--panel2);border:2px solid var(--accent);border-radius:var(--r);padding:.4rem}
@@ -201,26 +232,41 @@ dialog.imp button.ghost{text-align:center}
 .cnt-pdf th{background:#e6ecf7;font-weight:700}.cnt-pdf td.n{text-align:right}
 @media print{.cnt-pdf{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 
-/* ===== 14. Início em leque ===== */
-#home.fanhome{align-items:flex-start;justify-content:center;gap:1.2rem;padding:1rem 1.2rem 3rem max(1.2rem,6vw)}
-.dw{position:relative}
-.dw .drawer{width:min(34vw,150px);font-size:1rem}
-.dw.open .drawer{border-color:var(--accent);background:var(--panel2)}
-/* Leque: centralizado no quadrado, nunca maior que a tela (se tiver muitas funções, rola por dentro) */
-.fan{--dy:0px;position:absolute;left:100%;top:50%;margin-left:22px;transform:translateY(calc(-50% + var(--dy)));overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;visibility:hidden;pointer-events:none;z-index:5;padding:2px 2px 2px 0}
-.dw.open .fan{visibility:visible;pointer-events:auto}
-.fl{position:relative;display:flex;flex-direction:column;gap:10px;padding-left:20px}
-/* tronco vertical (do centro do primeiro ao centro do último item) */
-.fl::before{content:"";position:absolute;left:0;top:22px;bottom:22px;width:2px;background:var(--accent);transform-origin:top;transform:scaleY(0);transition:transform .25s}
-.dw.open .fl::before{transform:none}
-/* ligação do quadrado até o tronco */
-.con{position:absolute;left:100%;top:50%;width:22px;height:2px;background:var(--accent);transform-origin:left;transform:scaleX(0);transition:transform .15s;pointer-events:none;z-index:5}
-.dw.open .con{transform:none}
-.fi{position:relative;min-height:44px;width:min(50vw,250px);text-align:left;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:.5rem .8rem;opacity:0;transform:translateX(-14px) scale(.9);transform-origin:left center;transition:opacity .2s,transform .2s,background .15s;transition-delay:calc(var(--i)*40ms)}
-.fi::before{content:"";position:absolute;left:-20px;top:50%;width:20px;height:2px;background:var(--accent)}
-.dw.open .fi{opacity:1;transform:none}
-.fi:hover{background:var(--accent)}
-@media (prefers-reduced-motion:reduce){.fi,.fl::before,.con{transition:none}}
+
+/* ===== 14. Leque ===== */
+.fan{position:fixed;z-index:30;left:0;top:0;width:260px;visibility:hidden;pointer-events:none}
+.fan.open{visibility:visible;pointer-events:auto}
+.fl{position:relative;display:flex;flex-direction:column;gap:8px;padding-left:22px}
+.fl::before{content:"";position:absolute;left:0;top:22px;bottom:22px;width:1.5px;background:var(--accent);opacity:.55;transform-origin:top;transform:scaleY(0);transition:transform .28s ease}
+.fan.open .fl::before{transform:none}
+.fi{position:relative;display:flex;align-items:center;gap:10px;min-height:44px;width:100%;padding:0 14px;border-radius:10px;background:var(--panel);color:var(--text);border:1px solid var(--line);box-shadow:var(--shadow);font-size:14px;text-align:left;opacity:0;transform:translateX(-12px) scale(.96);transform-origin:left center;transition:opacity .2s ease,transform .2s ease,border-color .15s;transition-delay:var(--d,0ms)}
+.fi::before{content:"";position:absolute;left:-22px;top:50%;width:22px;height:1.5px;background:var(--accent);opacity:.55}
+.fan.open .fi{opacity:1;transform:none}
+.fi:hover{border-color:var(--accent);color:var(--accent)}
+.fi svg{width:16px;height:16px;color:var(--muted)}
+.fi:hover svg{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){.fi,.fl::before{transition:none}}
+
+/* ===== Celular (até 900px): barra inferior no lugar do menu lateral ===== */
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+  .rail{display:none}
+  .crumb .p{display:none}
+  .bar{padding:10px 16px;gap:10px}
+  #more{display:grid}
+  .topbtns{display:none;position:absolute;right:12px;top:calc(100% + 4px);flex-direction:column;align-items:stretch;gap:6px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+  .bar.more .topbtns{display:flex}
+  .topbtns button{text-align:left}
+  #home{padding:20px 16px}
+  .wrap h1{font-size:22px}
+  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:relative;z-index:20;border-top:1px solid var(--line);background:var(--panel);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+  .tabbar .nav{flex-direction:column;gap:3px;padding:8px 2px;text-align:center;align-items:center}
+  .tabbar .nav b{font-size:11px;flex:none}
+  .tabbar .chev{display:none}
+  .screen{left:0;bottom:var(--tab-h)}
+  .body{padding:16px}
+  .fan{width:min(260px,calc(100vw - 24px))}
+}
 
 /* ===== 15. Login ===== */
 #login{position:fixed;inset:0;z-index:1000;background:var(--bg);overflow:auto}
