@@ -67,12 +67,23 @@ CFO.shrink = (src, max, qual) => new Promise(res => {
   i.src = src;
 });
 
-// Imprime um trecho de HTML (A4) - no diálogo do navegador também dá para "Salvar como PDF"
+// Imprime um trecho de HTML (A4) - no diálogo do navegador também dá para "Salvar como PDF".
+// Imprime dentro de um quadro (iframe) separado, só com o relatório: assim o layout do sistema não cria folhas em branco.
+CFO.printDoc = html => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${CFO.esc(document.title)}</title>
+  ${[...document.querySelectorAll('style, link[rel=stylesheet]')].map(e => e.outerHTML).join('\n')}
+  <style>@page{size:A4;margin:0}html,body{display:block!important;margin:0;padding:0;background:#fff!important;color:#0f172a;min-height:0!important;height:auto!important;overflow:visible}
+  #printArea{display:block!important}</style></head><body><div id="printArea">${html}</div></body></html>`;
 CFO.print = html => {
-  let a = document.getElementById('printArea');
-  if (!a) { a = document.createElement('div'); a.id = 'printArea'; document.body.append(a); }
-  a.innerHTML = html;
-  setTimeout(() => window.print(), 150);
+  document.querySelectorAll('iframe.print-frame').forEach(f => f.remove());
+  const f = document.createElement('iframe'); f.className = 'print-frame';
+  f.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:0;visibility:hidden';
+  f.srcdoc = CFO.printDoc(html);
+  f.onload = () => setTimeout(() => {
+    const w = f.contentWindow; if (!w) return;
+    w.addEventListener('afterprint', () => setTimeout(() => f.remove(), 500));
+    w.focus(); w.print();
+  }, 250);
+  document.body.append(f);
 };
 
 // Datas auxiliares (usadas nas planilhas)
