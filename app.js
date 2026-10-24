@@ -40,8 +40,9 @@ tabbar.innerHTML = navHTML(false);
 back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#theme').innerHTML = svg('moon');
 
 // Início
-inicio.innerHTML = `<div class="wrap"><h1>Início</h1><p class="sub">Escolha uma função</p>
-  <div class="cols">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}">${s.name}${svg('chev')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
+inicio.innerHTML = `<div class="wrap"><h1>C.F.O</h1><p class="sub">Caixa de Ferramentas Operacional</p>
+  <div class="sec">Escolha uma função</div>
+  <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}">${s.name}${svg('chev')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
 inicio.querySelectorAll('.short button').forEach(b => b.onclick = () => { const d = DRAWERS.find(x => x.id === b.dataset.d); ir(d, d.subs[+b.dataset.i]); });
 
 // Barra superior e destaque do menu conforme as telas abertas
