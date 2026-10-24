@@ -90,7 +90,7 @@ dialog label>*{margin-top:.25rem;color:var(--text)}
 .fp-rev{width:270px;margin:0 0 0 auto;padding:6px 10px;border:1.5px solid #0f172a;border-radius:6px;text-align:center;font-weight:700;font-size:16px}
 /* Impressão: só a ficha, em A4 */
 #printArea{display:none}
-@media print{@page{size:A4;margin:0}body>*:not(#printArea){display:none!important}#printArea{display:block}body{display:block;background:#fff}}
+@media print{@page{size:A4;margin:0}body>*:not(#printArea){display:none!important}#printArea{display:block}html,body{display:block;background:#fff;min-height:0!important;height:auto!important;overflow:visible}#printArea{break-after:avoid;page-break-after:avoid}}
 
 /* ===== 11. Requisições e EPIs por contrato ===== */
 .sec{margin:1.4rem 0 .6rem;font-size:1rem}

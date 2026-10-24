@@ -50,6 +50,7 @@
       .rq-top h1{margin:0;font-size:20px;color:#058a5b;text-transform:uppercase;text-align:right}
       .rq-g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
       .rq-c{border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;break-inside:avoid}.rq-c small{display:block;font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:#7b889c;margin-bottom:5px}
+      .rq-ck{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;font-weight:700}.rq-ck span{display:flex;align-items:center;gap:6px}.rq-ck i{display:inline-block;width:14px;height:14px;border:1.5px solid #0f172a;border-radius:3px}
       .rq-c b{font-size:13px}.rq-c b.ok{color:#058a5b}
       .rq-box{border:1px solid #058a5b;border-radius:8px;padding:10px 12px;margin-bottom:14px}.rq-box h2{margin:0 0 8px;font-size:11px;color:#058a5b;text-transform:uppercase}
       .rq table{width:100%;border-collapse:collapse;font-size:11px}.rq th{background:#f4f6fa;border:1px solid #cbd5e1;padding:8px;font-size:9px;text-transform:uppercase}
@@ -59,11 +60,13 @@
       .rq-ft{margin-top:24px;border-top:4px solid #0f172a}
     </style>
     <div class="rq">
-      <div class="rq-top"><img src="${CFO.LOGO}" alt=""><h1>C.F.O - Relatório de Requisição</h1></div>
+      <div class="rq-top"><img src="${CFO.LOGO}" alt=""><h1>C.F.O - Requisição</h1></div>
       <div class="rq-g">
         ${card('Solicitante', esc(r.sol || '-'))}${card('Número requisição', '# ' + esc(r.id))}
         ${card('Contrato / Unidade', esc(r.contrato) + (r.contratoNome ? ' - ' + esc(r.contratoNome) : ''))}${card('Mês / Ano', esc(r.mes || '-'))}
         ${card('Valor total solicitado', R$(vS))}${card('Valor total aprovado', R$(total(r)), 'ok')}
+        ${card('Data e horário da impressão', new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).replace(',', ' às'))}
+        <div class="rq-c"><small>Controle</small><div class="rq-ck"><span><i></i>Separado</span><span><i></i>Nota feita</span><span><i></i>Retirado</span></div></div>
       </div>
       <div class="rq-box"><h2>Quadro de resumo total de itens aprovados</h2>
         <table><thead><tr><th>Código</th><th>Item / Descrição</th><th>Tamanho</th><th>Total aprovado</th></tr></thead><tbody>
