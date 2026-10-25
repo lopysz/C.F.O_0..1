@@ -1,9 +1,7 @@
 /* ===== Início > Painel gerencial =====
-   Quatro telinhas no topo do Início:
+   Duas divisórias no topo do Início:
    1) Aguardando retirada  - requisições já separadas (Foto de Separação) que ainda não foram retiradas; o quadradinho dá baixa
-   2) Gasto do mês         - soma do valor aprovado das requisições do mês atual (atualiza sozinho quando chega requisição)
-   3) Estoque              - os 5 itens com mais e os 5 com menos unidades na Planilha EPI
-   4) Últimas requisições  - as 3 mais recentes; quando chega uma nova, ela entra por cima e as outras descem
+   2) Últimas requisições  - as 3 mais recentes; quando chega uma nova, ela entra por cima e as outras descem
    Os dados vêm de CFO.store ('requisicoes', 'epi') e do banco de fotos (CFO.db 'fotos'): nada novo para configurar. */
 (() => {
   const esc = CFO.esc, P = CFO.periodo, norm = CFO.norm;
@@ -41,30 +39,6 @@
       rows ? `<div class="pg-list">${rows}</div>` : '<p class="pg-vazio">Nenhuma requisição aguardando retirada.</p>');
   }
 
-  /* 2) Gasto do mês */
-  function gastoHtml(reqs) {
-    const d = new Date(), m = d.getMonth() + 1, y = d.getFullYear(), pm = m === 1 ? 12 : m - 1, py = m === 1 ? y - 1 : y;
-    const doMes = (mm, yy) => reqs.filter(r => { const p = P.parse(r.mes); return p && p.m === mm && p.y === yy; });
-    const atual = doMes(m, y), ant = doMes(pm, py), v = atual.reduce((a, r) => a + total(r), 0), va = ant.reduce((a, r) => a + total(r), 0);
-    const dif = va ? (v - va) / va : null;
-    const cmp = dif === null ? '<span>sem mês anterior para comparar</span>'
-      : `<span>${dif > 0 ? '▲' : dif < 0 ? '▼' : '='} ${(Math.abs(dif) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}% vs ${P.NOMES[pm - 1].slice(0, 3).toLowerCase()}</span>`;
-    return tile('pg-gasto', 'Gasto do mês', acao('controle_gastos', 'Detalhes'),
-      `<div class="pg-big">${R$(v)}</div><div class="pg-meta"><span>${P.NOMES[m - 1]}/${y}</span><span>${atual.length} requisição(ões)</span>${cmp}</div>`);
-  }
-
-  /* 3) Estoque: mais e menos - só itens que têm saída nas requisições (item parado, sem saída, não entra) */
-  function estoqueHtml(reqs) {
-    const epi = CFO.store.get('epi', []).filter(r => r.item), achar = CFO.casarEpi(epi), saem = new Set();
-    reqs.forEach(q => q.itens.forEach(i => { if (i.qa > 0) { const r = achar(i.item); if (r) saem.add(r.id); } }));
-    const rows = epi.filter(r => saem.has(r.id)).map(r => ({ nome: r.item, q: +r.qtd || 0 }));
-    if (!rows.length) return tile('pg-est', 'Estoque', acao('epi', 'Planilha'), '<p class="pg-vazio">Sem itens com saída nas requisições.</p>');
-    const n = Math.min(3, Math.ceil(rows.length / 2)), mais = [...rows].sort((a, b) => b.q - a.q).slice(0, n), usados = new Set(mais);
-    const menos = rows.filter(r => !usados.has(r)).sort((a, b) => a.q - b.q).slice(0, n);
-    const col = (cls, tit, l) => `<div class="pg-col ${cls}"><h4>${tit}</h4>${l.map(r => `<div class="pg-s${r.q <= 0 ? ' zero' : ''}"><span title="${esc(r.nome)}">${esc(r.nome)}</span><b>${N(r.q)}</b></div>`).join('')}</div>`;
-    return tile('pg-est', 'Estoque', acao('epi', 'Planilha'), `<div class="pg-st">${col('mais', '▲ Mais', mais)}${col('menos', '▼ Menos', menos)}</div>`);
-  }
-
   /* 4) Últimas 3 requisições (a nova entra por cima, as outras descem e a 3ª sai) */
   const ordem = (a, b) => (b.chegou || '').localeCompare(a.chegou || '') || P.key(b.mes) - P.key(a.mes) || numCmp(b.id, a.id);
   function ultHtml(reqs) {
@@ -87,7 +61,7 @@
     let fotos = []; try { fotos = await CFO.db.all('fotos'); } catch {}
     if (eu !== token || !host.isConnected) return;
     const reqs = CFO.store.get('requisicoes', []).filter(r => r && r.itens);
-    host.innerHTML = `<div class="pg-grid">${sepHtml(fotos, reqs)}${CFO.pode('abrir', 'controle_gastos') ? gastoHtml(reqs) : '<section class="pg-t"></section>'}${estoqueHtml(reqs)}${ultHtml(reqs)}</div>`;
+    host.innerHTML = `<div class="pg-grid">${sepHtml(fotos, reqs)}${ultHtml(reqs)}</div>`;
     host.querySelectorAll('.pg-a').forEach(b => b.onclick = () => abrir(b.dataset.go));
     host.querySelectorAll('.pg-r input').forEach(c => c.onchange = async () => {
       const row = c.closest('.pg-r'), ids = row.dataset.ids.split(',');
