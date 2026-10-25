@@ -434,3 +434,17 @@ button.pg-a:hover{background:var(--panel2)}
   .pg-st{grid-template-columns:1fr;gap:12px}
 }
 @media (prefers-reduced-motion:reduce){.pg-u.ent,.pg-u.desc,.pg-u.ghost,.pg-r{animation:none;transition:none}}
+
+/* ===== Painel: um único quadro com divisórias (sobrepõe o estilo anterior) ===== */
+.pg-grid{gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.pg-t{background:var(--panel);border:0;border-radius:0;padding:16px 20px}
+.pg-st{gap:20px}
+.pg-s{padding:4px 0}
+.pg-u{height:52px;margin:0;padding:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none}
+.pg-u:last-child{border-bottom:0}
+.pg-stack{height:156px}
+.pg-u.ent{animation-name:pgEnt2}.pg-u.desc,.pg-u.ghost{--d:-52px}
+@keyframes pgEnt2{from{opacity:0;transform:translateY(-52px)}to{opacity:1;transform:none}}
+@keyframes pgDesc{from{transform:translateY(-52px)}to{transform:none}}
+@keyframes pgSai{from{opacity:1;transform:translateY(-52px)}to{opacity:0;transform:none}}
+.pg-list{max-height:156px}

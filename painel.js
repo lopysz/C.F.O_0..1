@@ -53,14 +53,16 @@
       `<div class="pg-big">${R$(v)}</div><div class="pg-meta"><span>${P.NOMES[m - 1]}/${y}</span><span>${atual.length} requisição(ões)</span>${cmp}</div>`);
   }
 
-  /* 3) Estoque: mais e menos */
-  function estoqueHtml() {
-    const rows = CFO.store.get('epi', []).filter(r => r.item).map(r => ({ nome: r.item, q: +r.qtd || 0 }));
-    if (!rows.length) return tile('pg-est', 'Estoque', acao('epi', 'Planilha'), '<p class="pg-vazio">Importe a Planilha EPI para ver os itens.</p>');
-    const n = Math.min(5, Math.ceil(rows.length / 2)), mais = [...rows].sort((a, b) => b.q - a.q).slice(0, n), usados = new Set(mais);
-    const menos = rows.filter(r => !usados.has(r)).sort((a, b) => a.q - b.q).slice(0, n), max = Math.max(...mais.map(r => r.q), 1);
-    const col = (cls, tit, l) => `<div class="pg-col ${cls}"><h4>${tit}</h4>${l.map(r => `<div class="pg-s${r.q <= 0 ? ' zero' : ''}"><span title="${esc(r.nome)}">${esc(r.nome)}</span><b>${N(r.q)}</b><i style="width:${r.q > 0 ? Math.max(3, 100 * r.q / max) : 0}%"></i></div>`).join('')}</div>`;
-    return tile('pg-est', 'Estoque', acao('epi', 'Planilha'), `<div class="pg-st">${col('mais', '▲ Mais temos', mais)}${col('menos', '▼ Menos temos', menos)}</div>`);
+  /* 3) Estoque: mais e menos - só itens que têm saída nas requisições (item parado, sem saída, não entra) */
+  function estoqueHtml(reqs) {
+    const epi = CFO.store.get('epi', []).filter(r => r.item), achar = CFO.casarEpi(epi), saem = new Set();
+    reqs.forEach(q => q.itens.forEach(i => { if (i.qa > 0) { const r = achar(i.item); if (r) saem.add(r.id); } }));
+    const rows = epi.filter(r => saem.has(r.id)).map(r => ({ nome: r.item, q: +r.qtd || 0 }));
+    if (!rows.length) return tile('pg-est', 'Estoque', acao('epi', 'Planilha'), '<p class="pg-vazio">Sem itens com saída nas requisições.</p>');
+    const n = Math.min(3, Math.ceil(rows.length / 2)), mais = [...rows].sort((a, b) => b.q - a.q).slice(0, n), usados = new Set(mais);
+    const menos = rows.filter(r => !usados.has(r)).sort((a, b) => a.q - b.q).slice(0, n);
+    const col = (cls, tit, l) => `<div class="pg-col ${cls}"><h4>${tit}</h4>${l.map(r => `<div class="pg-s${r.q <= 0 ? ' zero' : ''}"><span title="${esc(r.nome)}">${esc(r.nome)}</span><b>${N(r.q)}</b></div>`).join('')}</div>`;
+    return tile('pg-est', 'Estoque', acao('epi', 'Planilha'), `<div class="pg-st">${col('mais', '▲ Mais', mais)}${col('menos', '▼ Menos', menos)}</div>`);
   }
 
   /* 4) Últimas 3 requisições (a nova entra por cima, as outras descem e a 3ª sai) */
@@ -85,7 +87,7 @@
     let fotos = []; try { fotos = await CFO.db.all('fotos'); } catch {}
     if (eu !== token || !host.isConnected) return;
     const reqs = CFO.store.get('requisicoes', []).filter(r => r && r.itens);
-    host.innerHTML = `<div class="pg-grid">${sepHtml(fotos, reqs)}${CFO.pode('abrir', 'controle_gastos') ? gastoHtml(reqs) : ''}${estoqueHtml()}${ultHtml(reqs)}</div>`;
+    host.innerHTML = `<div class="pg-grid">${sepHtml(fotos, reqs)}${CFO.pode('abrir', 'controle_gastos') ? gastoHtml(reqs) : '<section class="pg-t"></section>'}${estoqueHtml(reqs)}${ultHtml(reqs)}</div>`;
     host.querySelectorAll('.pg-a').forEach(b => b.onclick = () => abrir(b.dataset.go));
     host.querySelectorAll('.pg-r input').forEach(c => c.onchange = async () => {
       const row = c.closest('.pg-r'), ids = row.dataset.ids.split(',');
