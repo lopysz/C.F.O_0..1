@@ -418,9 +418,7 @@ button.pg-a:hover{background:var(--panel2)}
 @keyframes pgEnt{from{opacity:0;transform:translateY(-68px) scale(.97);border-color:var(--accent)}to{opacity:1;transform:none}}
 @keyframes pgDesc{from{transform:translateY(-68px)}to{transform:none}}
 @keyframes pgSai{from{opacity:1;transform:translateY(-68px)}to{opacity:0;transform:none}}
-@media (max-width:760px){
-  .pg-grid{grid-template-columns:1fr}
-}
+
 @media (prefers-reduced-motion:reduce){.pg-u.ent,.pg-u.desc,.pg-u.ghost,.pg-r{animation:none;transition:none}}
 
 /* ===== Painel: um único quadro com divisórias (sobrepõe o estilo anterior) ===== */
@@ -434,3 +432,19 @@ button.pg-a:hover{background:var(--panel2)}
 @keyframes pgDesc{from{transform:translateY(-52px)}to{transform:none}}
 @keyframes pgSai{from{opacity:1;transform:translateY(-52px)}to{opacity:0;transform:none}}
 .pg-list{max-height:156px}
+
+/* ===== Painel: duas colunas (divisória vertical) também no celular ===== */
+.pg-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:760px){
+  .pg-t{padding:12px 10px;gap:8px}
+  .pg-t>header{flex-wrap:wrap;gap:2px 6px}
+  .pg-t h3{flex:1 1 auto;font-size:11px;letter-spacing:.04em}
+  button.pg-a{padding:2px 4px;font-size:12px}
+  .pg-r{gap:6px;flex-wrap:wrap;min-height:44px}
+  .pg-n{flex:1 1 calc(100% - 34px);font-size:14px}
+  .pg-r small{order:3;font-size:11px}
+  .pg-r input{margin-left:auto;width:24px;height:24px}
+  .pg-u{height:52px}
+  .pg-u span{font-size:13px}
+  .pg-u small{font-size:11px}
+}
