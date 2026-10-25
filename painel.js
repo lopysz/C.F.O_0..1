@@ -10,7 +10,7 @@
   const numCmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
   const total = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0);
   const LS = 'cfo_painel_ult';           // últimas 3 já mostradas neste aparelho (só para saber quando animar)
-  let host = null, abrir = () => {}, sujo = false, timer = null, token = 0;
+  let host = null, abrir = () => {}, timer = null, token = 0;
 
   const idade = iso => {
     const m = (Date.now() - new Date(iso)) / 60000;
@@ -32,8 +32,8 @@
     const lista = [...g.values()].sort((a, b) => a.ts.localeCompare(b.ts));      // quem espera há mais tempo fica em cima
     const rows = lista.map(x => {
       const atraso = dias(x.ts) >= 5;                                              // prazo de retirada do relatório: 5 dias
-      return `<label class="pg-r" data-ids="${esc(x.ids.join(','))}"><span class="pg-n"><b>${esc(x.req)}</b>${x.sol ? ' - ' + esc(x.sol) : ''}</span>
-        <small class="${atraso ? 'late' : ''}">${idade(x.ts)}</small><input type="checkbox" aria-label="Marcar ${esc(x.req)} como retirada"></label>`;
+      return `<div class="pg-r" data-ids="${esc(x.ids.join(','))}"><span class="pg-n"><b>${esc(x.req)}</b>${x.sol ? ' - ' + esc(x.sol) : ''}</span>
+        <small class="${atraso ? 'late' : ''}">${idade(x.ts)}</small><input type="checkbox" aria-label="Marcar ${esc(x.req)} como retirada"></div>`;
     }).join('');
     return tile('pg-sep', 'Aguardando retirada', (lista.length ? `<span class="pg-c">${lista.length}</span>` : '') + acao('fotos', 'Fotos'),
       rows ? `<div class="pg-list">${rows}</div>` : '<p class="pg-vazio">Nenhuma requisição aguardando retirada.</p>');
@@ -61,7 +61,9 @@
     let fotos = []; try { fotos = await CFO.db.all('fotos'); } catch {}
     if (eu !== token || !host.isConnected) return;
     const reqs = CFO.store.get('requisicoes', []).filter(r => r && r.itens);
+    const rolou = host.querySelector('.pg-list')?.scrollTop || 0;       // mantém a rolagem da lista ao redesenhar
     host.innerHTML = `<div class="pg-grid">${sepHtml(fotos, reqs)}${ultHtml(reqs)}</div>`;
+    const lista = host.querySelector('.pg-list'); if (lista) lista.scrollTop = rolou;
     host.querySelectorAll('.pg-a').forEach(b => b.onclick = () => abrir(b.dataset.go));
     host.querySelectorAll('.pg-r input').forEach(c => c.onchange = async () => {
       const row = c.closest('.pg-r'), ids = row.dataset.ids.split(',');
@@ -78,13 +80,13 @@
   // Redesenha só quando o Início está visível (com telas abertas, deixa para quando fechar)
   function atualizar() {
     if (!host) return;
-    if (CFO.screens.length) { sujo = true; return; }
-    sujo = false; clearTimeout(timer); timer = setTimeout(desenhar, 60);
+    if (CFO.screens.length) return;
+    clearTimeout(timer); timer = setTimeout(desenhar, 60);
   }
 
   CFO.painel = {
     montar(el, irPara) { host = el; abrir = irPara; desenhar(); },
-    atualizar, aoMudarTela() { if (!CFO.screens.length && host) { sujo = false; atualizar(); } }
+    atualizar, aoMudarTela() { if (!CFO.screens.length && host) atualizar(); }
   };
 
   // Atualiza quando chega requisição/estoque novo (gravação local, nuvem ou WL) e a cada minuto (horários "há x min")

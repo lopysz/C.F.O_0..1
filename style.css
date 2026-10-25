@@ -395,27 +395,16 @@ button.pg-a:hover{background:var(--panel2)}
 .pg-vazio{color:var(--muted);font-size:14px;padding:6px 0}
 /* 1) Aguardando retirada */
 .pg-list{display:flex;flex-direction:column;max-height:216px;overflow:auto;margin:0 -6px;padding:0 6px}
-.pg-r{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer;transition:opacity .25s,transform .25s}
+.pg-r{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 0;border-bottom:1px solid var(--line);transition:opacity .25s,transform .25s}
 .pg-r:last-child{border-bottom:0}
 .pg-r.sai{opacity:0;transform:translateX(14px)}
 .pg-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
 .pg-n b{font-weight:650;font-variant-numeric:tabular-nums}
 .pg-r small{color:var(--muted);font-size:12px;white-space:nowrap}
 .pg-r small.late{color:var(--warn)}
-.pg-r input{flex:none;width:22px;height:22px;margin:0;padding:0;cursor:pointer;accent-color:var(--accent)}
+.pg-r input{flex:none;width:26px;height:26px;margin:0;padding:0;cursor:pointer;accent-color:var(--accent)}
 /* 2) Gasto do mês */
-.pg-big{font-size:clamp(26px,4vw,34px);font-weight:650;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
-.pg-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted);font-size:13px}
 /* 3) Estoque */
-.pg-st{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
-.pg-col h4{margin:0 0 8px;font-size:12px;font-weight:600}
-.pg-col.mais h4{color:#4cc38a}.pg-col.menos h4{color:#ff8a8f}
-.pg-s{position:relative;display:flex;align-items:baseline;gap:8px;padding:5px 0 8px;font-size:13px}
-.pg-s span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pg-s b{font-weight:650;font-variant-numeric:tabular-nums}
-.pg-s i{position:absolute;left:0;bottom:2px;height:3px;border-radius:3px;background:var(--accent);opacity:.55}
-.pg-col.menos .pg-s i{background:#ff8a8f}
-.pg-s.zero b{color:#ff8a8f}
 /* 4) Últimas requisições */
 .pg-stack{position:relative;height:196px;overflow:hidden}
 .pg-u{display:flex;flex-direction:column;justify-content:center;gap:2px;height:60px;margin-bottom:8px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
@@ -431,15 +420,12 @@ button.pg-a:hover{background:var(--panel2)}
 @keyframes pgSai{from{opacity:1;transform:translateY(-68px)}to{opacity:0;transform:none}}
 @media (max-width:760px){
   .pg-grid{grid-template-columns:1fr}
-  .pg-st{grid-template-columns:1fr;gap:12px}
 }
 @media (prefers-reduced-motion:reduce){.pg-u.ent,.pg-u.desc,.pg-u.ghost,.pg-r{animation:none;transition:none}}
 
 /* ===== Painel: um único quadro com divisórias (sobrepõe o estilo anterior) ===== */
 .pg-grid{gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .pg-t{background:var(--panel);border:0;border-radius:0;padding:16px 20px}
-.pg-st{gap:20px}
-.pg-s{padding:4px 0}
 .pg-u{height:52px;margin:0;padding:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none}
 .pg-u:last-child{border-bottom:0}
 .pg-stack{height:156px}
