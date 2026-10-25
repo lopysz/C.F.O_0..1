@@ -31,7 +31,8 @@
       if (!r) { const c = parseContrato(g('contrato')); r = { id, sol: g('sol'), motivo: g('motivo'), contrato: c.num, contratoNome: c.nome, mes: g('mes'), itens: [] }; fresh.set(id, r); }
       r.itens.push({ item, tam: g('tam'), qs: CFO.toNum(g('qs')), qa: CFO.toNum(g('qa')), preco: CFO.toNum(g('preco')) });
     });
-    fresh.forEach((r, id) => { map.has(id) ? upd++ : add++; map.set(id, r); });
+    const agora = new Date().toISOString();                 // 'chegou' = quando a requisição entrou no sistema (usado no Painel do Início)
+    fresh.forEach((r, id) => { const antiga = map.get(id); antiga ? upd++ : add++; r.chegou = antiga ? antiga.chegou : agora; if (!r.chegou) delete r.chegou; map.set(id, r); });
     CFO.store.set('requisicoes', [...map.values()]);
     return { add, dup: 0, upd };
   };

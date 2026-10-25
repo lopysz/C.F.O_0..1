@@ -37,16 +37,19 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 // Menus (a mesma lista alimenta a lateral e a barra inferior)
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? d.name : d.short}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
-rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261025a</div>`;
+rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261025b</div>`;
 tabbar.innerHTML = navHTML(false);
 back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#theme').innerHTML = svg('moon');
 
 // Início (funções sem permissão para o perfil aparecem apagadas, com cadeado)
 function renderInicio() {
   inicio.innerHTML = `<div class="wrap"><p class="sub" style="margin-top:0">Caixa de Ferramentas Operacional</p>
-  <div class="sec">Escolha uma função</div>
+  <div class="sec">Painel gerencial</div><div id="painel"></div>
+  <div class="sec" style="margin-top:2rem">Escolha uma função</div>
   <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}${d.subs.every(s => !CFO.pode('abrir', s.m)) ? '<span class="tag" style="margin-left:auto">Sem acesso</span>' : ''}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}"${CFO.pode('abrir', s.m) ? '' : ' disabled'}>${s.name}${svg(CFO.pode('abrir', s.m) ? 'chev' : 'lock')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
   inicio.querySelectorAll('.short button:not(:disabled)').forEach(b => b.onclick = () => { const d = DRAWERS.find(x => x.id === b.dataset.d); ir(d, d.subs[+b.dataset.i]); });
+  // Painel gerencial (painel.js): os botões das telinhas abrem a função correspondente
+  CFO.painel?.montar($('#painel'), m => { const d = DRAWERS.find(x => x.subs.some(s => s.m === m)); if (d) ir(d, d.subs.find(s => s.m === m)); });
 }
 CFO.onUser = () => { renderInicio(); fechar(); };
 renderInicio();
@@ -59,6 +62,7 @@ function atualizar() {
   crumb.innerHTML = partes.map((p, i) => i === partes.length - 1 ? `<b>${CFO.esc(p)}</b>` : `<span class="p">${CFO.esc(p)} / </span>`).join('');
   document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', n ? b.dataset.d === ctx?.id : b.hasAttribute('data-home')));
   barra.classList.remove('more');
+  CFO.painel?.aoMudarTela();
 }
 CFO.onChange = atualizar;
 back.onclick = () => CFO.close();

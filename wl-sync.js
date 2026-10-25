@@ -61,7 +61,9 @@
         });
         const novo = { id, sol: String(w.requester || '').trim(), motivo: String(w.motive || '').trim(), contrato: c.num, contratoNome: c.nome, mes, itens, origem: 'WL' };
         const antigo = mapa.get(id);
+        if (antigo?.chegou) novo.chegou = antigo.chegou;     // 'chegou' = quando entrou no sistema (Painel do Início)
         if (!antigo) res.add++; else if (JSON.stringify(antigo) !== JSON.stringify(novo)) res.upd++; else { res.iguais++; return; }
+        if (!antigo) novo.chegou = new Date().toISOString();
         mapa.set(id, novo);
       });
       if (res.add || res.upd) CFO.store.set('requisicoes', [...mapa.values()]);   // só grava (e só envia à nuvem) se mudou algo
