@@ -43,9 +43,9 @@
         const id = String(w.number || '').trim();
         const guarda = (rid, motivo) => { if (res.lista.length < 10) res.lista.push({ id: rid, motivo, data: w.created_at || w.date || '' }); };   // 10 mais recentes (a leitura vem do mais novo para o mais antigo)
         if (!id) { res.ignoradas++; guarda('(sem número)', 'Sem número RQ no WL'); return; }
-        const tipo = norm(w.requisition_type || 'epi');
+        // Qualquer tipo (EPI, UNIFORM...) conta como EPI: só as canceladas são ignoradas
         const canc = w.cancellation_reason || /cancel/i.test(w.status || '');
-        if (tipo !== 'epi' || canc) { guarda(id, [canc ? 'Cancelada' + (w.cancellation_reason ? ': ' + w.cancellation_reason : (w.status ? ' (status: ' + w.status + ')' : '')) : '', tipo !== 'epi' ? 'Tipo "' + (w.requisition_type || '-') + '" (não é EPI)' : ''].filter(Boolean).join(' + ')); res.ignoradas++; if (canc) res.canc++; else res.naoEpi++; if (tipo !== 'epi') res.tipos[w.requisition_type] = (res.tipos[w.requisition_type] || 0) + 1; return; }
+        if (canc) { guarda(id, 'Cancelada' + (w.cancellation_reason ? ': ' + w.cancellation_reason : (w.status ? ' (status: ' + w.status + ')' : ''))); res.ignoradas++; res.canc++; return; }
         const st = String(w.status || '-').trim(); res.status[st] = (res.status[st] || 0) + 1;
         const c = parseContrato(w.contract_name || w.cost_center);
         const mes = w.month && w.year ? `${w.month} ${w.year}` : String(w.date || '');
