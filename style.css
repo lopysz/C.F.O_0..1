@@ -460,3 +460,14 @@ button.pg-a:hover{background:var(--panel2)}
   .pg-u small .pg-v{display:none}   /* o valor aprovado fica só no PC; no celular não cabia */
   .pg-u small{display:block;max-width:100%}
 }
+
+/* ===== Painel (celular): número da requisição numa linha só; o nome encolhe com "…" ===== */
+.pg-u>div b{flex:none;white-space:nowrap}
+.pg-u>div span{flex:1 1 0;min-width:0}
+@media (max-width:760px){
+  .pg-u{gap:1px}
+  .pg-u>div{gap:6px}
+  .pg-u>div b{font-size:13px}
+  .pg-u>div span{font-size:12px}
+  .pg-u small{font-size:11px;line-height:1.2}
+}
