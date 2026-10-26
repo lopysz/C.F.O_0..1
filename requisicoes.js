@@ -82,11 +82,13 @@
   };
 
   const api = body => {
-    let q = '', fotos = [];
+    let q = '', fotos = [], base = [], limite = 100, timer = 0;
+    const meta = new Map(), fotosPor = new Map();      // cache: texto de busca/totais de cada requisição e retiradas por nº (calculados 1 vez, não a cada letra digitada)
+    const POR_PAGINA = 100;
     const fmtDH = iso => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
     const negs = () => CFO.store.get('req_negadas', {});          // { 'RQ-3370': 'data/hora em que foi marcada como negada' }  (guardado à parte: a sincronização do WL não apaga)
     // Retirada vem das fotos de separação ligadas ao nº da requisição (mesma regra do Painel)
-    const retirada = r => { const k = CFO.norm(r.id), l = fotos.filter(f => f.req && CFO.norm(f.req) === k); if (!l.length) return null; const ok = l.filter(f => f.ret); return { total: l.length, ok: ok.length, ts: ok.map(f => f.retTs || '').sort().pop() || '' }; };
+    const retirada = r => fotosPor.get(CFO.norm(r.id)) || null;
     const retHtml = x => !x ? '' : x.ok === x.total ? `<span class="rqret">✔ RETIRADA${x.ts ? `<small>${fmtDH(x.ts)}</small>` : ''}</span>`
       : x.ok ? `<span class="rqret par">Retirada parcial<small>${x.ok} de ${x.total} fotos</small></span>` : '<span class="rqret esp">Aguardando retirada</span>';
     const all = () => CFO.store.get('requisicoes', []).sort((a, b) => mesKey(b.mes).localeCompare(mesKey(a.mes)) || numCmp(b.id, a.id));
@@ -99,18 +101,31 @@
       <div id="lst"></div>`;
     const $ = s => body.querySelector(s);
 
+    // Lê tudo do armazenamento UMA vez (e quando importar/apagar); digitar na busca só filtra o que já está na memória
+    function carrega() {
+      base = all(); meta.clear();
+      base.forEach(r => meta.set(r, { t: CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item)].join(' ')), tot: total(r), qt: qtd(r) }));
+      CFO.periodo.fill(body, base); CFO.motivo.fill(body, base);
+      indexaFotos(); render();
+    }
+    function indexaFotos() {
+      fotosPor.clear();
+      fotos.forEach(f => { if (!f.req) return; const k = CFO.norm(f.req), x = fotosPor.get(k) || { total: 0, ok: 0, ts: '' }; x.total++; if (f.ret) { x.ok++; if ((f.retTs || '') > x.ts) x.ts = f.retTs || ''; } fotosPor.set(k, x); });
+    }
+    const filtros = () => { limite = POR_PAGINA; render(); };
+
     function render() {
-      const todas = all(); CFO.periodo.fill(body, todas); CFO.motivo.fill(body, todas);
-      const neg = negs(), fn = $('#fn').value;
-      const rs = todas.filter(CFO.periodo.test(body)).filter(CFO.motivo.test(body)).filter(r => !fn || (fn === 'neg') === !!neg[r.id]), t = CFO.norm(q);
-      const v = rs.filter(r => CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item)].join(' ')).includes(t));
-      $('#cards').innerHTML = [['Requisições', rs.length], ['Itens aprovados', rs.reduce((a, r) => a + qtd(r), 0)],
-        ['Valor aprovado', R$(rs.reduce((a, r) => a + total(r), 0))], ['Contratos atendidos', new Set(rs.map(r => r.contrato)).size]]
+      const neg = negs(), fn = $('#fn').value, t = CFO.norm(q);
+      const rs = base.filter(CFO.periodo.test(body)).filter(CFO.motivo.test(body)).filter(r => !fn || (fn === 'neg') === !!neg[r.id]);
+      const v = t ? rs.filter(r => meta.get(r).t.includes(t)) : rs;
+      $('#cards').innerHTML = [['Requisições', rs.length], ['Itens aprovados', rs.reduce((a, r) => a + meta.get(r).qt, 0)],
+        ['Valor aprovado', R$(rs.reduce((a, r) => a + meta.get(r).tot, 0))], ['Contratos atendidos', new Set(rs.map(r => r.contrato)).size]]
         .map(d => `<div class="card"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('');
-      $('#lst').innerHTML = v.map(r => { const n = neg[r.id]; return `<div class="foto rq${n ? ' neg' : ''}" data-id="${esc(r.id)}"><div class="rqtxt"><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>${esc(r.sol)}<br>
+      $('#lst').innerHTML = v.slice(0, limite).map(r => { const n = neg[r.id]; return `<div class="foto rq${n ? ' neg' : ''}" data-id="${esc(r.id)}"><div class="rqtxt"><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>${esc(r.sol)}<br>
         <small>${esc(r.mes)} · ${r.itens.length} linha(s) · ${R$(total(r))}</small></div>
         <div class="rqdir">${n ? `<span class="rqneg">🚫 NEGADA<small>${fmtDH(n)}</small></span>` : ''}${retHtml(retirada(r))}<label class="fchk rqn" title="Marcar como negada (recusada depois de aprovada)"><input type="checkbox" class="ng" ${n ? 'checked' : ''}></label></div></div>`; }).join('')
         || '<p class="empty">Nenhuma requisição. Importe a planilha de aprovações ou use "Importar pasta".</p>';
+      if (v.length > limite) { $('#lst').insertAdjacentHTML('beforeend', `<div class="bar" style="justify-content:center"><button id="mais" class="ghost">Mostrar mais (${v.length - limite} restantes)</button></div>`); $('#mais').onclick = () => { limite += POR_PAGINA; render(); }; }
       body.querySelectorAll('.foto .rqn').forEach(l => l.onclick = e => e.stopPropagation());
       body.querySelectorAll('.foto .ng').forEach(c => c.onchange = () => {
         const id = c.closest('.foto').dataset.id, m = { ...negs() };
@@ -118,7 +133,7 @@
         else delete m[id];
         CFO.store.set('req_negadas', m); render();
       });
-      body.querySelectorAll('.foto').forEach(el => el.onclick = () => detail(rs.find(r => r.id === el.dataset.id)));
+      body.querySelectorAll('.foto').forEach(el => el.onclick = () => detail(base.find(r => r.id === el.dataset.id)));
     }
 
     function detail(r) {
@@ -132,24 +147,24 @@
         b.querySelector('#prn').onclick = () => relatorio(r);
         (b.querySelector('#del') || {}).onclick = () => {
           if (!confirm('Excluir esta requisição?')) return;
-          CFO.store.set('requisicoes', CFO.store.get('requisicoes', []).filter(x => x.id !== r.id)); CFO.close(); render();
+          CFO.store.set('requisicoes', CFO.store.get('requisicoes', []).filter(x => x.id !== r.id)); CFO.close(); carrega();
         };
       });
     }
 
-    $('#q').oninput = e => { q = e.target.value; render(); };
-    $('#fm').onchange = $('#fa').onchange = $('#ft').onchange = $('#fn').onchange = render;
+    $('#q').oninput = e => { q = e.target.value; clearTimeout(timer); timer = setTimeout(filtros, 200); };   // espera parar de digitar
+    $('#fm').onchange = $('#fa').onchange = $('#ft').onchange = $('#fn').onchange = filtros;
     $('#imp').onclick = () => $('#file').click();
     $('#file').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
       const s = (await CFO.readBook(f)).find(x => score(x.data) >= 4);
       if (!s) { alert('Não reconheci uma planilha de requisição nesse arquivo.'); return; }
-      const r = importData(s.data); render();
+      const r = importData(s.data); carrega();
       alert(`${r.add} requisição(ões) nova(s)` + (r.upd ? `, ${r.upd} atualizada(s)` : '') + '.');
     };
-    ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODO o histórico de requisições?')) { CFO.store.set('requisicoes', []); render(); } };
-    render();
-    CFO.db.all('fotos').then(l => { fotos = l; render(); }).catch(() => {});   // traz as retiradas (fotos de separação)
+    ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODO o histórico de requisições?')) { CFO.store.set('requisicoes', []); carrega(); } };
+    carrega();
+    CFO.db.all('fotos').then(l => { fotos = l; indexaFotos(); render(); }).catch(() => {});   // traz as retiradas (fotos de separação)
   };
   CFO.modules.requisicoes = Object.assign(api, { cfg: { title: 'Requisição', hints: ['requisic', 'aprovac'] }, score, importData });
 })();
