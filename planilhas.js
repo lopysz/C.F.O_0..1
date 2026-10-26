@@ -62,25 +62,26 @@ CFO.sheet = cfg => {
 
   /* --- Tela da planilha --- */
   const api = body => {
-    let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '', per = { m: '', y: '', t: '' };
+    let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '', solo = false, per = { m: '', y: '', t: '' };
     const calcular = () => {                          // colunas calculadas a partir das requisições (cfg.calc) no período escolhido
-      if (!cfg.calc) return { cols: [], cards: [], todas: [] };
+      if (!cfg.calc) return { cols: [], cards: [], filtro: null, todas: [] };
       const todas = CFO.store.get('requisicoes', []), r = cfg.calc({ reqs: todas.filter(CFO.periodo.fn(per.m, per.y)).filter(CFO.motivo.fn(per.t)), rows });
-      return { cols: r.cols || [], cards: r.cards || [], todas };
+      return { cols: r.cols || [], cards: r.cards || [], filtro: r.filtro, todas };
     };
     const save = () => { CFO.store.set(K, rows); CFO.store.set(K + ':mov', movs); draw(); };
     const field = (c, v = '') => c.options
       ? `<label>${c.label}<select name="${c.k}">${c.options.map(o => `<option ${o == v ? 'selected' : ''}>${o}</option>`).join('')}</select></label>`
-      : `<label>${c.label}<input name="${c.k}" type="${c.type || 'text'}" step="any" value="${CFO.esc(v)}" ${c === first ? 'required' : ''}></label>`;
+      : `<label>${c.label}${c.hint ? `<small>${c.hint}</small>` : ''}<input name="${c.k}" type="${c.type || 'text'}" step="any" value="${CFO.esc(v)}" ${c === first ? 'required' : ''}></label>`;
     const form = (r = {}) => cfg.columns.map(c => field(c, r[c.k])).join('');
 
     function draw() {
-      const list = rows.filter(r => JSON.stringify(Object.values(r)).toLowerCase().includes(q)), cx = calcular();
+      const cx = calcular(), list = rows.filter(r => JSON.stringify(Object.values(r)).toLowerCase().includes(q)).filter(r => !(solo && cx.filtro) || cx.filtro.test(r));
       body.innerHTML = `
         <div class="cards">${[...cfg.dash(rows, movs), ...cx.cards].map(d => `<div class="card ${d[2] || ''}"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('')}</div>
         <div class="bar">
           <input id="q" type="search" placeholder="Buscar..." value="${CFO.esc(q)}">
           ${cfg.calc ? CFO.periodo.html() + CFO.motivo.html() : ''}
+          ${cx.filtro ? `<button id="solo" class="ghost">${solo ? '✓ ' : ''}${cx.filtro.label}</button>` : ''}
           <button id="add">+ Adicionar</button>
           <button id="imp" class="ghost">Importar</button>
           <button id="exp" class="ghost">Exportar</button>
@@ -106,6 +107,7 @@ CFO.sheet = cfg => {
     function bind() {
       const $ = s => body.querySelector(s), find = id => rows.find(r => r.id === id);
       $('#q').oninput = e => { q = e.target.value.toLowerCase(); draw(); const n = $('#q'); n.focus(); n.setSelectionRange(99, 99); };
+      if ($('#solo')) $('#solo').onclick = () => { solo = !solo; draw(); };
       $('#add').onclick = () => CFO.dialog('Novo registro', form(), d => { rows.push({ id: Date.now() + Math.random().toString(36).slice(2, 5), ...clean(d) }); save(); });
       body.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { const r = find(b.dataset.e); CFO.dialog('Editar registro', form(r), d => { Object.assign(r, clean(d)); save(); }); });
       body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { if (confirm('Excluir este registro?')) { rows = rows.filter(r => r.id !== b.dataset.d); save(); } });

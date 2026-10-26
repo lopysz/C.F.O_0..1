@@ -243,7 +243,7 @@ CFO.modules.contagem = (() => {
         itens.forEach(x => {
           const r = rows.find(y => y.id === x.rid);
           if (r) r.qtd = x.qtd; else rows.push({ id: x.rid, codigo: x.codigo, item: x.item, qtd: x.qtd });
-          if (x.sis !== x.qtd) movs.push({ item: x.item, tipo: 'Contagem', qtd: x.qtd, resp: 'Contagem de estoque', data: agora });
+          if (x.sis !== x.qtd) movs.push({ item: x.item, tipo: 'Contagem', qtd: x.qtd, ant: x.sis, resp: 'Contagem de estoque', data: agora });
         });
         CFO.store.set('epi', rows); CFO.store.set('epi:mov', movs);
 

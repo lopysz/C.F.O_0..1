@@ -471,3 +471,10 @@ button.pg-a:hover{background:var(--panel2)}
   .pg-u>div span{font-size:12px}
   .pg-u small{font-size:11px;line-height:1.2}
 }
+
+/* ===== Histórico de movimentação: verde = entrada, vermelho = saída, amarelo = ajuste de contagem ===== */
+.hm-d{display:flex;align-items:center;gap:.35rem;color:var(--muted);font-size:.85rem}
+.hm-e td{background:rgba(76,195,138,.12)}.hm-s td{background:rgba(255,100,110,.12)}.hm-c td{background:rgba(240,180,41,.12)}
+.hm-e td:first-child{box-shadow:inset 4px 0 0 #4cc38a}.hm-s td:first-child{box-shadow:inset 4px 0 0 #ff6470}.hm-c td:first-child{box-shadow:inset 4px 0 0 #f0b429}
+.hm-e td:nth-child(3),.hm-e .hm-q{color:#4cc38a;font-weight:700}.hm-s td:nth-child(3),.hm-s .hm-q{color:#ff6470;font-weight:700}.hm-c td:nth-child(3),.hm-c .hm-q{color:#f0b429;font-weight:700}
+.hm-q{white-space:nowrap}.card.hm-ce b{color:#4cc38a}.card.hm-cs b{color:#ff6470}
