@@ -499,3 +499,14 @@ button.pg-a:hover{background:var(--panel2)}
 .rel table{break-inside:auto}
 .rel .pn svg{break-inside:avoid}
 .rel .scroll{max-height:none!important;overflow:visible!important;border:0}
+
+/* ===== PDF (correção da folha em branco no meio) =====
+   O navegador erra a divisão de páginas de tabelas dentro de "grid" e de cabeçalhos "sticky" (fixos), e acaba deixando
+   meia folha vazia + uma folha em branco. Na impressão os painéis passam a empilhar em bloco normal (que o navegador sabe paginar) e o cabeçalho fixo vira normal. */
+.rel .dash{display:block}
+.rel .pn{display:block;width:100%;box-sizing:border-box;margin:0 0 8px}
+.rel .pn:not(.w8):not(.w12):not(:has(table)){display:inline-block;width:calc(50% - 5px);vertical-align:top;margin-right:6px}
+.rel .pn:not(.w8):not(.w12):not(:has(table)):nth-of-type(even){margin-right:0}
+.rel th,.rel .scroll table th{position:static!important}
+.rel .tw{display:block;height:auto!important}
+.rel .tw>table{width:100%}
