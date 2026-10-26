@@ -40,7 +40,7 @@
   }
 
   /* 4) Últimas 3 requisições (a nova entra por cima, as outras descem e a 3ª sai) */
-  const ordem = (a, b) => (b.chegou || '').localeCompare(a.chegou || '') || P.key(b.mes) - P.key(a.mes) || numCmp(b.id, a.id);
+  const ordem = (a, b) => numCmp(b.id, a.id);   // pelo número da requisição (RQ maior = mais recente), não pela data em que entrou no sistema
   function ultHtml(reqs) {
     const top = [...reqs].sort(ordem).slice(0, 3), ids = top.map(r => r.id);
     let prev = []; try { prev = JSON.parse(localStorage.getItem(LS)) || []; } catch {}
