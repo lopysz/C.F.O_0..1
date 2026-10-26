@@ -57,6 +57,20 @@ CFO.mapa3d = (canvas, api) => {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.55)'; if (!fundo) ctx.strokeText(t, p.x, p.y); ctx.fillStyle = cor; ctx.fillText(t, p.x, p.y);
   };
 
+  // Texto pintado no chão: fica fixo no piso e gira junto com o mapa (em perspectiva); só vira 180° para nunca ficar de cabeça para baixo
+  const textoChao = (t, cx, cz, compr, altMax, cor) => {
+    const o = proj([cx, .02, cz]), a = proj([cx + 1, .02, cz]), b = proj([cx, .02, cz + 1]); if (!o || !a || !b) return;
+    let ax = a.x - o.x, ay = a.y - o.y, bx = b.x - o.x, by = b.y - o.y;
+    if (Math.abs(ax * by - ay * bx) < .5) return;                    // visto quase de lado: some em vez de borrar
+    if (ax < 0) { ax = -ax; ay = -ay; bx = -bx; by = -by; }           // mantém a leitura da esquerda para a direita
+    const F = 100; ctx.font = `700 ${F}px system-ui,Arial,sans-serif`;
+    const w = ctx.measureText(t).width / F;                            // largura em "alturas de letra"
+    const h = Math.min(altMax, compr / Math.max(w, .01)), k = h / F;   // altura da letra em unidades do mundo
+    ctx.save(); ctx.transform(ax * k, ay * k, bx * k, by * k, o.x, o.y);
+    ctx.font = `700 ${F}px system-ui,Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = .9; ctx.fillStyle = cor; ctx.fillText(t, 0, 0); ctx.restore(); ctx.globalAlpha = 1;
+  };
+
   function draw() {
     pend = 0; B = basis();
     ctx.setTransform(canvas.width / W, 0, 0, canvas.height / Hh, 0, 0);
@@ -66,6 +80,7 @@ CFO.mapa3d = (canvas, api) => {
     const chao = [[-1.5, 0, -1.5], [G.maxP + 1.5, 0, -1.5], [G.maxP + 1.5, 0, G.zt + 1.5], [-1.5, 0, G.zt + 1.5]].map(proj);
     if (chao.every(Boolean)) poly(chao, '#2e3339');
     G.rows.filter(x => x.r.t === 'c').forEach(x => { const q = [[0, .01, x.z], [G.maxP, .01, x.z], [G.maxP, .01, x.z + x.d], [0, .01, x.z + x.d]].map(proj); if (q.every(Boolean)) poly(q, '#6b7076'); });
+    G.rows.filter(x => x.r.t === 'c').forEach(x => textoChao(x.r.nome.toUpperCase(), G.maxP / 2, x.z + x.d / 2, G.maxP * .8, Math.min(.9, x.d * .45), '#e5e7eb'));
     // ocupação dos espaços (prateleira/andar)
     const ocup = new Map(), hit = new Set();
     api.locais().forEach(l => { const k = l.f + '|' + l.p + '|' + l.a; ocup.set(k, 1); if (foco && l.rid === foco) hit.add(k); });
@@ -129,7 +144,6 @@ CFO.mapa3d = (canvas, api) => {
       const alt = x.r.a * HA, px = esq ? .6 : x.r.p - .6, base = proj([px, alt, x.z + DF / 2]), top = proj([px, alt + 1.3, x.z + DF / 2]);
       if (base && top) placa(x.r.nome, base, top, forte);
     });
-    G.rows.filter(x => x.r.t === 'c').forEach(x => { const p = proj([G.maxP / 2, .05, x.z + x.d / 2]); if (p) rotulo(x.r.nome.toUpperCase(), p, Math.max(9, Math.min(11, fpx() * .35 / p.z)), '#c9ced6', 'center'); });
   }
   const pedir = () => { if (!pend) pend = requestAnimationFrame(passo); };
   function passo(now) {

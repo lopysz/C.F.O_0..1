@@ -47,7 +47,7 @@
     const muda = prev.length && prev.join('|') !== ids.join('|');
     try { localStorage.setItem(LS, JSON.stringify(ids)); } catch {}
     const row = (r, cls = '') => `<div class="pg-u ${cls}"><div><b>#${esc(r.id)}</b><span>${esc(r.sol || '-')}</span></div>
-      <small>${r.contrato ? 'Contrato ' + esc(r.contrato) + ' · ' : ''}${R$(total(r))}${r.chegou ? ' · ' + idade(r.chegou) : ''}</small></div>`;
+      <small>${r.contrato ? 'Contrato ' + esc(r.contrato) : ''}${r.contrato && r.chegou ? ' · ' : ''}<span class="pg-v">${r.contrato && !r.chegou ? ' · ' : ''}${R$(total(r))}${r.chegou ? ' · ' : ''}</span>${r.chegou ? idade(r.chegou) : ''}</small></div>`;
     const html = top.map((r, i) => { const j = prev.indexOf(r.id); return row(r, !muda ? '' : j < 0 ? 'ent' : j < i ? 'desc' : ''); }).join('');
     const saiu = muda ? prev.filter(id => !ids.includes(id)).map(id => reqs.find(r => r.id === id)).filter(Boolean)[0] : null;
     return tile('pg-ult', 'Últimas requisições', acao('requisicoes', 'Ver todas'),
