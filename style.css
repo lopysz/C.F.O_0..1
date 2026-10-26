@@ -489,3 +489,13 @@ button.pg-a:hover{background:var(--panel2)}
 .foto.rq .rqn input{accent-color:#e74c3c}
 .foto.rq.neg{border-color:#e74c3c}
 .foto.rq.neg .rqtxt{opacity:.6}
+
+/* ===== PDF dos relatórios: sem quebra de página desnecessária =====
+   Antes, todo painel ficava "inteiro numa página só": se uma tabela não coubesse no que sobrava da folha,
+   ela pulava para a próxima e deixava meia folha em branco. Agora painéis com tabela podem continuar na folha seguinte
+   (só gráficos e cartões pequenos continuam sem ser cortados). */
+.rel .pn:has(table),.rel .pn:has(.tw),.rel .pn:has(.scroll){break-inside:auto;page-break-inside:auto}
+.rel .pn>header{break-after:avoid}
+.rel table{break-inside:auto}
+.rel .pn svg{break-inside:avoid}
+.rel .scroll{max-height:none!important;overflow:visible!important;border:0}
