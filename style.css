@@ -510,3 +510,11 @@ button.pg-a:hover{background:var(--panel2)}
 .rel th,.rel .scroll table th{position:static!important}
 .rel .tw{display:block;height:auto!important}
 .rel .tw>table{width:100%}
+
+/* ===== PDF: tabela grande começa logo depois do gráfico (sem pular para a folha seguinte) =====
+   O "manter título junto da tabela" fazia o navegador mandar título + tabela inteira para a próxima folha quando a tabela
+   é maior que uma página, deixando metade da folha anterior vazia. Aqui o título deixa de ser "grudado" e a tabela pode começar em qualquer ponto. */
+.rel .sub,.rel h2,.rel h3,.rel .pn>header{break-after:auto!important;page-break-after:auto!important}
+.rel .tw,.rel table,.rel tbody{break-inside:auto!important;page-break-inside:auto!important;break-before:auto!important}
+.rel tr{break-inside:avoid}
+.rel tbody tr:first-child{break-before:avoid}
