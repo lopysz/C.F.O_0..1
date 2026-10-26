@@ -478,3 +478,14 @@ button.pg-a:hover{background:var(--panel2)}
 .hm-e td:first-child{box-shadow:inset 4px 0 0 #4cc38a}.hm-s td:first-child{box-shadow:inset 4px 0 0 #ff6470}.hm-c td:first-child{box-shadow:inset 4px 0 0 #f0b429}
 .hm-e td:nth-child(3),.hm-e .hm-q{color:#4cc38a;font-weight:700}.hm-s td:nth-child(3),.hm-s .hm-q{color:#ff6470;font-weight:700}.hm-c td:nth-child(3),.hm-c .hm-q{color:#f0b429;font-weight:700}
 .hm-q{white-space:nowrap}.card.hm-ce b{color:#4cc38a}.card.hm-cs b{color:#ff6470}
+
+/* ===== Requisição: retirada + negada ===== */
+.foto.rq .rqtxt{flex:1;min-width:0}
+.foto.rq .rqdir{display:flex;align-items:center;gap:.8rem;margin-left:auto;flex:none;text-align:right}
+.foto.rq .rqret,.foto.rq .rqneg{font-weight:700;font-size:.8rem;line-height:1.1}
+.foto.rq .rqret{color:#2ecc71}.foto.rq .rqret.par{color:#f1c40f}.foto.rq .rqret.esp{color:var(--muted);font-weight:400}
+.foto.rq .rqneg{color:#e74c3c}
+.foto.rq .rqret small,.foto.rq .rqneg small{display:block;font-weight:400;font-size:.65rem;opacity:.85}
+.foto.rq .rqn input{accent-color:#e74c3c}
+.foto.rq.neg{border-color:#e74c3c}
+.foto.rq.neg .rqtxt{opacity:.6}
