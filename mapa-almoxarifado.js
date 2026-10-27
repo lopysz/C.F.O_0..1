@@ -11,7 +11,7 @@ CFO.mapa3d = (canvas, api) => {
   const ctx = canvas.getContext('2d'), HA = .9, DF = 1.5, GAP = .5, DC = 2.2, TF = Math.tan(25 * Math.PI / 180);
   const cam = { yaw: -.55, pitch: .6, dist: 30, tx: 0, ty: 1.5, tz: 0 };
   let vista = -.55;                                          // ângulo de entrada (diagonal); "Girar" passa para o próximo canto
-  let W = 320, Hh = 320, pend = 0, anim = null, anc = null;   // anc: fileira em foco (ponto de ancoragem); as outras ficam translúcidas
+  let W = 320, Hh = 320, pend = 0, anim = null, anc = null, alvo = null;   // alvo: bloco destacado enquanto se arrasta um item   // anc: fileira em foco (ponto de ancoragem); as outras ficam translúcidas
 
   // Fileiras normais empilham-se em z; estantes avulsas (r.av) ficam nos cantos/lados ou em posição livre (ox, oz, rot: 0 = ao longo de x, 1 = ao longo de z)
   const geo = () => {
@@ -64,7 +64,7 @@ CFO.mapa3d = (canvas, api) => {
     FACES.forEach(([n, ix]) => {
       const mid = [(x0 + x1) / 2 + n[0] * (x1 - x0) / 2, (y0 + y1) / 2 + n[1] * (y1 - y0) / 2, (z0 + z1) / 2 + n[2] * (z1 - z0) / 2];
       if (n[0] * (B.c[0] - mid[0]) + n[1] * (B.c[1] - mid[1]) + n[2] * (B.c[2] - mid[2]) <= 0) return;   // face de trás
-      const pts = projPoly(ix.map(i => c[i])); if (!pts) return;
+      const pts = projPoly(ix.map(i => c[i])); if (!pts || pts.every(q => q.x < -30) || pts.every(q => q.x > W + 30) || pts.every(q => q.y < -30) || pts.every(q => q.y > Hh + 30)) return;
       L.push({ pts, d: dist2(mid), fill: shade(rgb, n), alpha, stroke });
     });
   };
@@ -144,6 +144,7 @@ CFO.mapa3d = (canvas, api) => {
         const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k);
         if (h) bx(p - .92, (a - 1) * HA + .05, .08, p - .08, a * HA - .05, DF - .06, [245, 158, 11], 1, '#fff');
         else if (o) { const cf = cores && cores.get(k); bx(p - .9, (a - 1) * HA + .05, .1, p - .1, a * HA - .08, DF - .08, cf ? cf.rgb : [40, 168, 80], .92 * g); }
+        if (alvo && alvo.f === r.id && alvo.p === p && alvo.a === a) bx(p - .96, (a - 1) * HA + .02, .03, p - .04, a * HA - .02, DF - .03, [56, 140, 255], .55, '#9cc7ff');
         if (sel && sel.f === r.id && sel.p === p) bx(p - 1, (a - 1) * HA, 0, p, a * HA, DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)');
       }
       if (!cima && !/estoque/i.test(r.nome)) {                                  // fora da vista de cima o nome fica escrito na ponta da estante
@@ -225,7 +226,7 @@ CFO.mapa3d = (canvas, api) => {
   const api3 = {
     render: pedir,
     resize() {
-      const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth || 320, h = canvas.clientHeight || 320;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75), w = canvas.clientWidth || 320, h = canvas.clientHeight || 320;
       W = w; Hh = h; canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); pedir();
     },
     // Enquadra o almoxarifado inteiro (com as plaquinhas) no canvas, olhando pela diagonal
@@ -247,21 +248,31 @@ CFO.mapa3d = (canvas, api) => {
       ir({ yaw, pitch: .5, dist: 10, tx: t[0], ty: t[1], tz: t[2] });
     },
     // espaço (prateleira) mais próximo do toque
-    achar(px, py) {
+    achar(px, py, so, folga) {                                       // so: só nessa fileira; folga: soltar de item (pega o bloco mais perto do dedo)
       const G = geo(); let melhor = null;
-      G.rows.filter(x => x.r.t === 'f').forEach(x => { for (let p = 1; p <= x.r.p; p++) for (let a = 1; a <= x.r.a; a++) {
+      G.rows.filter(x => x.r.t === 'f' && (!so || x.r.id === so)).forEach(x => { for (let p = 1; p <= x.r.p; p++) for (let a = 1; a <= x.r.a; a++) {
         const c = proj(mundoPos(x, p - .5, (a - .5) * HA, DF / 2)), e = proj(mundoPos(x, p, (a - .5) * HA, DF / 2)); if (!c || !e) continue;
-        const raio = Math.max(9, Math.abs(e.x - c.x) * .9);
-        if (Math.hypot(c.x - px, c.y - py) <= raio && (!melhor || c.z < melhor.z)) melhor = { f: x.r.id, p, a, z: c.z };
+        const raio = Math.max(folga ? 14 : 9, Math.abs(e.x - c.x) * (folga ? 1.2 : .9)), dd = Math.hypot(c.x - px, c.y - py);
+        if (dd <= raio && (!melhor || (folga ? dd < melhor.dd : c.z < melhor.z))) melhor = { f: x.r.id, p, a, z: c.z, dd };
       } });
       return melhor;
-    }
+    },
+    alvo(px, py, so) { alvo = px == null ? null : this.achar(px, py, so, true); pedir(); return alvo; }
   };
 
   /* ----- toque / mouse ----- */
   const ptr = new Map(); let mov = 0, t0 = 0, ult = null;
-  canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptr.size === 1) { mov = 0; t0 = Date.now(); } ult = null; anim = null; });
+  // Toque sem "fantasmas": um ponteiro que ficou preso (soltou fora da janela, botão direito, etc.) fazia o próximo arrasto virar pinça e a rotação travava
+  const limpa = () => { ptr.clear(); ult = null; };
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') { if (e.button === 1) return; limpa(); }          // mouse nunca faz pinça
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptr.size === 1) { mov = 0; t0 = Date.now(); } ult = null; anim = null;
+  });
+  canvas.addEventListener('lostpointercapture', e => { ptr.delete(e.pointerId); ult = null; });
+  window.addEventListener('blur', limpa); window.addEventListener('pointerup', e => { if (e.pointerType === 'mouse') limpa(); });
   canvas.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse' && !e.buttons) { limpa(); return; }               // botão já foi solto: para de girar
     const p = ptr.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; mov += Math.abs(dx) + Math.abs(dy);
     if (ptr.size >= 2) {
@@ -273,10 +284,10 @@ CFO.mapa3d = (canvas, api) => {
   });
   const pan = (dx, dy) => { const k = cam.dist / fpx(); B = basis(); const s = Math.sin(cam.yaw), c = Math.cos(cam.yaw); cam.tx -= (B.r[0] * dx) * k + (-s) * dy * k; cam.tz -= (B.r[2] * dx) * k + (-c) * dy * k; };
   const solta = e => { const tap = ptr.size === 1 && mov < 6 && Date.now() - t0 < 500; ptr.delete(e.pointerId); ult = null;
-    if (tap) { const r = canvas.getBoundingClientRect(), h = api3.achar(e.clientX - r.left, e.clientY - r.top); api.onTap(h ? h.f : null, h ? h.p : null); } };
+    if (tap) { const r = canvas.getBoundingClientRect(), h = api3.achar(e.clientX - r.left, e.clientY - r.top); api.onTap(h ? h.f : null, h ? h.p : null, h ? h.a : null); } };
   canvas.addEventListener('pointerup', solta); canvas.addEventListener('pointercancel', e => { ptr.delete(e.pointerId); ult = null; });
   canvas.addEventListener('wheel', e => { e.preventDefault(); anim = null; cam.dist = Math.max(4, Math.min(140, cam.dist * Math.exp(e.deltaY * .0012))); pedir(); }, { passive: false });
-  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('contextmenu', e => { e.preventDefault(); limpa(); });
   if (window.ResizeObserver) new ResizeObserver(() => api3.resize()).observe(canvas);
   return api3;
 };
@@ -316,7 +327,9 @@ CFO.modules.mapa = body => {
   body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Mapa almoxarifado</b> mostra onde cada item está guardado: digite o nome ou o código e o mapa destaca a prateleira, com o <b>corredor</b>, a <b>fileira</b>, a <b>prateleira</b> e o <b>andar</b>. Toque na <b>⚙️ engrenagem</b> para configurar: toque numa prateleira e escolha os itens de cada andar, ou use <b>Definir local</b> no resultado da busca. Em <b>Layout</b> você muda o desenho (fileiras, corredores, prateleiras e andares).</p></details>
     <div class="bar mp-bar"><input id="mq" type="search" placeholder="🔎 Pesquisar item" autocomplete="off"><button id="m3" class="ghost" aria-label="Ver em 3D" title="Alternar entre mapa 2D e 3D">🧊 3D</button><button id="mf" class="ghost" aria-label="Camadas e filtros" title="Camadas / filtro de cor"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 2 8.5 12 14l10-5.5L12 3z"/><path d="m2 13 10 5.5L22 13"/><path d="m2 17.5 10 5.5 10-5.5" opacity=".55"/></svg></button></div>
     <div class="mp-top"><div id="mp-info"></div><button id="mg" class="ghost" aria-label="Configurar" title="Configurar o mapa">⚙️</button></div><div id="mp-fleg" class="mp-leg" hidden></div><div id="mp-out"></div><div id="mp-pan"></div><div id="mp-2d"></div>
-    <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><button class="ghost" id="m3r">↻ Girar</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
+    <div id="mp-3d" class="mp-3d" hidden><div class="mp-cv"><canvas aria-label="Almoxarifado em 3D"></canvas>
+      <div id="mp-tray" class="mp-tray" hidden><div class="mp-th"><b id="mp-tt"></b><input id="mp-tq" type="search" placeholder="filtrar..." autocomplete="off"><button class="ghost" id="mp-tall"></button><button class="ghost" id="mp-tx" aria-label="Fechar">✕</button></div><small id="mp-tm" class="mut"></small><div id="mp-tl" class="mp-tl"></div></div></div>
+      <div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><button class="ghost" id="m3r">↻ Girar</button><button class="ghost" id="m3b" hidden>📥 Itens sem local</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
   const $ = s => body.querySelector(s);
 
   // Celular + 3D: a barra de pesquisa fica sobre o topo do modelo (no computador continua no lugar de sempre)
@@ -363,6 +376,67 @@ CFO.modules.mapa = body => {
       return `<div class="mp-it${r.id === foco ? ' on' : ''}" data-rid="${esc(r.id)}"><div class="mp-t"><b>${esc(r.item)}</b><small>${r.codigo ? esc(r.codigo) + ' · ' : ''}estoque ${r.qtd ?? '-'}</small></div>
         <div class="mp-ls">${ls.map(l => `<button class="mp-loc" data-l="${l.id}">📍 ${esc(textoLocal(l))}</button>`).join('') || '<small class="mut">sem local definido</small>'}<button class="ghost mp-def" data-def="${esc(r.id)}">+ local</button></div></div>`; }).join('')}</div>`;
   };
+
+  /* ---------- Itens sem local: arrastar para um bloco da estante em foco ---------- */
+  let bandeja = false, pegar = null, bTodos = false, bq = '';
+  const CAT = { luva: /\bluvas?\b|mangote|dedeira/, calcado: /calcad|\bbotas?\b|botina|sapato|tenis|sapatilha|chinelo|sandalia|galocha|tamanco/, uniforme: /uniform|\bcamisas?\b|camiseta|\bcalcas?\b|bermuda|jaleco|macacao|\bcolete|jaqueta|\bblusa|\bbone\b|casaco|japona|moletom|\bpolo\b|avental|regata|\bconjunto/ };
+  const catItem = nome => { const n = nrm(nome); return CAT.luva.test(n) ? 'luva' : CAT.calcado.test(n) ? 'calcado' : CAT.uniforme.test(n) ? 'uniforme' : 'epi'; };
+  // O nome da fileira diz o que ela guarda: "Calçados 2" -> só calçados, "Luvas 7" -> só luvas, "EPIs 5" -> o que não é calçado/uniforme/luva
+  const filtroFileira = nome => {
+    const n = nrm(nome), rot = String(nome).replace(/[\d#º°-]+/g, ' ').trim() || nome;
+    if (/calcad|bota|sapato/.test(n)) return { rot, ok: r => catItem(r.item) === 'calcado' };
+    if (/uniform/.test(n)) return { rot, ok: r => catItem(r.item) === 'uniforme' };
+    if (/luva/.test(n)) return { rot, ok: r => catItem(r.item) === 'luva' };
+    if (/\bepis?\b/.test(n)) return { rot, ok: r => catItem(r.item) === 'epi' };
+    const tk = n.replace(/\d+/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !/estoque|fileira|prateleira|estante|avulsa/.test(w));
+    return tk.length ? { rot, ok: r => tk.some(w => nrm(r.item).includes(w.replace(/s$/, ''))) } : null;
+  };
+  const semLocalLista = () => { const f = mundo && fil(mundo.ancorada()); if (!f) return { f: null, lista: [], fl: null };
+    const com = new Set(D.locais.filter(l => fil(l.f)).map(l => l.rid)), fl = filtroFileira(f.nome), t = nrm(bq).trim();
+    let lista = rows().filter(r => r.item && !com.has(r.id)); if (fl && !bTodos) lista = lista.filter(fl.ok);
+    if (t) lista = lista.filter(r => nrm(r.item + ' ' + (r.codigo || '')).includes(t));
+    return { f, fl, lista }; };
+  const renderBandeja = msg => {
+    const tr = $('#mp-tray'), anc = v3 && mundo && mundo.ancorada() && fil(mundo.ancorada());
+    $('#m3b').hidden = !anc; if (!anc) { bandeja = false; pegar = null; }
+    tr.hidden = !(bandeja && anc); if (tr.hidden) return;
+    const { f, fl, lista } = semLocalLista();
+    $('#mp-tt').textContent = `📥 Sem local${fl && !bTodos ? ' · ' + fl.rot : ''} (${lista.length})`;
+    const tb = $('#mp-tall'); tb.hidden = !fl; tb.textContent = bTodos ? 'Só ' + (fl ? fl.rot : '') : 'Ver todos';
+    $('#mp-tm').textContent = msg || (pegar ? 'Agora toque no bloco da estante onde guardar.' : `Arraste o item até um bloco de ${f.nome} (ou toque no item e depois no bloco).`);
+    $('#mp-tl').innerHTML = lista.slice(0, 300).map(r => `<div class="mp-dc${pegar === r.id ? ' on' : ''}" data-rid="${esc(r.id)}"><b>${esc(r.item)}</b><small>${r.codigo ? esc(r.codigo) + ' · ' : ''}estoque ${r.qtd ?? '-'}</small></div>`).join('')
+      || `<small class="mut">${bq ? 'Nada com esse texto.' : fl && !bTodos ? 'Nenhum item sem local deste tipo. Toque em "Ver todos".' : 'Todos os itens já têm local.'}</small>`;
+  };
+  const colocar = (rid, f, p, a) => {
+    const row = rowOf(rid), fi = fil(f); if (!row || !fi) return;
+    if (!D.locais.some(x => x.rid === rid && x.f === f && x.p === p && x.a === a)) D.locais.push({ id: uid(), rid, nome: row.item, f, p, a });
+    salvar(); pegar = null; sel = { f, p }; desenhar(); renderBandeja(`✔ ${row.item} → ${fi.nome} · Prateleira ${p} · Andar ${a}`);
+  };
+  let arr = null;                                            // arrasto em andamento: { rid, id, x, y, on, touch, ghost }
+  const tray = $('#mp-tray');
+  tray.addEventListener('pointerdown', e => { const c = e.target.closest('.mp-dc'); if (!c) return; arr = { rid: c.dataset.rid, id: e.pointerId, x: e.clientX, y: e.clientY, on: false, touch: e.pointerType !== 'mouse', el: c }; });
+  tray.addEventListener('pointermove', e => {
+    if (!arr || e.pointerId !== arr.id) return;
+    const dx = e.clientX - arr.x, dy = e.clientY - arr.y;
+    if (!arr.on) {
+      if (Math.hypot(dx, dy) < 8 || (arr.touch && Math.abs(dx) > Math.abs(dy))) return;              // no toque, deslizar para o lado só rola a lista
+      arr.on = true; try { arr.el.setPointerCapture(e.pointerId); } catch (_) {}
+      arr.ghost = document.createElement('div'); arr.ghost.className = 'mp-ghost'; arr.ghost.textContent = (rowOf(arr.rid) || {}).item || ''; document.body.append(arr.ghost);
+    }
+    arr.ghost.style.transform = `translate(${e.clientX + 12}px,${e.clientY - 28}px)`;
+    const r = $('#mp-3d canvas').getBoundingClientRect(); mundo.alvo(e.clientX - r.left, e.clientY - r.top, mundo.ancorada());
+  });
+  const fimArr = (e, cancela) => {
+    if (!arr || e.pointerId !== arr.id) return; const a = arr; arr = null;
+    if (!a.on) { if (!cancela) { pegar = pegar === a.rid ? null : a.rid; renderBandeja(); } return; }   // toque simples: escolhe o item
+    a.ghost.remove(); const r = $('#mp-3d canvas').getBoundingClientRect(), h = cancela ? null : mundo.alvo(e.clientX - r.left, e.clientY - r.top, mundo.ancorada()); mundo.alvo(null);
+    if (h) colocar(a.rid, h.f, h.p, h.a); else if (!cancela) renderBandeja('Solte em cima de um bloco da estante.');
+  };
+  tray.addEventListener('pointerup', e => fimArr(e, false)); tray.addEventListener('pointercancel', e => fimArr(e, true));
+  $('#m3b').onclick = () => { bandeja = !bandeja; renderBandeja(); };
+  $('#mp-tx').onclick = () => { bandeja = false; pegar = null; renderBandeja(); };
+  $('#mp-tall').onclick = () => { bTodos = !bTodos; renderBandeja(); };
+  $('#mp-tq').oninput = e => { bq = e.target.value; renderBandeja(); };
 
   /* ---------- Camadas / filtro de cor ---------- */
   const calcFiltro = () => {
@@ -434,7 +508,7 @@ CFO.modules.mapa = body => {
     const pn = painelHTML();
     $('#mp-out').innerHTML = resHTML(); $('#mp-pan').innerHTML = v3 ? '' : pn; $('#mp-pan3').innerHTML = v3 ? pn : '';   // no 3D o painel da prateleira fica embaixo do modelo
     $('#mp-2d').innerHTML = mapaHTML(); $('#mp-2d').hidden = v3; $('#mp-3d').hidden = !v3; $('#m3').classList.toggle('on', v3);
-    if (v3 && mundo) mundo.render();
+    if (v3 && mundo) mundo.render(); renderBandeja();
     $('#mp-dl').innerHTML = edit ? todos.map(r => `<option value="${esc(r.item)}">`).join('') : '';
     const ml = $('#ml'); if (ml) ml.onclick = layout;
     $('#ms').onclick = () => { semLocal = !semLocal; foco = null; desenhar(); };
@@ -517,9 +591,10 @@ CFO.modules.mapa = body => {
     if (v3 && !mundo) mundo = CFO.mapa3d($('#mp-3d canvas'), {
       layout: () => D.layout, locais: () => D.locais.filter(l => fil(l.f)), foco: () => foco, sel: () => sel, cores: () => coresMap,
       corredor: id => corredorDe(id),
-      onTap: (f, p) => {
+      onTap: (f, p, a) => {
+        if (pegar && f && a && mundo.ancorada() === f) return colocar(pegar, f, p, a);          // item escolhido na bandeja: guarda no bloco tocado
         if (!f) { if (mundo.ancorada()) { mundo.soltar(); sel = null; desenhar(); } return; }   // toque fora: volta ao mapa geral
-        sel = { f, p }; if (!(v3 && !sug) && !at(f, p).some(l => l.rid === foco)) foco = null; desenhar(); mundo.ancorar(f, p);
+        sel = { f, p }; if (!(v3 && !sug) && !at(f, p).some(l => l.rid === foco)) foco = null; mundo.ancorar(f, p); desenhar();
       }
     });
     if (v3) { const a = alvoBusca(); foco = a ? a.id : null; }
@@ -528,7 +603,7 @@ CFO.modules.mapa = body => {
     desenhar();
     if (v3) { mundo.resize(); l ? mundo.focar(l) : mundo.geral(false); }
   };
-  $('#m3g').onclick = () => mundo && mundo.geral();
+  $('#m3g').onclick = () => { if (mundo) { mundo.geral(); desenhar(); } };
   $('#m3c').onclick = () => mundo && mundo.cima();
   $('#m3r').onclick = () => mundo && mundo.girar();
   body.addEventListener('click', e => {
