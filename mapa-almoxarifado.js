@@ -13,11 +13,22 @@ CFO.mapa3d = (canvas, api) => {
   let vista = -.55;                                          // ângulo de entrada (diagonal); "Girar" passa para o próximo canto
   let W = 320, Hh = 320, pend = 0, anim = null;
 
+  // Fileiras normais empilham-se em z; estantes avulsas (r.av) ficam nos cantos/lados ou em posição livre (ox, oz, rot: 0 = ao longo de x, 1 = ao longo de z)
   const geo = () => {
-    let z = 0, maxP = 1; const rows = [];
-    api.layout().forEach(r => { const d = r.t === 'f' ? DF + GAP : DC; rows.push({ r, z, d }); z += d; if (r.t === 'f') maxP = Math.max(maxP, r.p); });
-    return { rows, maxP, zt: z };
+    let z = 0, maxP = 1; const rows = [], lay = api.layout();
+    lay.forEach(r => { if (r.av) return; const d = r.t === 'f' ? DF + GAP : DC; rows.push({ r, z, d, ox: 0, oz: z, rot: 0 }); z += d; if (r.t === 'f') maxP = Math.max(maxP, r.p); });
+    const zt = z; let x0 = 0, x1 = maxP, z0 = 0, z1 = Math.max(zt - GAP, 1);
+    lay.filter(r => r.av).forEach(r => {
+      const o = +r.off || 0; let ox = +r.x || 0, oz = +r.z || 0, rot = r.rot ? 1 : 0;
+      if (r.lado === 'e') { rot = 1; ox = -DF - .6; oz = o; } else if (r.lado === 'd') { rot = 1; ox = maxP + .6; oz = o; }
+      else if (r.lado === 'f') { rot = 0; ox = o; oz = -DF - .6; } else if (r.lado === 't') { rot = 0; ox = o; oz = zt + .1; }
+      rows.push({ r, z: oz, d: 0, ox, oz, rot });
+      x0 = Math.min(x0, ox); z0 = Math.min(z0, oz);
+      x1 = Math.max(x1, rot ? ox + DF : ox + r.p); z1 = Math.max(z1, rot ? oz + r.p : oz + DF);
+    });
+    return { rows, maxP, zt, x0, x1, z0, z1 };
   };
+  const mundoPos = (x, u, y, w) => x.rot ? [x.ox + w, y, x.oz + u] : [x.ox + u, y, x.oz + w];   // (u = ao longo da estante, w = profundidade)
   const basis = () => {
     const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
     const c = [cam.tx + cam.dist * cp * Math.sin(cam.yaw), cam.ty + cam.dist * sp, cam.tz + cam.dist * cp * Math.cos(cam.yaw)];
@@ -34,6 +45,16 @@ CFO.mapa3d = (canvas, api) => {
     const xc = rel[0] * B.r[0] + rel[1] * B.r[1] + rel[2] * B.r[2], yc = rel[0] * B.u[0] + rel[1] * B.u[1] + rel[2] * B.u[2];
     return { x: W / 2 + xc / zc * fpx(), y: Hh / 2 - yc / zc * fpx(), z: zc };
   };
+  // Projeta um polígono 3D cortando o que está atrás da câmera (assim o chão e as estantes continuam aparecendo quando o zoom chega perto)
+  const projPoly = pts3 => {
+    const N = .3, c = pts3.map(p => { const rel = [p[0] - B.c[0], p[1] - B.c[1], p[2] - B.c[2]]; return [rel[0] * B.r[0] + rel[1] * B.r[1] + rel[2] * B.r[2], rel[0] * B.u[0] + rel[1] * B.u[1] + rel[2] * B.u[2], rel[0] * B.f[0] + rel[1] * B.f[1] + rel[2] * B.f[2]]; }), out = [];
+    for (let i = 0; i < c.length; i++) {
+      const a = c[i], b = c[(i + 1) % c.length], ia = a[2] >= N, ib = b[2] >= N;
+      if (ia) out.push(a);
+      if (ia !== ib) { const t = (N - a[2]) / (b[2] - a[2]); out.push(a.map((v, k) => v + (b[k] - v) * t)); }
+    }
+    return out.length < 3 ? null : out.map(q => ({ x: W / 2 + q[0] / q[2] * fpx(), y: Hh / 2 - q[1] / q[2] * fpx(), z: q[2] }));
+  };
   const dist2 = p => (p[0] - B.c[0]) ** 2 + (p[1] - B.c[1]) ** 2 + (p[2] - B.c[2]) ** 2;
 
   const FACES = [[[0, 0, -1], [0, 1, 3, 2]], [[0, 0, 1], [4, 5, 7, 6]], [[-1, 0, 0], [0, 2, 6, 4]], [[1, 0, 0], [1, 3, 7, 5]], [[0, 1, 0], [2, 3, 7, 6]]];
@@ -43,7 +64,7 @@ CFO.mapa3d = (canvas, api) => {
     FACES.forEach(([n, ix]) => {
       const mid = [(x0 + x1) / 2 + n[0] * (x1 - x0) / 2, (y0 + y1) / 2 + n[1] * (y1 - y0) / 2, (z0 + z1) / 2 + n[2] * (z1 - z0) / 2];
       if (n[0] * (B.c[0] - mid[0]) + n[1] * (B.c[1] - mid[1]) + n[2] * (B.c[2] - mid[2]) <= 0) return;   // face de trás
-      const pts = ix.map(i => proj(c[i])); if (pts.some(p => !p)) return;
+      const pts = projPoly(ix.map(i => c[i])); if (!pts) return;
       L.push({ pts, d: dist2(mid), fill: shade(rgb, n), alpha, stroke });
     });
   };
@@ -77,31 +98,32 @@ CFO.mapa3d = (canvas, api) => {
     ctx.globalAlpha = 1; ctx.fillStyle = '#23272d'; ctx.fillRect(0, 0, W, Hh);
     const G = geo(), L = [], foco = api.foco(), sel = api.sel();
     // chão e corredores
-    const chao = [[-1.5, 0, -1.5], [G.maxP + 1.5, 0, -1.5], [G.maxP + 1.5, 0, G.zt + 1.5], [-1.5, 0, G.zt + 1.5]].map(proj);
-    if (chao.every(Boolean)) poly(chao, '#2e3339');
-    G.rows.filter(x => x.r.t === 'c').forEach(x => { const q = [[0, .01, x.z], [G.maxP, .01, x.z], [G.maxP, .01, x.z + x.d], [0, .01, x.z + x.d]].map(proj); if (q.every(Boolean)) poly(q, '#6b7076'); });
+    // piso inteiro (sob as fileiras, entre elas, nas pontas e nos cantos) na mesma cor dos corredores
+    const chao = projPoly([[G.x0 - 1.5, 0, G.z0 - 1.5], [G.x1 + 1.5, 0, G.z0 - 1.5], [G.x1 + 1.5, 0, G.z1 + 1.5], [G.x0 - 1.5, 0, G.z1 + 1.5]]);
+    if (chao) poly(chao, '#6b7076');
     G.rows.filter(x => x.r.t === 'c').forEach(x => textoChao(x.r.nome.toUpperCase(), G.maxP / 2, x.z + x.d / 2, G.maxP * .8, Math.min(.9, x.d * .45), '#e5e7eb'));
     // ocupação dos espaços (prateleira/andar)
     const ocup = new Map(), hit = new Set();
     api.locais().forEach(l => { const k = l.f + '|' + l.p + '|' + l.a; ocup.set(k, 1); if (foco && l.rid === foco) hit.add(k); });
     const ativas = hit.size ? new Set([...hit].map(k => k.split('|')[0])) : null;   // com item procurado, as outras fileiras ficam "fantasmas"
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
-      const { r, z } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1, aco = [150, 160, 172], pst = [100, 108, 120];
+      const { r } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1, aco = [150, 160, 172], pst = [100, 108, 120];
       const lat = [78, 86, 98];
-      addBox(L, 0, 0, z, r.p, alt, z + .04, lat, .55 * g);                                                           // painel do fundo
-      addBox(L, -.08, 0, z, 0, alt, z + DF, lat, .6 * g); addBox(L, r.p, 0, z, r.p + .08, alt, z + DF, lat, .6 * g);   // laterais
+      const bx = (u0, y0, w0, u1, y1, w1, rgb, al, st) => x.rot ? addBox(L, x.ox + w0, y0, x.oz + u0, x.ox + w1, y1, x.oz + u1, rgb, al, st) : addBox(L, x.ox + u0, y0, x.oz + w0, x.ox + u1, y1, x.oz + w1, rgb, al, st);
+      bx(0, 0, 0, r.p, alt, .04, lat, .55 * g);                                                           // painel do fundo
+      bx(-.08, 0, 0, 0, alt, DF, lat, .6 * g); bx(r.p, 0, 0, r.p + .08, alt, DF, lat, .6 * g);             // laterais
       for (let a = 0; a <= r.a; a++) {
         const y = a * HA;
-        addBox(L, 0, y - .05, z, r.p, y + .05, z + DF, aco, .45 * g);                                               // tampo da prateleira (corpo inteiro)
-        addBox(L, 0, y - .05, z, r.p, y + .05, z + .09, aco, g); addBox(L, 0, y - .05, z + DF - .09, r.p, y + .05, z + DF, aco, g);   // vigas frente e fundo
+        bx(0, y - .05, 0, r.p, y + .05, DF, aco, .45 * g);                                                // tampo da prateleira (corpo inteiro)
+        bx(0, y - .05, 0, r.p, y + .05, .09, aco, g); bx(0, y - .05, DF - .09, r.p, y + .05, DF, aco, g);   // vigas frente e fundo
       }
       const px = []; for (let p = 0; p <= r.p; p += 5) px.push(p); if (r.p % 5) px.push(r.p);
-      px.forEach(p => { addBox(L, p - .08, 0, z, p + .08, alt, z + .15, pst, g); addBox(L, p - .08, 0, z + DF - .15, p + .08, alt, z + DF, pst, g); });   // montantes mais grossos
+      px.forEach(p => { bx(p - .08, 0, 0, p + .08, alt, .15, pst, g); bx(p - .08, 0, DF - .15, p + .08, alt, DF, pst, g); });   // montantes mais grossos
       for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
         const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k);
-        if (h) addBox(L, p - .92, (a - 1) * HA + .05, z + .08, p - .08, a * HA - .05, z + DF - .06, [245, 158, 11], 1, '#fff');
-        else if (o) addBox(L, p - .9, (a - 1) * HA + .05, z + .1, p - .1, a * HA - .08, z + DF - .08, [40, 168, 80], .92 * g);
-        if (sel && sel.f === r.id && sel.p === p) addBox(L, p - 1, (a - 1) * HA, z, p, a * HA, z + DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)');
+        if (h) bx(p - .92, (a - 1) * HA + .05, .08, p - .08, a * HA - .05, DF - .06, [245, 158, 11], 1, '#fff');
+        else if (o) bx(p - .9, (a - 1) * HA + .05, .1, p - .1, a * HA - .08, DF - .08, [40, 168, 80], .92 * g);
+        if (sel && sel.f === r.id && sel.p === p) bx(p - 1, (a - 1) * HA, 0, p, a * HA, DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)');
       }
     });
     L.sort((a, b) => b.d - a.d).forEach(f => poly(f.pts, f.fill, f.alpha, f.stroke));
@@ -119,7 +141,7 @@ CFO.mapa3d = (canvas, api) => {
     // marcador do item procurado (sempre aparece)
     hit.forEach(k => {
       const [f, p, a] = k.split('|'), x = G.rows.find(q => q.r.id === f); if (!x) return;
-      const top = proj([+p - .5, x.r.a * HA + 1.1, x.z + DF / 2]), base = proj([+p - .5, +a * HA - HA / 2, x.z + DF / 2]);
+      const top = proj(mundoPos(x, +p - .5, x.r.a * HA + 1.1, DF / 2)), base = proj(mundoPos(x, +p - .5, +a * HA - HA / 2, DF / 2));
       if (top && base) { ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(top.x, top.y); ctx.stroke(); rotulo(`Prat. ${p} · Andar ${a}`, { x: top.x, y: top.y - 10 }, 12, '#1a1200', 'center', '#f59e0b', true); }
     });
     // fileiras: plaquinha numa haste sobre a ponta da estante (alterna esquerda/direita); se encostar em outra, a haste sobe
@@ -141,7 +163,7 @@ CFO.mapa3d = (canvas, api) => {
     let n = 0;
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
       const esq = n++ % 2 === 0, forte = ativas && ativas.has(x.r.id); if (ativas && !forte) return;
-      const alt = x.r.a * HA, px = esq ? .6 : x.r.p - .6, base = proj([px, alt, x.z + DF / 2]), top = proj([px, alt + 1.3, x.z + DF / 2]);
+      const alt = x.r.a * HA, px = esq ? .6 : x.r.p - .6, base = proj(mundoPos(x, px, alt, DF / 2)), top = proj(mundoPos(x, px, alt + 1.3, DF / 2));
       if (base && top) placa(x.r.nome, base, top, forte);
     });
   }
@@ -156,10 +178,10 @@ CFO.mapa3d = (canvas, api) => {
     }
     draw(); if (anim) pend = requestAnimationFrame(passo);
   }
-  const caixa = () => { const G = geo(), alt = Math.max(1, ...api.layout().filter(r => r.t === 'f').map(r => r.a * HA)); return { G, cx: G.maxP / 2, cz: G.zt / 2, top: alt + 2.4 }; };
+  const caixa = () => { const G = geo(), alt = Math.max(1, ...api.layout().filter(r => r.t === 'f').map(r => r.a * HA)); return { G, cx: (G.x0 + G.x1) / 2, cz: (G.z0 + G.z1) / 2, top: alt + 2.4 }; };
   const cabe = (yaw, pitch, d, c) => {
     Object.assign(cam, { yaw, pitch, dist: d, tx: c.cx, ty: c.top / 2, tz: c.cz }); B = basis();
-    for (const x of [-1.5, c.G.maxP + 1.5]) for (const y of [0, c.top]) for (const z of [-1.5, c.G.zt + 1.5]) { const p = proj([x, y, z]); if (!p || p.x < 14 || p.x > W - 14 || p.y < 14 || p.y > Hh - 14) return false; }
+    for (const x of [c.G.x0 - 1.5, c.G.x1 + 1.5]) for (const y of [0, c.top]) for (const z of [c.G.z0 - 1.5, c.G.z1 + 1.5]) { const p = proj([x, y, z]); if (!p || p.x < 14 || p.x > W - 14 || p.y < 14 || p.y > Hh - 14) return false; }
     return true;
   };
   const ajustar = (yaw, pitch) => {                          // menor distância em que a caixa do almoxarifado cabe inteira na tela
@@ -182,14 +204,15 @@ CFO.mapa3d = (canvas, api) => {
     cima() { ir(ajustar(vista, 1.5)); },
     focar(l) {
       const G = geo(), x = G.rows.find(q => q.r.id === l.f); if (!x) return;
-      const c = api.corredor(l.f), cz = c ? (G.rows.find(q => q.r.id === c.id) || {}).z : null;
-      ir({ yaw: cz != null && cz < x.z ? Math.PI : 0, pitch: .5, dist: 10, tx: l.p - .5, ty: (l.a - .5) * HA, tz: x.z + DF / 2 });
+      const c = api.corredor(l.f), cz = c ? (G.rows.find(q => q.r.id === c.id) || {}).z : null, t = mundoPos(x, l.p - .5, (l.a - .5) * HA, DF / 2);
+      const yaw = x.rot ? (x.r.lado === 'e' ? -Math.PI / 2 : Math.PI / 2) : x.r.av ? (x.r.lado === 'f' ? Math.PI : 0) : (cz != null && cz < x.z ? Math.PI : 0);
+      ir({ yaw, pitch: .5, dist: 10, tx: t[0], ty: t[1], tz: t[2] });
     },
     // espaço (prateleira) mais próximo do toque
     achar(px, py) {
       const G = geo(); let melhor = null;
       G.rows.filter(x => x.r.t === 'f').forEach(x => { for (let p = 1; p <= x.r.p; p++) for (let a = 1; a <= x.r.a; a++) {
-        const c = proj([p - .5, (a - .5) * HA, x.z + DF / 2]), e = proj([p, (a - .5) * HA, x.z + DF / 2]); if (!c || !e) continue;
+        const c = proj(mundoPos(x, p - .5, (a - .5) * HA, DF / 2)), e = proj(mundoPos(x, p, (a - .5) * HA, DF / 2)); if (!c || !e) continue;
         const raio = Math.max(9, Math.abs(e.x - c.x) * .9);
         if (Math.hypot(c.x - px, c.y - py) <= raio && (!melhor || c.z < melhor.z)) melhor = { f: x.r.id, p, a, z: c.z };
       } });
@@ -244,7 +267,7 @@ CFO.modules.mapa = body => {
   const doItem = rid => D.locais.filter(l => l.rid === rid && fil(l.f));
   // Corredor que atende a fileira: o vizinho direto; se não houver, o mais próximo
   const corredorDe = id => {
-    const L = D.layout, i = L.findIndex(x => x.id === id); if (i < 0) return null;
+    const L = D.layout.filter(x => !x.av), i = L.findIndex(x => x.id === id); if (i < 0) return null;
     for (let d = 1; d < L.length; d++) for (const j of [i - d, i + d]) if (L[j] && L[j].t === 'c') return L[j];
     return null;
   };
@@ -365,19 +388,26 @@ CFO.modules.mapa = body => {
     let L = JSON.parse(JSON.stringify(D.layout));
     const draw = () => {
       d.innerHTML = `<form method="dialog"><h3>Layout do almoxarifado</h3><p class="log" style="margin-top:0">De cima para baixo, como no mapa. Cada fileira tem um número de prateleiras e de andares.</p>
-        <div class="mp-lay">${L.map((r, i) => `<div class="mp-lr" data-i="${i}"><span class="tag">${r.t === 'f' ? 'Fileira' : 'Corredor'}</span><input data-k="nome" value="${esc(r.nome)}" aria-label="Nome">
+        <div class="mp-lay">${L.map((r, i) => r.av ? `<div class="mp-lr mp-av" data-i="${i}"><span class="tag">Estante avulsa</span><input data-k="nome" value="${esc(r.nome)}" aria-label="Nome">
+          <label>Prat.<input type="number" min="1" max="60" data-k="p" value="${r.p}"></label><label>Andares<input type="number" min="1" max="12" data-k="a" value="${r.a}"></label>
+          <label>Lugar<select data-k="lado">${[['e', 'Canto esquerdo'], ['d', 'Canto direito'], ['f', 'Frente'], ['t', 'Fundo'], ['l', 'Livre (X/Z)']].map(([v, n]) => `<option value="${v}"${(r.lado || 'e') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+          ${r.lado === 'l' ? `<label>X<input type="number" step="0.5" data-k="x" value="${+r.x || 0}"></label><label>Z<input type="number" step="0.5" data-k="z" value="${+r.z || 0}"></label><label>Sentido<select data-k="rot"><option value="0"${r.rot ? '' : ' selected'}>Horizontal</option><option value="1"${r.rot ? ' selected' : ''}>Vertical</option></select></label>`
+            : `<label>Deslocar<input type="number" step="0.5" data-k="off" value="${+r.off || 0}"></label>`}
+          <button type="button" class="ghost" data-rm aria-label="Remover">✕</button></div>`
+          : `<div class="mp-lr" data-i="${i}"><span class="tag">${r.t === 'f' ? 'Fileira' : 'Corredor'}</span><input data-k="nome" value="${esc(r.nome)}" aria-label="Nome">
           ${r.t === 'f' ? `<label>Prat.<input type="number" min="1" max="60" data-k="p" value="${r.p}"></label><label>Andares<input type="number" min="1" max="12" data-k="a" value="${r.a}"></label>` : ''}
           <button type="button" class="ghost" data-mv="-1" aria-label="Subir">↑</button><button type="button" class="ghost" data-mv="1" aria-label="Descer">↓</button><button type="button" class="ghost" data-rm aria-label="Remover">✕</button></div>`).join('')}</div>
-        <div class="row"><button type="button" class="ghost" data-add="f">+ Fileira</button><button type="button" class="ghost" data-add="c">+ Corredor</button></div>
+        <div class="row"><button type="button" class="ghost" data-add="f">+ Fileira</button><button type="button" class="ghost" data-add="c">+ Corredor</button><button type="button" class="ghost" data-add="v">+ Estante avulsa</button></div>
         <div class="row"><button type="button" class="ghost" data-pad>Restaurar padrão</button><button value="cancel" class="ghost" formnovalidate>Cancelar</button><button value="ok">Salvar</button></div></form>`;
       d.querySelectorAll('.mp-lr').forEach(el => {
         const i = +el.dataset.i;
-        el.querySelectorAll('input').forEach(inp => inp.oninput = () => { L[i][inp.dataset.k] = inp.dataset.k === 'nome' ? inp.value : Math.max(1, +inp.value || 1); });
+        el.querySelectorAll('input').forEach(inp => inp.oninput = () => { const k = inp.dataset.k; L[i][k] = k === 'nome' ? inp.value : ['x', 'z', 'off'].includes(k) ? (+inp.value || 0) : Math.max(1, +inp.value || 1); });
+        el.querySelectorAll('select').forEach(sl => sl.onchange = () => { const k = sl.dataset.k; L[i][k] = k === 'rot' ? +sl.value : sl.value; if (k === 'lado') draw(); });
         el.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => { const j = i + +b.dataset.mv; if (L[j]) { [L[i], L[j]] = [L[j], L[i]]; draw(); } });
         el.querySelector('[data-rm]').onclick = () => { L.splice(i, 1); draw(); };
       });
-      d.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const t = b.dataset.add, n = L.filter(x => x.t === t).length + 1; L.push(t === 'f' ? { id: 'f' + uid(), t, nome: 'Fileira ' + n, p: 25, a: 5 } : { id: 'c' + uid(), t, nome: 'Corredor ' + n }); draw(); });
-      d.querySelector('[data-pad]').onclick = () => { if (confirm('Voltar ao desenho padrão do almoxarifado?')) { L = padrao().layout.map((x, i) => ({ ...x, id: D.layout[i] && D.layout[i].t === x.t ? D.layout[i].id : x.id })); draw(); } };
+      d.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const t = b.dataset.add; if (t === 'v') { const n = L.filter(x => x.av).length + 1; L.push({ id: 'f' + uid(), t: 'f', av: true, nome: 'Estante avulsa ' + n, p: 6, a: 5, lado: 'e', off: 0 }); return draw(); } const n = L.filter(x => x.t === t && !x.av).length + 1; L.push(t === 'f' ? { id: 'f' + uid(), t, nome: 'Fileira ' + n, p: 25, a: 5 } : { id: 'c' + uid(), t, nome: 'Corredor ' + n }); draw(); });
+      d.querySelector('[data-pad]').onclick = () => { if (confirm('Voltar ao desenho padrão do almoxarifado?')) { const av = L.filter(x => x.av); L = padrao().layout.map((x, i) => ({ ...x, id: D.layout[i] && D.layout[i].t === x.t && !D.layout[i].av ? D.layout[i].id : x.id })).concat(av); draw(); } };
     };
     draw();
     d.onclose = () => {

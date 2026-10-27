@@ -510,3 +510,4 @@ button.pg-a:hover{background:var(--panel2)}
 .rel th,.rel .scroll table th{position:static!important}
 .rel .tw{display:block;height:auto!important}
 .rel .tw>table{width:100%}
+.mp-lr select{margin:0;padding:.35rem;max-width:140px}.mp-av{padding:.4rem;border:1px dashed #64748b;border-radius:8px}
