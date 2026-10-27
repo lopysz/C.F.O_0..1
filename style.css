@@ -511,3 +511,7 @@ button.pg-a:hover{background:var(--panel2)}
 .rel .tw{display:block;height:auto!important}
 .rel .tw>table{width:100%}
 .mp-lr select{margin:0;padding:.35rem;max-width:140px}.mp-av{padding:.4rem;border:1px dashed #64748b;border-radius:8px}
+.mp-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem}.mp-top #mp-info{flex:1;min-width:0}.mp-top #mg{flex:none}
+#mf svg{display:block}#mf.on{background:var(--accent,#2dd4bf);color:#06201c}
+.mp-fops{display:grid;gap:.5rem}.mp-fop{text-align:left;display:grid;gap:.2rem;padding:.7rem .8rem;border-radius:10px}.mp-fop small{opacity:.8;font-weight:400}.mp-fop.on{outline:2px solid #34d399}
+.mp-leg b{margin-right:.3rem}

@@ -11,7 +11,7 @@ CFO.mapa3d = (canvas, api) => {
   const ctx = canvas.getContext('2d'), HA = .9, DF = 1.5, GAP = .5, DC = 2.2, TF = Math.tan(25 * Math.PI / 180);
   const cam = { yaw: -.55, pitch: .6, dist: 30, tx: 0, ty: 1.5, tz: 0 };
   let vista = -.55;                                          // ângulo de entrada (diagonal); "Girar" passa para o próximo canto
-  let W = 320, Hh = 320, pend = 0, anim = null;
+  let W = 320, Hh = 320, pend = 0, anim = null, anc = null;   // anc: fileira em foco (ponto de ancoragem); as outras ficam translúcidas
 
   // Fileiras normais empilham-se em z; estantes avulsas (r.av) ficam nos cantos/lados ou em posição livre (ox, oz, rot: 0 = ao longo de x, 1 = ao longo de z)
   const geo = () => {
@@ -79,8 +79,8 @@ CFO.mapa3d = (canvas, api) => {
   };
 
   // Texto pintado no chão: fica fixo no piso e gira junto com o mapa (em perspectiva); só vira 180° para nunca ficar de cabeça para baixo
-  const textoChao = (t, cx, cz, compr, altMax, cor) => {
-    const o = proj([cx, .02, cz]), a = proj([cx + 1, .02, cz]), b = proj([cx, .02, cz + 1]); if (!o || !a || !b) return;
+  const textoChao = (t, cx, cz, compr, altMax, cor, ez) => {
+    const o = proj([cx, .02, cz]), a = proj(ez ? [cx, .02, cz + 1] : [cx + 1, .02, cz]), b = proj(ez ? [cx + 1, .02, cz] : [cx, .02, cz + 1]); if (!o || !a || !b) return;
     let ax = a.x - o.x, ay = a.y - o.y, bx = b.x - o.x, by = b.y - o.y;
     if (Math.abs(ax * by - ay * bx) < .5) return;                    // visto quase de lado: some em vez de borrar
     if (ax < 0) { ax = -ax; ay = -ay; bx = -bx; by = -by; }           // mantém a leitura da esquerda para a direita
@@ -92,6 +92,20 @@ CFO.mapa3d = (canvas, api) => {
     ctx.globalAlpha = .9; ctx.fillStyle = cor; ctx.fillText(t, 0, 0); ctx.restore(); ctx.globalAlpha = 1;
   };
 
+  // Nome escrito na própria estante (na testeira da ponta), lendo de baixo para cima; nunca fica espelhado
+  const rotuloPlano = (t, c, wdir, compr, altMax, alpha) => {
+    const o = proj(c), u = proj([c[0], c[1] + 1, c[2]]), w = proj([c[0] + wdir[0], c[1] + wdir[1], c[2] + wdir[2]]); if (!o || !u || !w) return;
+    const ax = u.x - o.x, ay = u.y - o.y; let bx = w.x - o.x, by = w.y - o.y;
+    if (ax * by - ay * bx < 0) { bx = -bx; by = -by; }
+    if (Math.abs(ax * by - ay * bx) < .8) return;                     // visto quase de lado: some em vez de borrar
+    const F = 100; ctx.save(); ctx.font = `700 ${F}px system-ui,Arial,sans-serif`;
+    const wt = ctx.measureText(t).width / F, h = Math.min(altMax, compr / Math.max(wt, .01)), k = h / F;
+    ctx.transform(ax * k, ay * k, bx * k, by * k, o.x, o.y);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.globalAlpha = alpha;
+    ctx.lineWidth = F * .12; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(t, 0, 0); ctx.fillStyle = '#fff'; ctx.fillText(t, 0, 0);
+    ctx.restore(); ctx.globalAlpha = 1;
+  };
+
   function draw() {
     pend = 0; B = basis();
     ctx.setTransform(canvas.width / W, 0, 0, canvas.height / Hh, 0, 0);
@@ -101,11 +115,18 @@ CFO.mapa3d = (canvas, api) => {
     // piso inteiro (sob as fileiras, entre elas, nas pontas e nos cantos) na mesma cor dos corredores
     const chao = projPoly([[G.x0 - 1.5, 0, G.z0 - 1.5], [G.x1 + 1.5, 0, G.z0 - 1.5], [G.x1 + 1.5, 0, G.z1 + 1.5], [G.x0 - 1.5, 0, G.z1 + 1.5]]);
     if (chao) poly(chao, '#6b7076');
+    // seta no chão: lado de entrada (início) e sentido em que se anda, da última fileira até a primeira
+    { const xa = -.5, zt0 = G.zt - GAP - .3, zh = .4, sw = .13, hw = .38, hl = 1;
+      const seta = projPoly([[xa - sw, .02, zt0], [xa + sw, .02, zt0], [xa + sw, .02, zh + hl], [xa + hw, .02, zh + hl], [xa, .02, zh], [xa - hw, .02, zh + hl], [xa - sw, .02, zh + hl]]);
+      if (seta) poly(seta, '#34d399', .9);
+      textoChao('INÍCIO', xa, zt0 + 1.1, 1.8, .5, '#34d399', true); }
     G.rows.filter(x => x.r.t === 'c').forEach(x => textoChao(x.r.nome.toUpperCase(), G.maxP / 2, x.z + x.d / 2, G.maxP * .8, Math.min(.9, x.d * .45), '#e5e7eb'));
     // ocupação dos espaços (prateleira/andar)
     const ocup = new Map(), hit = new Set();
     api.locais().forEach(l => { const k = l.f + '|' + l.p + '|' + l.a; ocup.set(k, 1); if (foco && l.rid === foco) hit.add(k); });
-    const ativas = hit.size ? new Set([...hit].map(k => k.split('|')[0])) : null;   // com item procurado, as outras fileiras ficam "fantasmas"
+    const cores = api.cores ? api.cores() : null, cima = cam.pitch >= 1.1;
+    let ativas = hit.size ? new Set([...hit].map(k => k.split('|')[0])) : null;
+    if (anc) { ativas = ativas || new Set(); ativas.add(anc); }   // com item procurado, as outras fileiras ficam "fantasmas"
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
       const { r } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1, aco = [150, 160, 172], pst = [100, 108, 120];
       const lat = [78, 86, 98];
@@ -122,11 +143,19 @@ CFO.mapa3d = (canvas, api) => {
       for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
         const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k);
         if (h) bx(p - .92, (a - 1) * HA + .05, .08, p - .08, a * HA - .05, DF - .06, [245, 158, 11], 1, '#fff');
-        else if (o) bx(p - .9, (a - 1) * HA + .05, .1, p - .1, a * HA - .08, DF - .08, [40, 168, 80], .92 * g);
+        else if (o) { const cf = cores && cores.get(k); bx(p - .9, (a - 1) * HA + .05, .1, p - .1, a * HA - .08, DF - .08, cf ? cf.rgb : [40, 168, 80], .92 * g); }
         if (sel && sel.f === r.id && sel.p === p) bx(p - 1, (a - 1) * HA, 0, p, a * HA, DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)');
       }
+      if (!cima && !/estoque/i.test(r.nome)) {                                  // fora da vista de cima o nome fica escrito na ponta da estante
+        const o0 = mundoPos(x, 0, 0, 0), wd = mundoPos(x, 0, 0, 1).map((v, i) => v - o0[i]), uu = mundoPos(x, 1, 0, 0).map((v, i) => v - o0[i]);
+        [[-.09, -1], [r.p + .09, 1]].forEach(([u0, sg]) => {
+          const c = mundoPos(x, u0, alt / 2, DF / 2);
+          if (sg * (uu[0] * (B.c[0] - c[0]) + uu[2] * (B.c[2] - c[2])) <= 0) return;   // ponta de trás
+          L.push({ d: dist2(c) - 150, fn: () => rotuloPlano(r.nome, c, wd, alt * .88, DF * .55, g < 1 ? .2 : .95) });
+        });
+      }
     });
-    L.sort((a, b) => b.d - a.d).forEach(f => poly(f.pts, f.fill, f.alpha, f.stroke));
+    L.sort((a, b) => b.d - a.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, f.alpha, f.stroke));
     // nomes: cada rótulo só é desenhado se não encobrir outro (se não couber, tenta acima/abaixo; senão some até aproximar o zoom)
     const usados = [];
     const rotulo = (t, p, tam, cor, alin, fundo, forcar) => {
@@ -162,8 +191,9 @@ CFO.mapa3d = (canvas, api) => {
     };
     let n = 0;
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
-      const esq = n++ % 2 === 0, forte = ativas && ativas.has(x.r.id); if (ativas && !forte) return;
-      const alt = x.r.a * HA, px = esq ? .6 : x.r.p - .6, base = proj(mundoPos(x, px, alt, DF / 2)), top = proj(mundoPos(x, px, alt + 1.3, DF / 2));
+      const esq = n++ % 2 === 0, forte = ativas && ativas.has(x.r.id), est = /estoque/i.test(x.r.nome);
+      if ((ativas && !forte) || (!cima && !est)) return;
+      const alt = x.r.a * HA, px = esq ? .6 : x.r.p - .6, base = proj(mundoPos(x, px, alt, DF / 2)), top = proj(mundoPos(x, px, alt + (cima ? 1.3 : .5), DF / 2));
       if (base && top) placa(x.r.nome, base, top, forte);
     });
   }
@@ -199,9 +229,17 @@ CFO.mapa3d = (canvas, api) => {
       W = w; Hh = h; canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); pedir();
     },
     // Enquadra o almoxarifado inteiro (com as plaquinhas) no canvas, olhando pela diagonal
-    geral(animar = true) { const to = ajustar(vista, .6); animar ? ir(to) : (Object.assign(cam, to), pedir()); },
-    girar() { vista += Math.PI / 2; ir(ajustar(vista, .6)); },
-    cima() { ir(ajustar(vista, 1.5)); },
+    geral(animar = true) { anc = null; const to = ajustar(vista, .6); animar ? ir(to) : (Object.assign(cam, to), pedir()); },
+    girar() { if (anc) return ir({ yaw: cam.yaw + Math.PI / 2 }); vista += Math.PI / 2; ir(ajustar(vista, .6)); },
+    cima() { if (anc) return ir({ pitch: 1.5 }); ir(ajustar(vista, 1.5)); },
+    ancorada: () => anc,
+    soltar() { this.geral(); },
+    // Ancora na estante tocada: as outras ficam translúcidas e a câmera passa a girar em volta dela
+    ancorar(f, p) {
+      const G = geo(), x = G.rows.find(q => q.r.id === f); if (!x) return; anc = f;
+      const t = mundoPos(x, p - .5, x.r.a * HA / 2, DF / 2);
+      ir({ pitch: Math.min(cam.pitch, 1.5), dist: Math.min(cam.dist, 14), tx: t[0], ty: t[1], tz: t[2] }); pedir();
+    },
     focar(l) {
       const G = geo(), x = G.rows.find(q => q.r.id === l.f); if (!x) return;
       const c = api.corredor(l.f), cz = c ? (G.rows.find(q => q.r.id === c.id) || {}).z : null, t = mundoPos(x, l.p - .5, (l.a - .5) * HA, DF / 2);
@@ -235,7 +273,7 @@ CFO.mapa3d = (canvas, api) => {
   });
   const pan = (dx, dy) => { const k = cam.dist / fpx(); B = basis(); const s = Math.sin(cam.yaw), c = Math.cos(cam.yaw); cam.tx -= (B.r[0] * dx) * k + (-s) * dy * k; cam.tz -= (B.r[2] * dx) * k + (-c) * dy * k; };
   const solta = e => { const tap = ptr.size === 1 && mov < 6 && Date.now() - t0 < 500; ptr.delete(e.pointerId); ult = null;
-    if (tap) { const r = canvas.getBoundingClientRect(), h = api3.achar(e.clientX - r.left, e.clientY - r.top); if (h) api.onTap(h.f, h.p); } };
+    if (tap) { const r = canvas.getBoundingClientRect(), h = api3.achar(e.clientX - r.left, e.clientY - r.top); api.onTap(h ? h.f : null, h ? h.p : null); } };
   canvas.addEventListener('pointerup', solta); canvas.addEventListener('pointercancel', e => { ptr.delete(e.pointerId); ult = null; });
   canvas.addEventListener('wheel', e => { e.preventDefault(); anim = null; cam.dist = Math.max(4, Math.min(140, cam.dist * Math.exp(e.deltaY * .0012))); pedir(); }, { passive: false });
   canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -258,6 +296,7 @@ CFO.modules.mapa = body => {
   if (!Array.isArray(D.locais)) D.locais = [];
   const salvar = () => CFO.store.set(K, D);
 
+  let filtro = '', coresMap = null, infoRid = null;   // filtro de cor: '' | 'estoque' | 'rot'
   let q = '', semLocal = false, edit = false, foco = null, sel = null, v3 = false, mundo = null, sug = true;   // sug: lista de sugestões (sempre desligada ao entrar no 3D)
   const rows = () => CFO.store.get('epi', []);
   const rowOf = rid => rows().find(r => r.id === rid);
@@ -275,8 +314,8 @@ CFO.modules.mapa = body => {
 
   body.style.maxWidth = '1280px';
   body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Mapa almoxarifado</b> mostra onde cada item está guardado: digite o nome ou o código e o mapa destaca a prateleira, com o <b>corredor</b>, a <b>fileira</b>, a <b>prateleira</b> e o <b>andar</b>. Toque na <b>⚙️ engrenagem</b> para configurar: toque numa prateleira e escolha os itens de cada andar, ou use <b>Definir local</b> no resultado da busca. Em <b>Layout</b> você muda o desenho (fileiras, corredores, prateleiras e andares).</p></details>
-    <div class="bar mp-bar"><input id="mq" type="search" placeholder="🔎 Pesquisar item" autocomplete="off"><button id="m3" class="ghost" aria-label="Ver em 3D" title="Alternar entre mapa 2D e 3D">🧊 3D</button><button id="mg" class="ghost" aria-label="Configurar" title="Configurar o mapa">⚙️</button></div>
-    <div id="mp-info"></div><div id="mp-out"></div><div id="mp-pan"></div><div id="mp-2d"></div>
+    <div class="bar mp-bar"><input id="mq" type="search" placeholder="🔎 Pesquisar item" autocomplete="off"><button id="m3" class="ghost" aria-label="Ver em 3D" title="Alternar entre mapa 2D e 3D">🧊 3D</button><button id="mf" class="ghost" aria-label="Camadas e filtros" title="Camadas / filtro de cor"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 2 8.5 12 14l10-5.5L12 3z"/><path d="m2 13 10 5.5L22 13"/><path d="m2 17.5 10 5.5 10-5.5" opacity=".55"/></svg></button></div>
+    <div class="mp-top"><div id="mp-info"></div><button id="mg" class="ghost" aria-label="Configurar" title="Configurar o mapa">⚙️</button></div><div id="mp-fleg" class="mp-leg" hidden></div><div id="mp-out"></div><div id="mp-pan"></div><div id="mp-2d"></div>
     <div id="mp-3d" class="mp-3d" hidden><canvas aria-label="Almoxarifado em 3D"></canvas><div class="mp-3dbar"><button class="ghost" id="m3g">Visão geral</button><button class="ghost" id="m3c">De cima</button><button class="ghost" id="m3r">↻ Girar</button><span>arraste = girar · roda ou pinça = zoom · Shift ou 2 dedos = mover · toque numa prateleira para abrir</span></div></div><div id="mp-pan3"></div><datalist id="mp-dl"></datalist>`;
   const $ = s => body.querySelector(s);
 
@@ -325,13 +364,50 @@ CFO.modules.mapa = body => {
         <div class="mp-ls">${ls.map(l => `<button class="mp-loc" data-l="${l.id}">📍 ${esc(textoLocal(l))}</button>`).join('') || '<small class="mut">sem local definido</small>'}<button class="ghost mp-def" data-def="${esc(r.id)}">+ local</button></div></div>`; }).join('')}</div>`;
   };
 
+  /* ---------- Camadas / filtro de cor ---------- */
+  const calcFiltro = () => {
+    coresMap = infoRid = null; if (!filtro) return;
+    const rs = rows(), info = new Map();
+    if (filtro === 'estoque') {
+      const mins = CFO.estoqueMin ? CFO.estoqueMin(rs) : new Map();
+      rs.forEach(r => { const q = +r.qtd || 0, m = (mins.get(r.id) || {}).min || 0;
+        info.set(r.id, q <= 0 ? { v: 3, rgb: [225, 60, 60], t: 'zerado' } : m && q <= m ? { v: 2, rgb: [245, 190, 30], t: 'baixo' } : { v: 1, rgb: [40, 168, 80], t: 'bom' }); });
+    } else {
+      const h = new Date(), mes = h.getMonth() + 1, ano = h.getFullYear(), achar = CFO.casarEpi(rs), neg = CFO.store.get('req_negadas', {}), saiu = new Map();
+      CFO.store.get('requisicoes', []).filter(r => r && r.itens && !neg[r.id] && (pp => pp && pp.m === mes && pp.y === ano)(CFO.periodo.parse(r.mes)))
+        .forEach(qq => qq.itens.forEach(i => { if (!(i.qa > 0)) return; const r = achar(i.item); if (r) saiu.set(r.id, (saiu.get(r.id) || 0) + i.qa); }));
+      const mx = Math.max(0, ...saiu.values());
+      rs.forEach(r => { const n = saiu.get(r.id) || 0, k = mx ? n / mx : 0;
+        info.set(r.id, { n, ...(!n ? { v: 0, rgb: [96, 110, 130], t: 'sem saída' } : k > .75 ? { v: 4, rgb: [225, 60, 60], t: 'saída muito alta' } : k > .5 ? { v: 3, rgb: [240, 130, 40], t: 'saída alta' } : k > .25 ? { v: 2, rgb: [245, 200, 40], t: 'saída média' } : { v: 1, rgb: [70, 150, 230], t: 'saída baixa' }) }); });
+    }
+    infoRid = info; coresMap = new Map();
+    D.locais.forEach(l => { if (!fil(l.f)) return; const i = info.get(l.rid); if (!i) return; const k = l.f + '|' + l.p + '|' + l.a, o = coresMap.get(k); if (!o || i.v > o.v) coresMap.set(k, i); });
+  };
+  const legendaFiltro = () => {
+    const sw = (c, t) => `<span class="lg" style="background:rgb(${c})"></span> ${t} `;
+    if (filtro === 'estoque') return sw('225,60,60', 'zerado') + sw('245,190,30', 'baixo') + sw('40,168,80', 'bom');
+    if (filtro === 'rot') { const m = CFO.periodo.NOMES[new Date().getMonth()]; return `<b>Rotatividade de ${m}:</b> ` + sw('96,110,130', 'sem saída') + sw('70,150,230', 'baixa') + sw('245,200,40', 'média') + sw('240,130,40', 'alta') + sw('225,60,60', 'muito alta'); }
+    return '';
+  };
+  function telaFiltro() {
+    const d = document.createElement('dialog'); d.className = 'mp-dlg';
+    const op = [['', 'Sem filtro', 'Cores normais: prateleiras com item em verde.'], ['estoque', 'Situação do estoque', 'Amarelo = baixo · verde = bom · vermelho = zerado (pelo estoque mínimo da Planilha EPI).'],
+      ['rot', 'Rotatividade do mês', 'Mostra os itens que mais saíram nas requisições aprovadas do mês atual. Zera sozinho a cada mês.']];
+    d.innerHTML = `<form method="dialog"><h3>Camadas</h3><p class="log" style="margin-top:0">Escolha como colorir as prateleiras:</p>
+      <div class="mp-fops">${op.map(([v, n, t]) => `<button value="f:${v}" class="mp-fop${filtro === v ? ' on' : ''}"><b>${n}</b><small>${t}</small></button>`).join('')}</div>
+      <div class="row"><button value="cancel" class="ghost" formnovalidate>Fechar</button></div></form>`;
+    d.onclose = () => { if (/^f:/.test(d.returnValue)) { filtro = d.returnValue.slice(2); desenhar(); } d.remove(); };
+    document.body.append(d); d.showModal();
+  }
+
   /* ---------- Mapa ---------- */
   const hitAndares = (f, p) => foco ? D.locais.filter(l => l.rid === foco && l.f === f && l.p === p).map(l => l.a) : [];
   const mapaHTML = () => `<div class="mp-map">${D.layout.map(r => r.t === 'c'
     ? `<div class="mp-cor">${esc(r.nome)}</div>`
     : `<div class="mp-fil"><div class="mp-grade"><span class="mp-nome" title="${esc(r.nome)}">${esc(r.nome)}</span>${Array.from({ length: r.p }, (_, i) => {
         const p = i + 1, n = at(r.id, p).length, h = hitAndares(r.id, p);
-        return `<button class="mp-c${n ? ' has' : ''}${h.length ? ' hit' : ''}${sel && sel.f === r.id && sel.p === p ? ' sel' : ''}${p % 5 === 0 && p < r.p ? ' gap' : ''}" data-f="${r.id}" data-p="${p}" title="${esc(r.nome)} · prateleira ${p}${n ? ' · ' + n + ' item(ns)' : ''}">${p}${h.length ? `<i>A${h.join(',')}</i>` : ''}</button>`;
+        let cf = null; if (coresMap) for (let a = 1; a <= r.a; a++) { const c = coresMap.get(r.id + '|' + p + '|' + a); if (c && (!cf || c.v > cf.v)) cf = c; }
+        return `<button${cf ? ` style="background:rgb(${cf.rgb});color:#fff"` : ''} class="mp-c${n ? ' has' : ''}${h.length ? ' hit' : ''}${sel && sel.f === r.id && sel.p === p ? ' sel' : ''}${p % 5 === 0 && p < r.p ? ' gap' : ''}" data-f="${r.id}" data-p="${p}" title="${esc(r.nome)} · prateleira ${p}${n ? ' · ' + n + ' item(ns)' : ''}">${p}${h.length ? `<i>A${h.join(',')}</i>` : ''}</button>`;
       }).join('')}</div></div>`).join('')}</div>
     <p class="mp-leg"><span class="lg c1"></span> prateleira vazia <span class="lg c2"></span> com itens <span class="lg c3"></span> item procurado <span class="lg c4"></span> corredor</p>`;
 
@@ -342,14 +418,15 @@ CFO.modules.mapa = body => {
     return `<section class="mp-pn"><header><b>${esc(c ? c.nome + ' · ' : '')}${esc(f.nome)} · Prateleira ${sel.p}</b><button class="ghost" data-x="1" aria-label="Fechar">✕</button></header>
       ${Array.from({ length: f.a }, (_, i) => f.a - i).map(a => { const its = D.locais.filter(l => l.f === f.id && l.p === sel.p && l.a === a);
         return `<div class="mp-and${its.some(l => l.rid === foco) ? ' hit' : ''}"><span class="mp-an">Andar ${a}</span>
-          <div class="mp-its">${its.map(l => `<span class="mp-chip${l.rid === foco ? ' hit' : ''}">${esc(nomeDe(l))}${edit ? ` <button class="x" data-del="${l.id}" aria-label="Remover">✕</button>` : ''}</span>`).join('') || '<small class="mut">vazio</small>'}</div>
+          <div class="mp-its">${its.map(l => `<span class="mp-chip${l.rid === foco ? ' hit' : ''}">${esc(nomeDe(l))}${infoRid && infoRid.get(l.rid) ? ` <small>· ${filtro === 'estoque' ? 'estoque ' + (rowOf(l.rid) || {}).qtd + ' (' + infoRid.get(l.rid).t + ')' : infoRid.get(l.rid).t + ' (' + infoRid.get(l.rid).n + ')'}</small>` : ''}${edit ? ` <button class="x" data-del="${l.id}" aria-label="Remover">✕</button>` : ''}</span>`).join('') || '<small class="mut">vazio</small>'}</div>
           ${edit ? `<div class="mp-add"><input list="mp-dl" data-in="${a}" placeholder="Adicionar item..."><button data-ad="${a}">+</button></div>` : ''}</div>`; }).join('')}
       ${edit ? '' : '<p class="log">Para trocar os itens desta prateleira, toque na ⚙️.</p>'}</section>`;
   };
 
   function desenhar() {
-    ajustaBarra();
-    $('#mg').classList.toggle('on', edit);
+    ajustaBarra(); calcFiltro();
+    $('#mg').classList.toggle('on', edit); $('#mf').classList.toggle('on', !!filtro);
+    const lg = $('#mp-fleg'); lg.hidden = !filtro; lg.innerHTML = legendaFiltro();
     const com = new Set(D.locais.filter(l => fil(l.f)).map(l => l.rid)), todos = rows();
     const sem = todos.filter(r => !com.has(r.id)).length;
     $('#mp-info').innerHTML = (edit ? `<div class="mp-edit"><span>⚙️ Modo configurar: toque numa prateleira para escolher os itens de cada andar.</span><button class="ghost" id="ml">Layout</button></div>` : '')
@@ -434,12 +511,16 @@ CFO.modules.mapa = body => {
     desenhar();
   };
   $('#mg').onclick = () => { edit = !edit; desenhar(); };
+  $('#mf').onclick = telaFiltro;
   $('#m3').onclick = () => {
     v3 = !v3; sug = !v3;                                    // 3D sempre começa com as sugestões desligadas
     if (v3 && !mundo) mundo = CFO.mapa3d($('#mp-3d canvas'), {
-      layout: () => D.layout, locais: () => D.locais.filter(l => fil(l.f)), foco: () => foco, sel: () => sel,
+      layout: () => D.layout, locais: () => D.locais.filter(l => fil(l.f)), foco: () => foco, sel: () => sel, cores: () => coresMap,
       corredor: id => corredorDe(id),
-      onTap: (f, p) => { sel = { f, p }; if (!(v3 && !sug) && !at(f, p).some(l => l.rid === foco)) foco = null; desenhar(); }
+      onTap: (f, p) => {
+        if (!f) { if (mundo.ancorada()) { mundo.soltar(); sel = null; desenhar(); } return; }   // toque fora: volta ao mapa geral
+        sel = { f, p }; if (!(v3 && !sug) && !at(f, p).some(l => l.rid === foco)) foco = null; desenhar(); mundo.ancorar(f, p);
+      }
     });
     if (v3) { const a = alvoBusca(); foco = a ? a.id : null; }
     const l = v3 && foco ? (sel && D.locais.find(x => x.rid === foco && x.f === sel.f && x.p === sel.p)) || doItem(foco)[0] : null;
