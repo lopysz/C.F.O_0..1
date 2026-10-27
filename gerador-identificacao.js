@@ -40,18 +40,27 @@
     /* --- Visualização / impressão --- */
     function preview(f) {
       CFO.open('Ficha de produto', b => {
-        b.innerHTML = `<div class="bar"><button id="print">🖨 Imprimir / PDF</button><button id="print2" class="ghost">🖨 2 por folha</button><button id="edit" class="ghost">Editar</button>
+        b.innerHTML = `<div class="bar"><button id="print">🖨 Imprimir / PDF</button><button id="edit" class="ghost">Editar</button>
           <button id="dup" class="ghost">Duplicar</button><button id="del" class="ghost danger">Excluir</button></div>
           <div class="pv">${fichaHTML(f)}</div>`;
         const pv = b.querySelector('.pv'), fp = pv.querySelector('.fp');
         new ResizeObserver(() => { const k = Math.min(1.15, pv.clientWidth / 794); fp.style.transform = `scale(${k})`; pv.style.height = fp.offsetHeight * k + 'px'; }).observe(pv);
-        b.querySelector('#print').onclick = () => CFO.print(fichaHTML(f));
-        // 2 fichas iguais na mesma folha A4 (uma em cima da outra, com linha pontilhada para cortar). Montado aqui, sem depender de "páginas por folha" do navegador
-        b.querySelector('#print2').onclick = () => {
-          const h = fp.offsetHeight, k = Math.min(1, 528 / h, 0.95);
-          const cel = `<div style="width:${Math.round(794 * k)}px;height:${Math.round(h * k)}px;overflow:hidden"><div style="width:794px;transform:scale(${k});transform-origin:top left">${fichaHTML(f)}</div></div>`;
-          const L = ext => `<div style="height:540px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;${ext}">${cel}</div>`;
-          CFO.print(`<style>@page{size:A4;margin:0}</style><div style="width:100%;height:1080px;overflow:hidden">${L('border-bottom:1px dashed #94a3b8')}${L('')}</div>`);
+        // Imprimir / PDF abre a escolha: 1 ficha por folha ou 2 fichas por folha (as duas no maior tamanho que couber no A4)
+        const opt = document.createElement('div'); opt.className = 'bar'; opt.style.display = 'none';
+        opt.innerHTML = '<button id="p1">1 ficha por folha</button><button id="p2">2 fichas por folha</button>';
+        b.querySelector('.bar').after(opt);
+        b.querySelector('#print').onclick = () => { opt.style.display = opt.style.display === 'none' ? '' : 'none'; };
+        opt.querySelector('#p1').onclick = () => { opt.style.display = 'none'; CFO.print(fichaHTML(f)); };
+        opt.querySelector('#p2').onclick = () => {
+          opt.style.display = 'none';
+          // margens internas menores só neste modo, para a ficha poder ficar maior; a altura real é medida antes de calcular a escala
+          const html = fichaHTML(f).replace('class="fp"', 'class="fp" style="padding:18px 34px"');
+          const t = document.createElement('div'); t.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px'; t.innerHTML = html; document.body.append(t);
+          const h = t.firstElementChild.offsetHeight; t.remove();
+          const k = Math.min(1, 554 / h, 0.99);   // 2 células de ~559px de altura (A4 = 1122px), quase sem sobra
+          const cel = `<div style="width:${Math.floor(794 * k)}px;height:${Math.ceil(h * k)}px;overflow:hidden"><div style="width:794px;transform:scale(${k});transform-origin:top left">${html}</div></div>`;
+          const L = ext => `<div style="height:559px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;${ext}">${cel}</div>`;
+          CFO.print(`<style>@page{size:A4;margin:0}</style><div style="width:100%;height:1118px;overflow:hidden">${L('border-bottom:1px dashed #94a3b8')}${L('')}</div>`);
         };
         b.querySelector('#edit').onclick = () => editor(f);
         b.querySelector('#dup').onclick = async () => { await CFO.db.put('fichas', { ...structuredClone(f), id: Date.now() + Math.random().toString(36).slice(2, 6) }); CFO.close(); load(); };
