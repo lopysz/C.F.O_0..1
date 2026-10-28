@@ -123,6 +123,7 @@ CFO.modules.contagem = (() => {
 
   async function exportarXlsx(arquivo, tabelas, graf, logo) {
     const nomeAba = n => n.replace(/[\\/?*[\]:]/g, '-').slice(0, 31);
+    if (await CFO.lib('exceljs')) { /* ok */ } else await CFO.lib('xlsx');
     if (!window.ExcelJS) {                                                // sem a biblioteca (ex.: sem internet): só as tabelas
       const wb = XLSX.utils.book_new();
       tabelas.forEach(t => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([t.cab, ...t.linhas]), nomeAba(t.nome)));

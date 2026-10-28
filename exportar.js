@@ -40,6 +40,7 @@ CFO.xlsxLogo = (wb, ws) => {
 CFO.xlsxSalvar = async (arquivo, folhas, opt = {}) => {
   const aba = n => String(n).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31).trim() || 'Planilha';
   const larg = c => typeof c === 'number' ? c : c && c.wch;
+  if (await CFO.lib('exceljs')) { /* ok */ } else await CFO.lib('xlsx');
   if (!window.ExcelJS) {                                           // sem a biblioteca (sem internet): Excel simples
     if (typeof XLSX === 'undefined') return alert('A biblioteca de Excel não carregou. Verifique a internet e tente de novo.');
     const wb = XLSX.utils.book_new();

@@ -55,10 +55,11 @@
   }
 
   /* Montagem */
+  let cacheFotos = null;
   async function desenhar() {
     if (!host || !host.isConnected) return;
     const eu = ++token;
-    let fotos = []; try { fotos = await CFO.db.all('fotos'); } catch {}
+    let fotos = cacheFotos; if (!fotos) { try { fotos = cacheFotos = await CFO.db.all('fotos'); } catch { fotos = []; } }
     if (eu !== token || !host.isConnected) return;
     const reqs = CFO.store.get('requisicoes', []).filter(r => r && r.itens);
     const rolou = host.querySelector('.pg-list')?.scrollTop || 0;       // mantém a rolagem da lista ao redesenhar
@@ -92,7 +93,9 @@
   // Atualiza quando chega requisição/estoque novo (gravação local, nuvem ou WL) e a cada minuto (horários "há x min")
   const grava = CFO.store.set;
   CFO.store.set = (k, v) => { grava(k, v); if (k === 'requisicoes' || k === 'epi') atualizar(); };
-  document.addEventListener('cfo-sync', atualizar);
+  // As fotos só são relidas do banco quando mudam (antes eram relidas inteiras a cada minuto)
+  for (const m of ['put', 'del', 'clear']) { const o = CFO.db[m]; CFO.db[m] = async (...a) => { const r = await o(...a); cacheFotos = null; return r; }; }
+  document.addEventListener('cfo-sync', () => { cacheFotos = null; atualizar(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizar(); });
   setInterval(() => { if (!document.hidden) atualizar(); }, 60000);
 })();

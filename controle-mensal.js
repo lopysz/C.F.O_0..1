@@ -285,8 +285,6 @@
     const titulo = () => 'Controle mensal - ' + { fin: 'Financeiro', prev: 'Previsão', aud: 'Revisão' }[ultimo.aba];
     const filtros = () => [['Contrato', txtSel('#fc')], ['Tipo', txtSel('#ft')], ['Previsão', txtSel('#fh')], ['Contratos', txtSel('#fq')], ['Valores', txtSel('#fv')], ...(ultimo.aba === 'fin' ? [['Mês de referência', lbl(f.m || curKey())]] : [])];
     const cel = (v, t) => v === '' || v == null ? '' : t === '$' ? { t: 'n', v: +v, z: '"R$" #,##0.00' } : t === 'n' ? { t: 'n', v: +v, z: '#,##0.0' } : t === '%' ? { t: 'n', v: +v, z: '0.0%' } : t === 'c' ? (v.ok ? 'Sim' : 'Não') : String(v);
-    const usados = new Set();
-    const aba31 = nome => { let n = nome.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31).trim() || 'Planilha', i = 2; while (usados.has(n)) n = n.slice(0, 28) + ' ' + i++; usados.add(n); return n; };
 
     function exportar() {
       if (!ultimo) return;

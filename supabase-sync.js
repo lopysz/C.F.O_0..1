@@ -51,7 +51,7 @@
   };
 
   // Banco de fotos (IndexedDB): cada foto/ficha vira um arquivo em <pasta>/db/<grupo>/<id>.json
-  const raw = { put: CFO.db.put, del: CFO.db.del, clear: CFO.db.clear, get: CFO.db.get, all: CFO.db.all };
+  const raw = { put: CFO.db.put, del: CFO.db.del, clear: CFO.db.clear, get: CFO.db.get, all: CFO.db.all, keys: CFO.db.keys };
   const envObj = (nome, obj) => CFO.supaEnviar(nome, new Blob([JSON.stringify(obj)], { type: 'application/json' }), 'application/json', true);
   let t = null;
   const agendar = () => { if (ativo && meta.synced) { clearTimeout(t); t = setTimeout(sync, 2500); } };
@@ -110,9 +110,9 @@
           await envObj(nome, rec ? { store: st, id: rec.id, updatedAt: op.ts, value: rec } : { store: st, id, deleted: true, updatedAt: op.ts });
           delete meta.dbDirty[dk]; nomesDb.push(nome);
         }
-        for (const st of STORES) for (const rec of await raw.all(st)) {   // fotos antigas ainda não enviadas
-          const nome = nomeDb(st, rec.id);
-          if ((reenviar || !remotoDb.has(nome)) && !nomesDb.includes(nome)) { await envObj(nome, { store: st, id: rec.id, updatedAt: Date.now(), value: rec }); nomesDb.push(nome); }
+        for (const st of STORES) for (const id of await raw.keys(st)) {   // fotos antigas ainda não enviadas (só as chaves: não carrega as fotos na memória a cada ciclo)
+          const nome = nomeDb(st, id);
+          if ((reenviar || !remotoDb.has(nome)) && !nomesDb.includes(nome)) { const rec = await raw.get(st, id); if (rec) await envObj(nome, { store: st, id: rec.id, updatedAt: Date.now(), value: rec }); nomesDb.push(nome); }
         }
         if (nomesDb.length) for (const st of STORES) (await listar(`${dbRaiz}/${st}`)).forEach((u, n) => { if (nomesDb.includes(n)) meta.seen[n] = u; });
         meta.synced = true; salvaMeta();

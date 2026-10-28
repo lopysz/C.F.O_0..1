@@ -3,6 +3,7 @@
 
 // Lê todas as abas de um arquivo .xlsx/.xls/.csv como matrizes de texto
 CFO.readBook = async file => {
+  if (!(await CFO.lib('xlsx'))) throw new Error('A biblioteca de Excel não carregou. Verifique a internet e tente de novo.');
   const wb = XLSX.read(await file.arrayBuffer());
   return wb.SheetNames.map(n => ({ sheet: n, data: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '', blankrows: false }) }));
 };

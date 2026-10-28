@@ -227,6 +227,7 @@ CFO.mapa3d = (canvas, api) => {
     render: pedir,
     resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, 1.75), w = canvas.clientWidth || 320, h = canvas.clientHeight || 320;
+      if (w === W && h === Hh && canvas.width === Math.round(w * dpr)) return pedir();   // mesmo tamanho: não recria a tela (era lento)
       W = w; Hh = h; canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); pedir();
     },
     // Enquadra o almoxarifado inteiro (com as plaquinhas) no canvas, olhando pela diagonal
@@ -270,7 +271,9 @@ CFO.mapa3d = (canvas, api) => {
     ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptr.size === 1) { mov = 0; t0 = Date.now(); } ult = null; anim = null;
   });
   canvas.addEventListener('lostpointercapture', e => { ptr.delete(e.pointerId); ult = null; });
-  window.addEventListener('blur', limpa); window.addEventListener('pointerup', e => { if (e.pointerType === 'mouse') limpa(); });
+  const aoBlur = () => { if (!canvas.isConnected) return fora(); limpa(); }, aoUp = e => { if (!canvas.isConnected) return fora(); if (e.pointerType === 'mouse') limpa(); };
+  const fora = () => { window.removeEventListener('blur', aoBlur); window.removeEventListener('pointerup', aoUp); };   // tela fechada: solta os ouvintes
+  window.addEventListener('blur', aoBlur); window.addEventListener('pointerup', aoUp);
   canvas.addEventListener('pointermove', e => {
     if (e.pointerType === 'mouse' && !e.buttons) { limpa(); return; }               // botão já foi solto: para de girar
     const p = ptr.get(e.pointerId); if (!p) return;
@@ -288,7 +291,7 @@ CFO.mapa3d = (canvas, api) => {
   canvas.addEventListener('pointerup', solta); canvas.addEventListener('pointercancel', e => { ptr.delete(e.pointerId); ult = null; });
   canvas.addEventListener('wheel', e => { e.preventDefault(); anim = null; cam.dist = Math.max(4, Math.min(140, cam.dist * Math.exp(e.deltaY * .0012))); pedir(); }, { passive: false });
   canvas.addEventListener('contextmenu', e => { e.preventDefault(); limpa(); });
-  if (window.ResizeObserver) new ResizeObserver(() => api3.resize()).observe(canvas);
+  if (window.ResizeObserver) { const ro = new ResizeObserver(() => { if (!canvas.isConnected) { ro.disconnect(); fora(); } else api3.resize(); }); ro.observe(canvas); }
   return api3;
 };
 
@@ -309,8 +312,10 @@ CFO.modules.mapa = body => {
 
   let filtro = '', coresMap = null, infoRid = null;   // filtro de cor: '' | 'estoque' | 'rot'
   let q = '', semLocal = false, edit = false, foco = null, sel = null, v3 = false, mundo = null, sug = true;   // sug: lista de sugestões (sempre desligada ao entrar no 3D)
-  const rows = () => CFO.store.get('epi', []);
-  const rowOf = rid => rows().find(r => r.id === rid);
+  let _rows = null, _idx = null;                           // a Planilha EPI é lida (JSON.parse) uma vez por redesenho, não a cada consulta
+  const rows = () => _rows || (_rows = CFO.store.get('epi', []));
+  const rowOf = rid => (_idx || (_idx = new Map(rows().map(r => [r.id, r])))).get(rid);
+  document.addEventListener('cfo-sync', function ev() { if (!body.isConnected) return document.removeEventListener('cfo-sync', ev); _rows = _idx = null; });
   const fil = id => D.layout.find(x => x.id === id && x.t === 'f');
   const nomeDe = l => { const r = rowOf(l.rid); return r ? r.item : (l.nome || '(item removido)'); };
   const at = (f, p) => D.locais.filter(l => l.f === f && l.p === p);
@@ -498,7 +503,7 @@ CFO.modules.mapa = body => {
   };
 
   function desenhar() {
-    ajustaBarra(); calcFiltro();
+    _rows = _idx = null; ajustaBarra(); calcFiltro();
     $('#mg').classList.toggle('on', edit); $('#mf').classList.toggle('on', !!filtro);
     const lg = $('#mp-fleg'); lg.hidden = !filtro; lg.innerHTML = legendaFiltro();
     const com = new Set(D.locais.filter(l => fil(l.f)).map(l => l.rid)), todos = rows();

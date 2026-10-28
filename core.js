@@ -6,6 +6,14 @@ CFO.norm = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 CFO.toNum = v => { v = String(v ?? '').replace(/[^\d,.-]/g, ''); if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.'); return parseFloat(v) || 0; };
 CFO.esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Bibliotecas pesadas (Excel) só são baixadas quando alguém importa/exporta uma planilha: a abertura do sistema fica bem mais leve
+CFO.lib = (() => {
+  const U = { xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', exceljs: 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js' }, G = { xlsx: 'XLSX', exceljs: 'ExcelJS' }, P = {};
+  return nome => window[G[nome]] ? Promise.resolve(true) : P[nome] || (P[nome] = new Promise(res => {
+    const s = document.createElement('script'); s.src = U[nome]; s.onload = () => res(true); s.onerror = () => { delete P[nome]; s.remove(); res(false); }; document.head.append(s);
+  }));
+})();
+
 // Dados salvos no navegador (localStorage)
 CFO.store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem('cfo:' + k)) ?? d; } catch { return d; } },
@@ -50,7 +58,7 @@ CFO.db = (() => {
   };
   return {
     put: (s, v) => run(s, 'readwrite', st => st.put(v)), all: s => run(s, 'readonly', st => st.getAll()),
-    get: (s, id) => run(s, 'readonly', st => st.get(id)), del: (s, id) => run(s, 'readwrite', st => st.delete(id)),
+    get: (s, id) => run(s, 'readonly', st => st.get(id)), keys: s => run(s, 'readonly', st => st.getAllKeys()), del: (s, id) => run(s, 'readwrite', st => st.delete(id)),
     clear: s => run(s, 'readwrite', st => st.clear())
   };
 })();

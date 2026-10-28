@@ -24,6 +24,11 @@
   }
 
   const ISO = d => d.toISOString().slice(0, 10);
+  let catCache = null, catTs = 0;                          // o catálogo muda pouco: não precisa baixar inteiro a cada 30 min
+  const catalogo = async completa => {
+    if (!completa && catCache && Date.now() - catTs < 2 * 3600e3) return catCache;
+    const c = await ler(C.catalogo).catch(() => []); if (c.length) { catCache = c; catTs = Date.now(); } return c;
+  };
 
   async function sincronizar({ completa = false } = {}) {
     if (rodando) return { erro: 'Já está sincronizando.' };
@@ -31,7 +36,7 @@
     const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, status: {}, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, lista: [], amostraItem: null, amostraCat: null };
     try {
       const desde = completa ? '' : '&date=gte.' + ISO(new Date(Date.now() - C.diasAuto * 864e5));
-      const [reqs, cat] = await Promise.all([ler(C.tabela, desde + '&order=created_at.desc,id.asc'), ler(C.catalogo).catch(() => [])]);
+      const [reqs, cat] = await Promise.all([ler(C.tabela, desde + '&order=created_at.desc,id.asc'), catalogo(completa)]);
 
       // Catálogo: código do EPI -> { nome, preco }
       const porCod = new Map();
