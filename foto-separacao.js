@@ -59,15 +59,19 @@ CFO.modules.fotos = body => {
     const img = await shrink(url, 1280, .7), th = await shrink(url, 240, .7);
     const reqs = CFO.store.get('requisicoes', []).slice().sort((a, b) => String(b.chegou || '').localeCompare(String(a.chegou || '')) || String(b.id).localeCompare(String(a.id), 'pt-BR', { numeric: true }));
     URL.revokeObjectURL(url);
+    // Acha a requisição pelo que foi digitado: "RQ-3370", "rq3370" ou só "3370" (as do WL têm o prefixo RQ-, as antigas podem não ter)
+    const dig = t => String(t || '').replace(/\D/g, '').replace(/^0+/, '');
+    const acha = v => { const n = CFO.norm(v), d = dig(v); if (!n) return null; return reqs.find(x => CFO.norm(x.id) === n) || (d ? reqs.find(x => dig(x.id) === d) : null) || null; };
     CFO.dialog('Salvar foto', `<img class="prev" src="${th}" alt=""><p class="log">${fmt(now.toISOString())}</p>
       <label>Nº da requisição<input name="req" required inputmode="numeric" autocomplete="off" list="dl-req"></label>
       <label>Nome do solicitante<input name="sol" required autocomplete="off"></label>
       <label>Observação (opcional)<input name="obs"></label>
-      <datalist id="dl-req">${reqs.slice(0, 80).map(r => `<option value="${CFO.esc(r.id)}">${CFO.esc(r.sol)}</option>`).join('')}</datalist>`,
+      <datalist id="dl-req">${reqs.slice(0, 300).map(r => `<option value="${CFO.esc(r.id)}">${CFO.esc(r.sol)}</option>`).join('')}</datalist>`,
       async d => {
         const id = Date.now() + Math.random().toString(36).slice(2, 6);
         await CFO.db.put('imgs', { id, img });
-        await CFO.db.put('fotos', { id, ts: now.toISOString(), dia: now.toLocaleDateString('en-CA'), req: d.req.trim(), sol: d.sol.trim(), obs: d.obs.trim(), th });
+        const rq = acha(d.req.trim());          // guarda o número igual ao da requisição (RQ-3370), assim o Painel e a tela de Requisições ligam a foto à requisição
+        await CFO.db.put('fotos', { id, ts: now.toISOString(), dia: now.toLocaleDateString('en-CA'), req: rq ? rq.id : d.req.trim(), sol: d.sol.trim() || (rq && rq.sol) || '', obs: d.obs.trim(), th });
         navigator.storage?.persist?.();
         load();
       });
@@ -75,7 +79,12 @@ CFO.modules.fotos = body => {
     const dlg = document.querySelector('dialog[open]');
     if (dlg) {
       const inReq = dlg.querySelector('[name=req]'), inSol = dlg.querySelector('[name=sol]');
-      inReq.oninput = () => { const r = reqs.find(x => CFO.norm(x.id) === CFO.norm(inReq.value)); if (r && r.sol) inSol.value = r.sol; };
+      let auto = false;                                                  // nome preenchido pelo sistema (pode ser trocado se o número mudar)
+      inReq.oninput = () => {
+        const r = acha(inReq.value);
+        if (r && r.sol) { inSol.value = r.sol; auto = true; } else if (auto) { inSol.value = ''; auto = false; }
+      };
+      inSol.oninput = () => { auto = false; };
       inReq.focus();
     }
   };
