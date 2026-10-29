@@ -56,7 +56,7 @@ back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#cfg').inne
 function renderInicio() {
   const eu = CFO.usuario();
   inicio.innerHTML = `<div class="wrap"><p class="sub" style="margin-top:0">Caixa de Ferramentas Operacional</p>
-  ${CFO.espaco ? `<p class="log setor-nota">🔒 Setor <b>${CFO.esc(eu?.setorNome || '')}</b>: os dados ficam só neste aparelho (sem nuvem). Exporte suas planilhas e faça o backup em ⚙ Configurações.</p>` : ''}
+  ${CFO.espaco ? `<p class="log setor-nota">🔒 Setor <b>${CFO.esc(eu?.setorNome || '')}</b>: dados próprios, separados do almoxarifado de EPIs. Use ☁️ Nuvem (no topo) para sincronizar entre aparelhos do setor, e ⚙ Configurações para exportar/backup.</p>` : ''}
   <div class="sec">Painel gerencial</div><div id="painel"></div>
   <div class="sec" style="margin-top:2rem">Escolha uma função</div>
   <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${CFO.esc(nD(d))}${d.subs.every(s => !CFO.pode('abrir', s.m)) ? '<span class="tag" style="margin-left:auto">Sem acesso</span>' : ''}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}"${CFO.pode('abrir', s.m) ? '' : ' disabled'}>${CFO.esc(nS(s))}${svg(CFO.pode('abrir', s.m) ? 'chev' : 'lock')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
@@ -67,7 +67,8 @@ function renderInicio() {
 CFO.onUser = () => {
   renderInicio(); fechar();
   [['imp', 'topo'], ['env', 'topo'], ['wlbtn', 'topo'], ['regbtn', 'registros']].forEach(([id, a]) => { const b = document.getElementById(id); if (b) b.hidden = !CFO.pode('abrir', a); });
-  if (CFO.espaco) ['env', 'wlbtn', 'regbtn'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });   // outro setor: sem nuvem, sem WL, sem registros
+  if (CFO.espaco) ['env', 'wlbtn', 'regbtn'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });   // outro setor: sem nuvem do EPI, sem WL, sem registros
+  const envS = document.getElementById('envS'); if (envS) envS.hidden = !CFO.espaco;   // outro setor: tem sua própria nuvem, isolada
 };
 CFO.onUser();
 

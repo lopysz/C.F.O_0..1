@@ -257,10 +257,12 @@
         L.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke });
       });
     };
-    const textoChao = (t, cx, cz, compr, altMax, cor2) => {                // texto pintado no chão (gira junto com o mapa)
+    const textoChao = (t, cx, cz, compr, altMax, cor2) => {                // texto pintado no chão (gira junto com o mapa; tamanho travado na tela p/ não "esticar" perto da câmera)
       const o = proj([cx, .03, cz]), a = proj([cx + 1, .03, cz]), b = proj([cx, .03, cz + 1]); if (!o || !a || !b) return;
       let ax = a.x - o.x, ay = a.y - o.y, bx = b.x - o.x, by = b.y - o.y; if (Math.abs(ax * by - ay * bx) < .5) return; if (ax < 0) { ax = -ax; ay = -ay; bx = -bx; by = -by; }
-      const F = 100; ctx.font = `700 ${F}px system-ui,Arial,sans-serif`; const wt = ctx.measureText(t).width / F, k = Math.min(altMax, compr / Math.max(wt, .01)) / F;
+      const F = 100; ctx.font = `700 ${F}px system-ui,Arial,sans-serif`; const wt = ctx.measureText(t).width / F; let k = Math.min(altMax, compr / Math.max(wt, .01)) / F;
+      const lenA = Math.hypot(ax, ay), capPx = Math.min(W, Hh) * .22, pxH = F * k * lenA;              // tamanho máximo na tela (não cresce mais que isso mesmo bem perto/de raspão)
+      if (pxH > capPx) k *= capPx / pxH;
       ctx.save(); ctx.transform(ax * k, ay * k, bx * k, by * k, o.x, o.y); ctx.font = `700 ${F}px system-ui,Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
       ctx.lineWidth = F * .1; ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.strokeText(t, 0, 0); ctx.fillStyle = cor2; ctx.fillText(t, 0, 0); ctx.restore();
     };

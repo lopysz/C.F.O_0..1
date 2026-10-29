@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>C.F.O - Caixa de Ferramentas Operacional</title>
-<link rel="stylesheet" href="style.css?v=20261030e">
+<link rel="stylesheet" href="style.css?v=20261030g">
 </head>
 <body>
 <div class="app">
@@ -12,7 +12,7 @@
   <header class="bar">
     <button class="ico" id="back" aria-label="Voltar" hidden></button>
     <div class="crumb" id="crumb"></div>
-    <div class="topbtns"><button id="imp" class="ghost">Importar planilhas</button><button id="env" class="ghost">☁️ Nuvem</button><button id="wlbtn" class="ghost">🔄 Sincronizar WL</button><button id="regbtn" class="ghost" hidden>📋 Registros</button></div>
+    <div class="topbtns"><button id="imp" class="ghost">Importar planilhas</button><button id="env" class="ghost">☁️ Nuvem</button><button id="envS" class="ghost" hidden>☁️ Nuvem</button><button id="wlbtn" class="ghost">🔄 Sincronizar WL</button><button id="regbtn" class="ghost" hidden>📋 Registros</button></div>
     <button class="ico" id="more" aria-label="Mais opções"></button>
     <button class="ico" id="cfg" aria-label="Configurações" title="Configurações"></button>
   </header>
@@ -25,38 +25,39 @@
 <!-- As bibliotecas de Excel (XLSX e ExcelJS) agora são baixadas só quando necessário: veja CFO.lib em core.js -->
 
 <!-- Núcleo (manter nesta ordem) -->
-<script src="core.js?v=20261030e"></script>
-<script src="login.js?v=20261030e"></script>
-<script src="setores.js?v=20261030e"></script>
-<script src="exportar.js?v=20261030e"></script>
-<script src="planilhas.js?v=20261030e"></script>
-<script src="importar-pasta.js?v=20261030e"></script>
-<script src="supabase-config.js?v=20261030e"></script>
-<script src="supabase-import.js?v=20261030e"></script>
-<script src="supabase-enviar.js?v=20261030e"></script>
-<script src="supabase-sync.js?v=20261030e"></script>
+<script src="core.js?v=20261030g"></script>
+<script src="login.js?v=20261030g"></script>
+<script src="setores.js?v=20261030g"></script>
+<script src="exportar.js?v=20261030g"></script>
+<script src="planilhas.js?v=20261030g"></script>
+<script src="importar-pasta.js?v=20261030g"></script>
+<script src="supabase-config.js?v=20261030g"></script>
+<script src="supabase-import.js?v=20261030g"></script>
+<script src="supabase-enviar.js?v=20261030g"></script>
+<script src="supabase-sync.js?v=20261030g"></script>
+<script src="setor-sync.js?v=20261030g"></script>
 
 <!-- Funções: um arquivo para cada. Para criar uma nova, adicione uma linha aqui -->
-<script src="epi.js?v=20261030e"></script>
-<script src="historico-movimentacao.js?v=20261030e"></script>
-<script src="contratos.js?v=20261030e"></script>
-<script src="requisicoes.js?v=20261030e"></script>
-<script src="epis-por-contrato.js?v=20261030e"></script>
-<script src="controle-gastos.js?v=20261030e"></script>
-<script src="controle-mensal.js?v=20261030e"></script>
-<script src="foto-separacao.js?v=20261030e"></script>
-<script src="gerador-identificacao.js?v=20261030e"></script>
-<script src="contagem-estoque.js?v=20261030e"></script>
-<script src="mapa-almoxarifado.js?v=20261030e"></script>
-<script src="mapa-livre.js?v=20261030e"></script>
-<script src="wl-config.js?v=20261030e"></script>
-<script src="wl-sync.js?v=20261030e"></script>
-<script src="painel.js?v=20261030e"></script>
-<script src="online.js?v=20261030e"></script>
-<script src="config-perfis.js?v=20261030e"></script>
-<script src="registros.js?v=20261030e"></script>
+<script src="epi.js?v=20261030g"></script>
+<script src="historico-movimentacao.js?v=20261030g"></script>
+<script src="contratos.js?v=20261030g"></script>
+<script src="requisicoes.js?v=20261030g"></script>
+<script src="epis-por-contrato.js?v=20261030g"></script>
+<script src="controle-gastos.js?v=20261030g"></script>
+<script src="controle-mensal.js?v=20261030g"></script>
+<script src="foto-separacao.js?v=20261030g"></script>
+<script src="gerador-identificacao.js?v=20261030g"></script>
+<script src="contagem-estoque.js?v=20261030g"></script>
+<script src="mapa-almoxarifado.js?v=20261030g"></script>
+<script src="mapa-livre.js?v=20261030g"></script>
+<script src="wl-config.js?v=20261030g"></script>
+<script src="wl-sync.js?v=20261030g"></script>
+<script src="painel.js?v=20261030g"></script>
+<script src="online.js?v=20261030g"></script>
+<script src="config-perfis.js?v=20261030g"></script>
+<script src="registros.js?v=20261030g"></script>
 
 <!-- Gavetas e inicialização (sempre por último) -->
-<script src="app.js?v=20261030e"></script>
+<script src="app.js?v=20261030g"></script>
 </body>
 </html>
