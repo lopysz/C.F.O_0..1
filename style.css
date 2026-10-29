@@ -522,3 +522,6 @@ button.pg-a:hover{background:var(--panel2)}
 .mp-dc{flex:none;min-width:130px;max-width:190px;padding:.45rem .6rem;border-radius:10px;background:#2b3038;border:1px solid #3d4552;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:pan-x;display:grid;gap:.1rem}
 .mp-dc b{font-size:.76rem;line-height:1.15}.mp-dc small{font-size:.66rem;opacity:.7}.mp-dc.on{outline:2px solid #38bdf8;background:#1d3a52}
 .mp-ghost{position:fixed;left:0;top:0;z-index:9999;pointer-events:none;padding:.4rem .7rem;border-radius:10px;background:#2563eb;color:#fff;font:600 .8rem system-ui;box-shadow:0 6px 20px rgba(0,0,0,.45);max-width:220px}
+
+/* Perfil leve (computador antigo): sem animações, sombras nem desfoque */
+body.leve *,body.leve *::before,body.leve *::after{transition:none!important;animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important;text-shadow:none!important}

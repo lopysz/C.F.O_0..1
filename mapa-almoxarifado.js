@@ -58,6 +58,8 @@ CFO.mapa3d = (canvas, api) => {
   const dist2 = p => (p[0] - B.c[0]) ** 2 + (p[1] - B.c[1]) ** 2 + (p[2] - B.c[2]) ** 2;
 
   const FACES = [[[0, 0, -1], [0, 1, 3, 2]], [[0, 0, 1], [4, 5, 7, 6]], [[-1, 0, 0], [0, 2, 6, 4]], [[1, 0, 0], [1, 3, 7, 5]], [[0, 1, 0], [2, 3, 7, 6]]];
+  const MODELO = { up: [31, 78, 140], beam: [232, 115, 26], deck: [180, 188, 195], fim: [24, 58, 104], caixa: [[176, 138, 90], [194, 155, 104], [156, 122, 77]] };
+  const rnd = i => { const v = Math.sin(i * 127.1) * 43758.5453; return v - Math.floor(v); };   // "sorteio" fixo: a mesma caixa sempre com o mesmo tamanho
   const shade = (rgb, n) => { const k = n[1] > 0 ? 1 : n[2] ? .82 : .6; return `rgb(${rgb.map(v => Math.round(v * k)).join(',')})`; };
   const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, alpha, stroke) => {
     const c = []; for (let i = 0; i < 8; i++) c.push([i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0]);
@@ -127,29 +129,59 @@ CFO.mapa3d = (canvas, api) => {
     const cores = api.cores ? api.cores() : null, cima = cam.pitch >= 1.1;
     let ativas = hit.size ? new Set([...hit].map(k => k.split('|')[0])) : null;
     if (anc) { ativas = ativas || new Set(); ativas.add(anc); }   // com item procurado, as outras fileiras ficam "fantasmas"
+    // Modo LEVE (perfil para computador antigo): sem polígonos translúcidos nem ordenação; só linhas e blocos agrupados por cor, desenhados em pouquíssimas chamadas
+    const lite = !!(api.leve && api.leve()), seg = { az: [], la: [], gh: [] }, fills = new Map(), extras = [];
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
-      const { r } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1, aco = [150, 160, 172], pst = [100, 108, 120];
-      const lat = [78, 86, 98];
+      const { r } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1;
       const bx = (u0, y0, w0, u1, y1, w1, rgb, al, st) => x.rot ? addBox(L, x.ox + w0, y0, x.oz + u0, x.ox + w1, y1, x.oz + u1, rgb, al, st) : addBox(L, x.ox + u0, y0, x.oz + w0, x.ox + u1, y1, x.oz + w1, rgb, al, st);
-      bx(0, 0, 0, r.p, alt, .04, lat, .55 * g);                                                           // painel do fundo
-      bx(-.08, 0, 0, 0, alt, DF, lat, .6 * g); bx(r.p, 0, 0, r.p + .08, alt, DF, lat, .6 * g);             // laterais
-      for (let a = 0; a <= r.a; a++) {
-        const y = a * HA;
-        bx(0, y - .05, 0, r.p, y + .05, DF, aco, .45 * g);                                                // tampo da prateleira (corpo inteiro)
-        bx(0, y - .05, 0, r.p, y + .05, .09, aco, g); bx(0, y - .05, DF - .09, r.p, y + .05, DF, aco, g);   // vigas frente e fundo
+      if (lite) {
+        const P = (u, y, w) => mundoPos(x, u, y, w), Z = g < 1 ? seg.gh : null, V = Z || seg.az, H = Z || seg.la;
+        [[0, 0], [0, DF], [r.p, 0], [r.p, DF]].forEach(([u, w]) => V.push([P(u, 0, w), P(u, alt, w)]));
+        if (!Z) for (let u = 5; u < r.p; u += 5) { V.push([P(u, 0, 0), P(u, alt, 0)]); V.push([P(u, 0, DF), P(u, alt, DF)]); }
+        for (let i = 0; i <= r.a; i++) { if (Z && i > 0 && i < r.a) continue; const y = i * HA;
+          H.push([P(0, y, 0), P(r.p, y, 0)], [P(0, y, DF), P(r.p, y, DF)], [P(0, y, 0), P(0, y, DF)], [P(r.p, y, 0), P(r.p, y, DF)]); }
+        if (!Z) for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
+          const k = r.id + '|' + p + '|' + a, y0 = (a - 1) * HA + .05, face = (u0, u1, yy0, yy1) => [P(u0, yy0, .1), P(u1, yy0, .1), P(u1, yy1, .1), P(u0, yy1, .1)];
+          if (hit.has(k)) extras.push({ q: face(p - .96, p - .04, y0 - .03, a * HA - .05), fill: '#f59e0b', alpha: 1, stroke: '#fff' });
+          else if (ocup.has(k)) {
+            const cf = cores && cores.get(k), sd = r.p * 31 + p * 7 + a, col = (cf ? cf.rgb : MODELO.caixa[sd % 3]).join(','), q = face(p - .9, p - .1, y0, y0 + .4 + rnd(sd) * .32);
+            (fills.get(col) || fills.set(col, []).get(col)).push(q);
+          }
+          if (alvo && alvo.f === r.id && alvo.p === p && alvo.a === a) extras.push({ q: face(p - .96, p - .04, y0 - .03, a * HA - .05), fill: 'rgba(56,140,255,.55)', alpha: 1, stroke: '#9cc7ff' });
+          if (sel && sel.f === r.id && sel.p === p) extras.push({ q: face(p - 1, p, (a - 1) * HA, a * HA), fill: 'rgba(255,255,255,.18)', alpha: 1, stroke: 'rgba(255,255,255,.85)' });
+        }
+      } else {
+      // Modelo novo: montantes azuis, longarinas laranja (frente e fundo), tampo de aço e caixas de papelão. Estrutura aberta e opaca (mais leve que painéis translúcidos)
+      const longe = cam.dist > 22;                                                                                                                     // visão geral: detalhe fino não aparece, então desenha menos
+      const leve = g < 1;                                                                                                                              // fileira "fantasma" (translúcida): só o esqueleto, ninguém vê o resto
+      const passo = r.p > 12 ? 2 : 1, ups = []; for (let p = 0; p < r.p; p += leve ? r.p : longe ? 5 : passo) ups.push(p); ups.push(r.p);
+      ups.forEach(p => { bx(p - .05, 0, 0, p + .05, alt, .08, MODELO.up, g); bx(p - .05, 0, DF - .08, p + .05, alt, DF, MODELO.up, g); });          // montantes
+      const bloco = leve ? r.p : longe ? 5 : passo * 3;                                                                                                                          // longarinas e tampos em trechos (ordem de desenho correta e poucos polígonos)
+      for (let a = 1; a <= r.a; a++) {
+        const y = (a - 1) * HA;
+        for (let u = 0; u < r.p; u += bloco) {
+          const u1 = Math.min(u + bloco, r.p);
+          bx(u, y - .08, 0, u1, y + .04, .07, MODELO.beam, g);                                                                                       // longarinas
+          if (!leve) { bx(u, y - .08, DF - .07, u1, y + .04, DF, MODELO.beam, g); if (!longe || cima) bx(u, y - .02, .07, u1, y + .035, DF - .07, MODELO.deck, g); }     // (+ fundo e tampo)
+        }
       }
-      const px = []; for (let p = 0; p <= r.p; p += 5) px.push(p); if (r.p % 5) px.push(r.p);
-      px.forEach(p => { bx(p - .08, 0, 0, p + .08, alt, .15, pst, g); bx(p - .08, 0, DF - .15, p + .08, alt, DF, pst, g); });   // montantes mais grossos
-      for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
-        const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k);
-        if (h) bx(p - .92, (a - 1) * HA + .05, .08, p - .08, a * HA - .05, DF - .06, [245, 158, 11], 1, '#fff');
-        else if (o) { const cf = cores && cores.get(k); bx(p - .9, (a - 1) * HA + .05, .1, p - .1, a * HA - .08, DF - .08, cf ? cf.rgb : [40, 168, 80], .92 * g); }
+      bx(-.1, 0, 0, -.06, alt, DF, MODELO.fim, .92 * g); bx(r.p + .06, 0, 0, r.p + .1, alt, DF, MODELO.fim, .92 * g);                                 // testeiras (onde fica o nome)
+      const dois = ocup.size < 120 && !longe;                                                                                                                     // poucas caixas: 2 por vão; muitas: 1 (mantém leve)
+      if (!leve) for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
+        const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k), y0 = (a - 1) * HA + .05;
+        if (h) bx(p - .92, y0, .1, p - .08, a * HA - .08, DF - .1, [245, 158, 11], 1, '#fff');
+        else if (o) {
+          const cf = cores && cores.get(k), sd = r.p * 31 + p * 7 + a, bh = .4 + rnd(sd) * .32;
+          if (dois) for (let i = 0; i < 2; i++) bx(p - .92 + i * .45, y0, .12, p - .92 + i * .45 + .4, y0 + bh, DF - .12, cf ? cf.rgb : MODELO.caixa[(sd + i) % 3], g);
+          else bx(p - .9, y0, .12, p - .1, y0 + bh, DF - .12, cf ? cf.rgb : MODELO.caixa[sd % 3], g);
+        }
         if (alvo && alvo.f === r.id && alvo.p === p && alvo.a === a) bx(p - .96, (a - 1) * HA + .02, .03, p - .04, a * HA - .02, DF - .03, [56, 140, 255], .55, '#9cc7ff');
         if (sel && sel.f === r.id && sel.p === p) bx(p - 1, (a - 1) * HA, 0, p, a * HA, DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)');
       }
+      }
       if (!cima && !/estoque/i.test(r.nome)) {                                  // fora da vista de cima o nome fica escrito na ponta da estante
         const o0 = mundoPos(x, 0, 0, 0), wd = mundoPos(x, 0, 0, 1).map((v, i) => v - o0[i]), uu = mundoPos(x, 1, 0, 0).map((v, i) => v - o0[i]);
-        [[-.09, -1], [r.p + .09, 1]].forEach(([u0, sg]) => {
+        [[-.11, -1], [r.p + .11, 1]].forEach(([u0, sg]) => {
           const c = mundoPos(x, u0, alt / 2, DF / 2);
           if (sg * (uu[0] * (B.c[0] - c[0]) + uu[2] * (B.c[2] - c[2])) <= 0) return;   // ponta de trás
           L.push({ d: dist2(c) - 150, fn: () => rotuloPlano(r.nome, c, wd, alt * .88, DF * .55, g < 1 ? .2 : .95) });
@@ -157,6 +189,20 @@ CFO.mapa3d = (canvas, api) => {
       }
     });
     L.sort((a, b) => b.d - a.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, f.alpha, f.stroke));
+    if (lite) {
+      const traca = (arr, cor, al, lw) => {
+        if (!arr.length) return; ctx.beginPath();
+        arr.forEach(([a, b]) => { const p = proj(a), q = proj(b); if (p && q) { ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); } });
+        ctx.globalAlpha = al; ctx.strokeStyle = cor; ctx.lineWidth = lw; ctx.stroke(); ctx.globalAlpha = 1;
+      };
+      traca(seg.gh, '#8fa6c4', .35, 1);
+      fills.forEach((qs, cor) => {
+        ctx.beginPath(); qs.forEach(q => { const t = q.map(proj); if (t.every(Boolean)) { ctx.moveTo(t[0].x, t[0].y); for (let i = 1; i < 4; i++) ctx.lineTo(t[i].x, t[i].y); ctx.closePath(); } });
+        ctx.fillStyle = 'rgb(' + cor + ')'; ctx.fill();
+      });
+      traca(seg.la, '#e8731a', 1, 1.6); traca(seg.az, '#3f78c4', 1, 2.2);
+      extras.forEach(e => { const t = e.q.map(proj); if (t.every(Boolean)) poly(t, e.fill, e.alpha, e.stroke); });
+    }
     // nomes: cada rótulo só é desenhado se não encobrir outro (se não couber, tenta acima/abaixo; senão some até aproximar o zoom)
     const usados = [];
     const rotulo = (t, p, tam, cor, alin, fundo, forcar) => {
@@ -226,7 +272,7 @@ CFO.mapa3d = (canvas, api) => {
   const api3 = {
     render: pedir,
     resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.75), w = canvas.clientWidth || 320, h = canvas.clientHeight || 320;
+      const dpr = api.leve && api.leve() ? .8 : Math.min(window.devicePixelRatio || 1, 1.75), w = canvas.clientWidth || 320, h = canvas.clientHeight || 320;
       if (w === W && h === Hh && canvas.width === Math.round(w * dpr)) return pedir();   // mesmo tamanho: não recria a tela (era lento)
       W = w; Hh = h; canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); pedir();
     },
@@ -470,7 +516,7 @@ CFO.modules.mapa = body => {
   };
   function telaFiltro() {
     const d = document.createElement('dialog'); d.className = 'mp-dlg';
-    const op = [['', 'Sem filtro', 'Cores normais: prateleiras com item em verde.'], ['estoque', 'Situação do estoque', 'Amarelo = baixo · verde = bom · vermelho = zerado (pelo estoque mínimo da Planilha EPI).'],
+    const op = [['', 'Sem filtro', 'Visual normal: caixas de papelão onde há item.'], ['estoque', 'Situação do estoque', 'Amarelo = baixo · verde = bom · vermelho = zerado (pelo estoque mínimo da Planilha EPI).'],
       ['rot', 'Rotatividade do mês', 'Mostra os itens que mais saíram nas requisições aprovadas do mês atual. Zera sozinho a cada mês.']];
     d.innerHTML = `<form method="dialog"><h3>Camadas</h3><p class="log" style="margin-top:0">Escolha como colorir as prateleiras:</p>
       <div class="mp-fops">${op.map(([v, n, t]) => `<button value="f:${v}" class="mp-fop${filtro === v ? ' on' : ''}"><b>${n}</b><small>${t}</small></button>`).join('')}</div>
@@ -594,7 +640,7 @@ CFO.modules.mapa = body => {
   $('#m3').onclick = () => {
     v3 = !v3; sug = !v3;                                    // 3D sempre começa com as sugestões desligadas
     if (v3 && !mundo) mundo = CFO.mapa3d($('#mp-3d canvas'), {
-      layout: () => D.layout, locais: () => D.locais.filter(l => fil(l.f)), foco: () => foco, sel: () => sel, cores: () => coresMap,
+      layout: () => D.layout, locais: () => D.locais.filter(l => fil(l.f)), foco: () => foco, sel: () => sel, cores: () => coresMap, leve: () => !!(CFO.leve && CFO.leve()),
       corredor: id => corredorDe(id),
       onTap: (f, p, a) => {
         if (pegar && f && a && mundo.ancorada() === f) return colocar(pegar, f, p, a);          // item escolhido na bandeja: guarda no bloco tocado
