@@ -130,6 +130,7 @@ CFO.mapa3d = (canvas, api) => {
     let ativas = hit.size ? new Set([...hit].map(k => k.split('|')[0])) : null;
     if (anc) { ativas = ativas || new Set(); ativas.add(anc); }   // com item procurado, as outras fileiras ficam "fantasmas"
     // Modo LEVE (perfil para computador antigo): sem polígonos translúcidos nem ordenação; só linhas e blocos agrupados por cor, desenhados em pouquíssimas chamadas
+    const vaosTotal = G.rows.reduce((n, x) => n + (x.r.t === 'f' ? x.r.p * x.r.a : 0), 0);
     const lite = !!(api.leve && api.leve()), seg = { az: [], la: [], gh: [] }, fills = new Map(), extras = [];
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
       const { r } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1;
@@ -152,7 +153,7 @@ CFO.mapa3d = (canvas, api) => {
         }
       } else {
       // Modelo novo: montantes azuis, longarinas laranja (frente e fundo), tampo de aço e caixas de papelão. Estrutura aberta e opaca (mais leve que painéis translúcidos)
-      const longe = cam.dist > 22;                                                                                                                     // visão geral: detalhe fino não aparece, então desenha menos
+      const longe = vaosTotal > 1600 && cam.dist > 30;                                                                                        // só em almoxarifados enormes simplifica de longe; nos normais o detalhe é o mesmo em qualquer distância
       const leve = g < 1;                                                                                                                              // fileira "fantasma" (translúcida): só o esqueleto, ninguém vê o resto
       const passo = r.p > 12 ? 2 : 1, ups = []; for (let p = 0; p < r.p; p += leve ? r.p : longe ? 5 : passo) ups.push(p); ups.push(r.p);
       ups.forEach(p => { bx(p - .05, 0, 0, p + .05, alt, .08, MODELO.up, g); bx(p - .05, 0, DF - .08, p + .05, alt, DF, MODELO.up, g); });          // montantes
