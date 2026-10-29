@@ -132,9 +132,16 @@ CFO.mapa3d = (canvas, api) => {
     // Modo LEVE (perfil para computador antigo): sem polígonos translúcidos nem ordenação; só linhas e blocos agrupados por cor, desenhados em pouquíssimas chamadas
     const vaosTotal = G.rows.reduce((n, x) => n + (x.r.t === 'f' ? x.r.p * x.r.a : 0), 0);
     const lite = !!(api.leve && api.leve()), seg = { az: [], la: [], gh: [] }, fills = new Map(), extras = [];
+    { const cx = B.c[0], cz = B.c[2], dRet = x => { const x0 = x.rot ? x.ox : x.ox - .1, x1 = x.rot ? x.ox + DF : x.ox + x.r.p + .1, z0 = x.rot ? x.oz - .1 : x.oz, z1 = x.rot ? x.oz + x.r.p + .1 : x.oz + DF; return Math.hypot(Math.max(x0 - cx, 0, cx - x1), Math.max(z0 - cz, 0, cz - z1)); };
+      G.rows.filter(x => x.r.t === 'f').map(x => [x, dRet(x)]).sort((a, b) => b[1] - a[1]).forEach(([x], i) => { x.ordem = i; }); }
     G.rows.filter(x => x.r.t === 'f').forEach(x => {
       const { r } = x, alt = r.a * HA, g = ativas && !ativas.has(r.id) ? .1 : 1;
-      const bx = (u0, y0, w0, u1, y1, w1, rgb, al, st) => x.rot ? addBox(L, x.ox + w0, y0, x.oz + u0, x.ox + w1, y1, x.oz + u1, rgb, al, st) : addBox(L, x.ox + u0, y0, x.oz + w0, x.ox + u1, y1, x.oz + w1, rgb, al, st);
+      const base = x.ordem * 1e6, camu = x.rot ? B.c[2] - x.oz : B.c[0] - x.ox, camw = x.rot ? B.c[0] - x.ox : B.c[2] - x.oz, nearFront = camw < DF / 2, sobe = B.c[1] > alt / 2;
+      const uk = uc => 1 - Math.min(Math.abs(uc - camu), 200) / 200;                                   // 0 = longe da câmera (desenha antes) ... 1 = perto
+      const bx = (u0, y0, w0, u1, y1, w1, rgb, al, a9, a10) => {                                        // a9: contorno (texto) ou ordem (número); a10: ordem
+        const st = typeof a9 === 'string' ? a9 : undefined, o = typeof a9 === 'number' ? a9 : a10, n0 = L.length; if (x.rot) addBox(L, x.ox + w0, y0, x.oz + u0, x.ox + w1, y1, x.oz + u1, rgb, al, st); else addBox(L, x.ox + u0, y0, x.oz + w0, x.ox + u1, y1, x.oz + w1, rgb, al, st);
+        for (let i = n0; i < L.length; i++) L[i].o = base + (o || 0);
+      };
       if (lite) {
         const P = (u, y, w) => mundoPos(x, u, y, w), Z = g < 1 ? seg.gh : null, V = Z || seg.az, H = Z || seg.la;
         [[0, 0], [0, DF], [r.p, 0], [r.p, DF]].forEach(([u, w]) => V.push([P(u, 0, w), P(u, alt, w)]));
@@ -153,31 +160,35 @@ CFO.mapa3d = (canvas, api) => {
         }
       } else {
       // Modelo novo: montantes azuis, longarinas laranja (frente e fundo), tampo de aço e caixas de papelão. Estrutura aberta e opaca (mais leve que painéis translúcidos)
-      const longe = vaosTotal > 1600 && cam.dist > 30;                                                                                        // só em almoxarifados enormes simplifica de longe; nos normais o detalhe é o mesmo em qualquer distância
-      const leve = g < 1;                                                                                                                              // fileira "fantasma" (translúcida): só o esqueleto, ninguém vê o resto
+      const longe = vaosTotal > 1600 && cam.dist > 30;                                                  // só em almoxarifados enormes simplifica de longe
+      const leve = g < 1;                                                                               // fileira "fantasma" (translúcida): só o esqueleto
       const passo = r.p > 12 ? 2 : 1, ups = []; for (let p = 0; p < r.p; p += leve ? r.p : longe ? 5 : passo) ups.push(p); ups.push(r.p);
-      ups.forEach(p => { bx(p - .05, 0, 0, p + .05, alt, .08, MODELO.up, g); bx(p - .05, 0, DF - .08, p + .05, alt, DF, MODELO.up, g); });          // montantes
-      const bloco = leve ? r.p : longe ? 5 : passo * 3;                                                                                                                          // longarinas e tampos em trechos (ordem de desenho correta e poucos polígonos)
+      // Ordem de desenho (de trás para a frente) calculada pela estrutura, não pela distância do centro: nada some nem aparece por cima ao girar
+      //   0 testeira longe · 1 lado de trás (montantes, depois longarinas) · 2 tampos e caixas (andar por andar) · 3 lado da frente · 4 testeira perto · 5 marcações · 6 nome
+      const plano = w => (w < DF / 2) === nearFront ? 3e5 : 1e5;
+      ups.forEach(p => { const o = uk(p) * 9999; bx(p - .05, 0, 0, p + .05, alt, .08, MODELO.up, g, plano(0) + o); bx(p - .05, 0, DF - .08, p + .05, alt, DF, MODELO.up, g, plano(DF) + o); });   // montantes
+      const bloco = leve ? r.p : longe ? 5 : passo * 3;                                                 // longarinas e tampos em trechos
       for (let a = 1; a <= r.a; a++) {
-        const y = (a - 1) * HA;
+        const y = (a - 1) * HA, lv = sobe ? a - 1 : r.a - a;
         for (let u = 0; u < r.p; u += bloco) {
-          const u1 = Math.min(u + bloco, r.p);
-          bx(u, y - .08, 0, u1, y + .04, .07, MODELO.beam, g);                                                                                       // longarinas
-          if (!leve) { bx(u, y - .08, DF - .07, u1, y + .04, DF, MODELO.beam, g); if (!longe || cima) bx(u, y - .02, .07, u1, y + .035, DF - .07, MODELO.deck, g); }     // (+ fundo e tampo)
+          const u1 = Math.min(u + bloco, r.p), k = uk((u + u1) / 2);
+          bx(u, y - .08, 0, u1, y + .04, .07, MODELO.beam, g, plano(0) + 2e4 + k * 9999);                  // longarinas
+          if (!leve) { bx(u, y - .08, DF - .07, u1, y + .04, DF, MODELO.beam, g, plano(DF) + 2e4 + k * 9999); if (!longe || cima) bx(u, y - .02, .07, u1, y + .035, DF - .07, MODELO.deck, g, 2e5 + lv * 7000 + k * 1000); }   // (+ fundo e tampo)
         }
       }
-      bx(-.1, 0, 0, -.06, alt, DF, MODELO.fim, .92 * g); bx(r.p + .06, 0, 0, r.p + .1, alt, DF, MODELO.fim, .92 * g);                                 // testeiras (onde fica o nome)
-      const dois = ocup.size < 120 && !longe;                                                                                                                     // poucas caixas: 2 por vão; muitas: 1 (mantém leve)
+      const esqPerto = Math.abs(camu) < Math.abs(camu - r.p);
+      bx(-.1, 0, 0, -.06, alt, DF, MODELO.fim, .92 * g, esqPerto ? 4e5 : 0); bx(r.p + .06, 0, 0, r.p + .1, alt, DF, MODELO.fim, .92 * g, esqPerto ? 0 : 4e5);   // testeiras (onde fica o nome)
+      const dois = ocup.size < 120 && !longe;                                                           // poucas caixas: 2 por vão; muitas: 1 (mantém leve)
       if (!leve) for (let p = 1; p <= r.p; p++) for (let a = 1; a <= r.a; a++) {
-        const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k), y0 = (a - 1) * HA + .05;
-        if (h) bx(p - .92, y0, .1, p - .08, a * HA - .08, DF - .1, [245, 158, 11], 1, '#fff');
+        const k = r.id + '|' + p + '|' + a, h = hit.has(k), o = ocup.has(k), y0 = (a - 1) * HA + .05, lv = sobe ? a - 1 : r.a - a, ob = uc => 2e5 + lv * 7000 + 1500 + uk(uc) * 5000;
+        if (h) bx(p - .92, y0, .1, p - .08, a * HA - .08, DF - .1, [245, 158, 11], 1, '#fff', ob(p - .5));
         else if (o) {
           const cf = cores && cores.get(k), sd = r.p * 31 + p * 7 + a, bh = .4 + rnd(sd) * .32;
-          if (dois) for (let i = 0; i < 2; i++) bx(p - .92 + i * .45, y0, .12, p - .92 + i * .45 + .4, y0 + bh, DF - .12, cf ? cf.rgb : MODELO.caixa[(sd + i) % 3], g);
-          else bx(p - .9, y0, .12, p - .1, y0 + bh, DF - .12, cf ? cf.rgb : MODELO.caixa[sd % 3], g);
+          if (dois) for (let i = 0; i < 2; i++) bx(p - .92 + i * .45, y0, .12, p - .92 + i * .45 + .4, y0 + bh, DF - .12, cf ? cf.rgb : MODELO.caixa[(sd + i) % 3], g, ob(p - .72 + i * .45));
+          else bx(p - .9, y0, .12, p - .1, y0 + bh, DF - .12, cf ? cf.rgb : MODELO.caixa[sd % 3], g, ob(p - .5));
         }
-        if (alvo && alvo.f === r.id && alvo.p === p && alvo.a === a) bx(p - .96, (a - 1) * HA + .02, .03, p - .04, a * HA - .02, DF - .03, [56, 140, 255], .55, '#9cc7ff');
-        if (sel && sel.f === r.id && sel.p === p) bx(p - 1, (a - 1) * HA, 0, p, a * HA, DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)');
+        if (alvo && alvo.f === r.id && alvo.p === p && alvo.a === a) bx(p - .96, (a - 1) * HA + .02, .03, p - .04, a * HA - .02, DF - .03, [56, 140, 255], .55, '#9cc7ff', 5e5 + uk(p - .5) * 9999);
+        if (sel && sel.f === r.id && sel.p === p) bx(p - 1, (a - 1) * HA, 0, p, a * HA, DF, [255, 255, 255], .12, 'rgba(255,255,255,.85)', 5e5 + uk(p - .5) * 9999);
       }
       }
       if (!cima && !/estoque/i.test(r.nome)) {                                  // fora da vista de cima o nome fica escrito na ponta da estante
@@ -185,11 +196,11 @@ CFO.mapa3d = (canvas, api) => {
         [[-.11, -1], [r.p + .11, 1]].forEach(([u0, sg]) => {
           const c = mundoPos(x, u0, alt / 2, DF / 2);
           if (sg * (uu[0] * (B.c[0] - c[0]) + uu[2] * (B.c[2] - c[2])) <= 0) return;   // ponta de trás
-          L.push({ d: dist2(c) - 150, fn: () => rotuloPlano(r.nome, c, wd, alt * .88, DF * .55, g < 1 ? .2 : .95) });
+          L.push({ o: base + 6e5, fn: () => rotuloPlano(r.nome, c, wd, alt * .88, DF * .55, g < 1 ? .2 : .95) });
         });
       }
     });
-    L.sort((a, b) => b.d - a.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, f.alpha, f.stroke));
+    L.sort((a, b) => a.o - b.o).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, f.alpha, f.stroke));
     if (lite) {
       const traca = (arr, cor, al, lw) => {
         if (!arr.length) return; ctx.beginPath();
