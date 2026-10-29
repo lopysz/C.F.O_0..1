@@ -25,6 +25,9 @@
       .ml-tb button.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
       .ml-tb button:not(.on){background:transparent;color:var(--text);border-color:var(--line)}
       .ml-tb .sep{width:1px;height:22px;background:var(--line);margin:0 .15rem}
+      .ml-busca{align-items:center}
+      .ml-busca input[type=search]{flex:1;min-width:160px;padding:.45rem .7rem;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13.5px}
+      #ml-gear.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
       .ml-cv{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel2);height:58vh;min-height:300px;overscroll-behavior:contain}
       .ml-cv canvas{display:block}
       .ml-info{font-size:13px;color:var(--muted);margin:0}.ml-info b{color:var(--text)}
@@ -52,12 +55,41 @@
     const salvar = () => CFO.store.set(K, D);
     const push = () => { const s = JSON.stringify(D); if (hist[hist.length - 1] !== s) { hist.push(s); if (hist.length > 40) hist.shift(); } };
     let tool = podeE() ? (D.areas.length ? 'palete' : 'area') : 'nav', vista = 'plano', cs = 28, selId = null, drag = null, ghost = null;
+    let editando = podeE() && !D.areas.length;      // layout (criar/editar) só aparece atrás da engrenagem; mapa novo já abre nele
+    const itensPlanilha = () => CFO.store.get('epi', []).map(r => r.item).filter(Boolean);
     const novoZ = { nome: '', cor: CORES[0] };
     const cam = { yaw: -.55, pitch: .75, dist: 40, tx: 0, ty: 0, tz: 0 }; let camOk = false, pend = 0;
 
-    body.innerHTML = `<div class="ml"><div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p>
-      <div class="ml-cv" id="ml-cv"><canvas id="ml-c"></canvas></div><div id="ml-pn"></div></div>`;
+    body.innerHTML = `<div class="ml"><div class="ml-tb ml-busca"><input id="ml-q" type="search" list="ml-bl" placeholder="🔎 Pesquisar e ir até o item/local" autocomplete="off"><datalist id="ml-bl"></datalist>${podeE() ? '<button id="ml-gear" class="ghost" aria-label="Editar layout">⚙ Editar layout</button>' : ''}</div>
+      <div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p>
+      <div class="ml-cv" id="ml-cv"><canvas id="ml-c"></canvas></div><div id="ml-pn"></div><datalist id="ml-itens"></datalist></div>`;
     const $ = s => body.querySelector(s), cv = $('#ml-c'), ctx = cv.getContext('2d'), wrap = $('#ml-cv');
+
+    /* ---------- pesquisar item e ir até o local ---------- */
+    const dlItens = $('#ml-itens'), dlBusca = $('#ml-bl'), qi = $('#ml-q');
+    dlItens.innerHTML = itensPlanilha().map(n => `<option value="${esc(n)}">`).join('');
+    const buscaveis = () => {
+      const r = [];
+      D.objs.forEach(o => { if (o.t === 'w') return; const rot = o.t === 'p' ? 'Palete' : 'Prateleira'; const nome = o.nome || rot; r.push({ id: o.id, label: `${nome}${o.conteudo ? ' — ' + o.conteudo : ''}`, busca: nome + ' ' + (o.conteudo || ''), x: o.x + o.w / 2, y: o.y + o.h / 2, w: o.w, h: o.h }); });
+      D.zonas.forEach(z => { if (z.nome) r.push({ id: z.id, label: `▨ ${z.nome}`, busca: z.nome, x: z.x + z.w / 2, y: z.y + z.h / 2, w: z.w, h: z.h }); });
+      return r;
+    };
+    const irPara = it => {
+      selId = it.id; editando = false;
+      if (vista === 'plano') { const px = (it.x) * cs, py = (it.y) * cs; wrap.scrollLeft = Math.max(0, px - wrap.clientWidth / 2); wrap.scrollTop = Math.max(0, py - wrap.clientHeight / 2); }
+      else { cam.tx = it.x; cam.tz = it.y; cam.dist = clamp(Math.max(it.w, it.h) * 5, 8, 400); camOk = true; B = basis(); pedir(); }
+      tool = 'sel'; barra(); painel(); draw();
+    };
+    const buscar = () => {
+      const q = CFO.norm(qi.value.trim()); if (!q) return;
+      const lista = buscaveis(); const exato = lista.find(it => it.label === qi.value.trim());
+      const achado = exato || lista.find(it => CFO.norm(it.busca).includes(q));
+      if (achado) irPara(achado); else alert('Não achei nada com esse nome no mapa.');
+    };
+    qi.addEventListener('input', () => { dlBusca.innerHTML = buscaveis().filter(it => !qi.value.trim() || CFO.norm(it.busca).includes(CFO.norm(qi.value.trim()))).slice(0, 25).map(it => `<option value="${esc(it.label)}">`).join(''); });
+    qi.addEventListener('change', buscar);
+    qi.addEventListener('keydown', e => { if (e.key === 'Enter') buscar(); });
+    const gear = $('#ml-gear'); if (gear) gear.onclick = () => { editando = !editando; if (!editando) { tool = 'nav'; } else if (!['nav','sel'].includes(tool)) tool = D.areas.length ? 'palete' : 'area'; barra(); painel(); draw(); };
 
     /* ---------- regras ---------- */
     const listaDe = { o: () => D.objs, z: () => D.zonas, a: () => D.areas };
@@ -77,17 +109,23 @@
     const pal = o => {
       const n = nCx(o), g = .05; let b = null;
       for (let c = 1; c <= n; c++) { const r = Math.ceil(n / c), s = Math.abs(Math.log(((o.w - g * 2) / c) / ((o.h - g * 2) / r))) + (c * r - n) * .12; if (!b || s < b.s) b = { c, r, s }; }
-      const bw = (o.w - g * 2) / b.c, bd = (o.h - g * 2) / b.r, bh = clamp(Math.min(bw, bd) * .85, .35, 1.1);
+      const MINC = .22;                                                        // tamanho mínimo de uma "caixa" (m): evita caixa fina tipo folha
+      const bw = Math.max((o.w - g * 2) / b.c, MINC), bd = Math.max((o.h - g * 2) / b.r, MINC), bh = clamp(Math.min(bw, bd) * .85, .35, 1.1);
       return { n, c: b.c, r: b.r, bw, bd, bh, g, H: BASE + bh * int(o.camadas, 1, 10) };
     };
     const altC = o => o.t === 'w' ? (o.alt || 3) / (D.m || 1) : o.t === 'p' ? pal(o).H : HA * int(o.andares, 1, 6) / (D.m || 1);   // altura em quadradinhos
 
     /* ---------- barra de ferramentas ---------- */
-    const FERR = [['nav', '✋ Navegar'], ['area', '⬚ Área'], ['zona', '▨ Demarcar'], ['parede', '▮ Parede'], ['palete', '📦 Palete'], ['p1', '▬ Prateleira fina (1)'], ['p2', '▰ Prateleira grossa (2)'], ['sel', '👆 Selecionar']];
+    const FERR_VER = [['nav', '✋ Navegar'], ['sel', '👆 Selecionar']];
+    const FERR_CRIAR = [['area', '⬚ Área'], ['zona', '▨ Demarcar'], ['parede', '▮ Parede'], ['palete', '📦 Palete'], ['p1', '▬ Prateleira fina (1)'], ['p2', '▰ Prateleira grossa (2)']];
+    const FERR = [...FERR_VER, ...FERR_CRIAR];
     const barra = () => {
-      const edit = podeE(), t = $('#ml-tools');
-      t.innerHTML = (edit ? FERR.map(([k, n]) => `<button data-t="${k}" class="${tool === k && vista === 'plano' ? 'on' : ''}">${n}</button>`).join('') +
-        (podeA() ? `<button data-t="del" class="${tool === 'del' && vista === 'plano' ? 'on' : ''}">🗑 Apagar</button>` : '') + '<span class="sep"></span><button data-a="undo">↶ Desfazer</button>' : '') +
+      const edit = podeE() && editando, t = $('#ml-tools'), gear = $('#ml-gear');
+      if (gear) { gear.classList.toggle('on', editando); gear.textContent = editando ? '⚙ Editando layout (toque p/ sair)' : '⚙ Editar layout'; }
+      if (!editando && tool !== 'nav' && tool !== 'sel') tool = 'nav';
+      const lista = podeE() ? (editando ? FERR : FERR_VER) : [];
+      t.innerHTML = (lista.length ? lista.map(([k, n]) => `<button data-t="${k}" class="${tool === k && vista === 'plano' ? 'on' : ''}">${n}</button>`).join('') +
+        (edit && podeA() ? `<button data-t="del" class="${tool === 'del' && vista === 'plano' ? 'on' : ''}">🗑 Apagar</button>` : '') + (edit ? '<span class="sep"></span><button data-a="undo">↶ Desfazer</button>' : '') : '') +
         `<span class="sep"></span><button data-v="plano" class="${vista === 'plano' ? 'on' : ''}">Plano</button><button data-v="iso" class="${vista === 'iso' ? 'on' : ''}">3D</button>` +
         (vista === 'iso' ? '<button data-a="rot">⟳ Girar</button><button data-a="reset">⌖ Centralizar</button>' : '<button data-a="mais">＋</button><button data-a="menos">－</button>') +
         '<button data-a="png">⬇ Imagem</button>' + (edit && podeA() ? '<button data-a="limpar" style="color:#dc2626;border-color:#dc2626">Limpar mapa</button>' : '');
@@ -115,7 +153,7 @@
     };
     const campo = (id, rot, val, ex = '', dis = '') => `<label>${rot}<input id="${id}" ${ex} value="${esc(val)}"${dis}></label>`;
     const painel = () => {
-      const el = $('#ml-pn'), f = vista === 'plano' ? achar(selId) : null, edit = podeE(), dis = edit ? '' : ' disabled';
+      const el = $('#ml-pn'), f = vista === 'plano' ? achar(selId) : null, edit = podeE() && editando, dis = edit ? '' : ' disabled';
       if (!f) {
         if (!(edit && vista === 'plano')) { el.innerHTML = ''; return; }
         if (tool === 'area') { const m = D.m || 1; el.innerHTML = `<div class="ml-pn"><h4>Áreas</h4><label>Cada quadradinho vale (metros)<select id="ml-m">${[.5, 1, 1.2, 2].map(v => `<option value="${v}"${v === m ? ' selected' : ''}>${String(v).replace('.', ',')} m</option>`).join('')}</select></label><p class="ml-info full">Arraste para criar uma área. Você pode criar quantas quiser, separadas ou coladas. Para mudar o tamanho de uma, use 👆 Selecionar e toque nela.</p></div>`; const s = el.querySelector('#ml-m'); s.onchange = () => { push(); D.m = +s.value; salvar(); info(); draw(); }; }
@@ -138,7 +176,7 @@
         ${k === 'o' && o.t === 's' ? campo('p-a', 'Andares (1 a 6)', int(o.andares, 1, 6, 4), 'type="number" min="1" max="6"', dis) : ''}
         ${k === 'o' && o.t === 'w' ? campo('p-alt', 'Altura (metros)', o.alt || 3, 'type="number" min="1" max="12" step="0.5"', dis) : ''}
         ${k === 'z' ? `<div class="cores">${CORES.map(c => `<button data-c="${c}" style="background:${c}" class="${c === o.cor ? 'on' : ''}"${dis} aria-label="Cor ${c}"></button>`).join('')}<input type="color" id="p-cor" value="${o.cor}"${dis} aria-label="Outra cor"></div>` : ''}
-        ${k === 'o' ? campo('p-o', 'Conteúdo / observações', o.conteudo || '', 'placeholder="O que fica aqui"', dis).replace('<label>', '<label class="full">') : ''}
+        ${k === 'o' ? campo('p-o', 'Conteúdo / item (puxa da planilha)', o.conteudo || '', 'placeholder="O que fica aqui" list="ml-itens"', dis).replace('<label>', '<label class="full">') : ''}
         ${edit ? `<div class="acts">${k !== 'a' ? '<button id="p-r" class="ghost">⟳ Girar 90°</button>' : ''}${podeA() ? '<button id="p-d" class="danger">🗑 Apagar</button>' : ''}</div>` : ''}</div>`;
       if (!edit) return;
       el.querySelector('#p-n').onchange = e => ap(() => { o.nome = e.target.value.trim(); });
@@ -225,7 +263,7 @@
       if (ghost) { if (tool === 'area') { const r = ghost.r; ctx.fillStyle = 'rgba(34,211,238,.25)'; ctx.fillRect(r.x * cs, r.y * cs, r.w * cs, r.h * cs); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 3; ctx.strokeRect(r.x * cs, r.y * cs, r.w * cs, r.h * cs); rotulo(`${r.w} × ${r.h}`, (r.x + r.w / 2) * cs, (r.y + r.h / 2) * cs, 15); }
         else if (ghost.r.t === 'z') zonaPlano(ghost.r, ghost.ok); else if (ghost.r.t !== 'w') objPlano(ghost.r, ghost.ok, true); else if (!ghost.ok) { const r = ghost.r; ctx.fillStyle = 'rgba(220,38,38,.4)'; ctx.fillRect(r.x * cs, r.y * cs, r.w * cs, r.h * cs); } }
       const s = achar(selId); if (s) { const o = s.it; ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]); ctx.strokeRect(o.x * cs - 2, o.y * cs - 2, o.w * cs + 4, o.h * cs + 4); ctx.setLineDash([]); }
-      const nav = tool === 'nav'; cv.style.touchAction = nav ? 'auto' : 'none'; cv.style.cursor = nav ? 'default' : 'crosshair';
+      const nav = tool === 'nav'; cv.style.touchAction = 'none'; cv.style.cursor = nav ? (pan2d ? 'grabbing' : 'grab') : 'crosshair';
     };
 
     // ----- 3D com câmera que gira (perspectiva desenhada no <canvas>, sem biblioteca)
@@ -325,10 +363,10 @@
       if (tool === 'area') ghost = { r, ok: true }; else if (tool === 'zona') ghost = { r: { t: 'z', cor: novoZ.cor, nome: novoZ.nome, ...r }, ok: cobre(r) };
       else { const t = tool === 'palete' ? 'p' : tool === 'parede' ? 'w' : 's'; ghost = { r: { t, camadas: 3, cpc: 4, andares: 4, alt: 3, ...r }, ok: livre(r, null, t) }; }
     };
-    const ptrs = new Map(); let pin = 0;
+    const ptrs = new Map(); let pin = 0; let pan2d = null;
     cv.onpointerdown = e => {
       if (vista === 'iso') { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); pin = 0; return; }
-      if (tool === 'nav') return;
+      if (tool === 'nav') { cv.setPointerCapture(e.pointerId); pan2d = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop, moveu: false }; cv.style.cursor = 'grabbing'; return; }
       const [cx, cy] = cel(e); if (cx < 0 || cy < 0 || cx >= FW || cy >= FH) return; cv.setPointerCapture(e.pointerId);
       if (tool === 'sel') {
         const h = topo(cx, cy); selId = h ? h.it.id : null;
@@ -341,6 +379,7 @@
       drag = { mode: 'draw', sx: cx, sy: cy, ex: cx, ey: cy }; ghost = null; moveGhost(); draw();
     };
     cv.onpointermove = e => {
+      if (pan2d) { const dx = e.clientX - pan2d.x, dy = e.clientY - pan2d.y; if (Math.abs(dx) > 2 || Math.abs(dy) > 2) pan2d.moveu = true; wrap.scrollLeft = pan2d.sl - dx; wrap.scrollTop = pan2d.st - dy; return; }
       if (vista === 'iso') {
         const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
         const pan = (ax, ay) => { const s = cam.dist * .0016, fg = Math.hypot(B.f[0], B.f[2]) || 1; cam.tx += -B.r[0] * ax * s + (B.f[0] / fg) * ay * s; cam.tz += -B.r[2] * ax * s + (B.f[2] / fg) * ay * s; };
@@ -354,6 +393,7 @@
       moveGhost(); draw();
     };
     const solta = e => {
+      if (pan2d) { pan2d = null; cv.style.cursor = 'grab'; return; }
       if (vista === 'iso') { ptrs.delete(e.pointerId); pin = 0; return; }
       if (!drag) return; const d = drag, g = ghost; drag = null; ghost = null;
       if (d.mode === 'move') { const f = achar(d.id); if (d.moveu && podeE() && f) { const o = f.it, r = { x: d.nx, y: d.ny, w: o.w, h: o.h }; if (f.k === 'z' ? cobre(r) : livre(r, o.id, o.t)) { push(); o.x = r.x; o.y = r.y; salvar(); } } painel(); info(); draw(); return; }
@@ -365,7 +405,7 @@
         salvar(); tudo();
       } else { if (g && !g.ok) alert(tool === 'zona' ? 'A demarcação precisa ficar dentro de uma área.' : 'Não cabe aí: precisa ficar dentro de uma área e sem encostar em outro objeto (paredes podem encostar em paredes).'); draw(); }
     };
-    cv.onpointerup = solta; cv.onpointercancel = e => { ptrs.delete(e.pointerId); drag = null; ghost = null; draw(); };
+    cv.onpointerup = solta; cv.onpointercancel = e => { ptrs.delete(e.pointerId); pan2d = null; drag = null; ghost = null; draw(); };
     cv.oncontextmenu = e => { if (vista === 'iso') e.preventDefault(); };
     cv.addEventListener('wheel', e => { if (vista !== 'iso') return; e.preventDefault(); cam.dist = clamp(cam.dist * (1 + e.deltaY * .001), 3, 400); B = basis(); pedir(); }, { passive: false });
     new ResizeObserver(() => { if (body.isConnected && vista === 'iso') pedir(); }).observe(wrap);
@@ -373,6 +413,8 @@
       if (!body.isConnected) return document.removeEventListener('keydown', ev);
       if ((e.key === 'Delete' || e.key === 'Backspace') && selId && vista === 'plano' && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) apagar(selId);
     });
+
+    document.addEventListener('cfo-sync', function ev() { if (!body.isConnected) return document.removeEventListener('cfo-sync', ev); dlItens.innerHTML = itensPlanilha().map(n => `<option value="${esc(n)}">`).join(''); });
 
     tudo();
     if (D.areas.length) requestAnimationFrame(() => { wrap.scrollLeft = Math.max(0, (Math.min(...D.areas.map(a => a.x)) - 1) * cs); wrap.scrollTop = Math.max(0, (Math.min(...D.areas.map(a => a.y)) - 1) * cs); });
