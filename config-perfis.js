@@ -15,7 +15,7 @@
   CFO.iconesCfg = IC;
 
   const TIPO = { total: 'Acesso total', leve: 'Modo leve', aprendiz: 'Aprendiz', custom: 'Perfil criado', setor: 'Outro setor' };
-  const EDITAR = [['epi', 'Planilha EPI'], ['contratos', 'Contratos'], ['requisicoes', 'Requisições'], ['mapa', 'Mapa do almoxarifado']];
+  const EDITAR = [['epi', 'Planilha EPI'], ['contratos', 'Contratos'], ['requisicoes', 'Requisições'], ['mapa', 'Mapa do almoxarifado'], ['mapalivre', 'Mapa livre']];
   const EXTRAS = [['topo', 'Botões do topo (Importar planilhas, Nuvem, Sincronizar WL)'], ['registros', 'Registros (modificações de cada perfil)']];
 
   CFO.modules.config = body => {
@@ -33,16 +33,23 @@
         <input id="cf-fl" type="file" accept=".json,application/json" hidden></section>`;
     }
     function secNomes() {
-      const r = CFO.store.get('rotulos', null) || {}, n = r.n || {};
+      const r = CFO.store.get('rotulos', null) || {}, n = r.n || {}, oc = CFO.ocultos();
       const campo = (id, padrao, rot) => `<label>${rot}<input data-n="${id}" value="${esc(n[id] || '')}" placeholder="${esc(padrao)}" autocomplete="off"></label>`;
+      const btnApagar = (tipo, id, rot) => `<button type="button" class="ghost danger" data-hide="${tipo}:${esc(id)}" title="Apagar ${esc(rot)}" aria-label="Apagar ${esc(rot)}">${ico('trash', 16)} Apagar</button>`;
+      const visiveis = DRAWERS_TODAS.filter(d => !oc.g.includes(d.id));
+      const apagadas = [...DRAWERS_TODAS.filter(d => oc.g.includes(d.id)).map(d => ['g', d.id, d.name + ' (gaveta inteira)']),
+        ...DRAWERS_TODAS.filter(d => !oc.g.includes(d.id)).flatMap(d => d.subs.filter(x => oc.f.includes(x.m)).map(x => ['f', x.m, x.name + ' (' + d.name + ')']))];
       return `<section class="cf-sec" data-nt><h3>Nomes das funções</h3>
         <p class="log" style="margin-top:0">Dê o nome que fizer sentido para o seu setor. O sistema usa o nome novo nos menus, telas, relatórios e exportações. Deixe em branco para manter o nome padrão.</p>
         <div class="cf-g"><h4>Palavra "EPI"</h4><div class="cf-nm"><label>Singular<input id="cf-t1" value="${esc(r.termo || '')}" placeholder="EPI" autocomplete="off"></label><label>Plural<input id="cf-t2" value="${esc(r.termos || '')}" placeholder="EPIs" autocomplete="off"></label></div>
           <p class="log">Ex.: <b>Peça</b> / <b>Peças</b> troca "Planilha EPI" por "Planilha Peça", "Gastos em EPIs" por "Gastos em Peças" e assim por diante, inclusive no controle mensal. Se o plural ficar em branco, o sistema monta sozinho.</p></div>
-        ${DRAWERS.map(d => `<div class="cf-g"><h4>${esc(d.name)}</h4><div class="cf-nm">${campo('d:' + d.id, d.name, 'Nome da gaveta')}${campo('c:' + d.id, d.short, 'Nome curto (barra do celular)')}</div>
-          ${d.subs.map(x => campo('s:' + x.m, x.name, esc(x.name))).join('')}</div>`).join('')}
+        ${visiveis.map(d => `<div class="cf-g"><h4>${esc(d.name)}</h4><div class="cf-nm">${campo('d:' + d.id, d.name, 'Nome da gaveta')}${campo('c:' + d.id, d.short, 'Nome curto (barra do celular)')}</div>
+          <div class="bar" style="padding:0;min-height:0;margin:.3rem 0">${btnApagar('g', d.id, 'gaveta ' + d.name)}</div>
+          ${d.subs.filter(x => !oc.f.includes(x.m)).map(x => `<div class="cf-nm">${campo('s:' + x.m, x.name, esc(x.name))}${btnApagar('f', x.m, 'função ' + x.name)}</div>`).join('')}</div>`).join('')}
         <div class="bar" style="padding:0;gap:.6rem;flex-wrap:wrap;min-height:0"><button id="cf-nsalvar">Salvar nomes</button><button id="cf-npadrao" class="ghost">Voltar aos nomes padrão</button></div>
-        <p class="log">A página recarrega ao salvar para aplicar os nomes em todas as telas.</p></section>`;
+        <p class="log">A página recarrega ao salvar para aplicar os nomes em todas as telas.</p>
+        ${apagadas.length ? `<div class="cf-g"><h4>Apagadas</h4><p class="log" style="margin-top:0">Somem do menu e do início, mas os dados ficam guardados no aparelho e voltam se você restaurar.</p>
+          ${apagadas.map(([t, id, nome]) => `<div class="cf-row"><span><b>${esc(nome)}</b></span><button type="button" class="ghost" data-show="${t}:${esc(id)}">Restaurar</button></div>`).join('')}</div>` : ''}</section>`;
     }
 
     function draw() {
@@ -74,6 +81,13 @@
           const n = {}; body.querySelectorAll('[data-n]').forEach(i => { const v = i.value.trim(); if (v) n[i.dataset.n] = v; });
           CFO.rotulosSalvar({ n, termo: body.querySelector('#cf-t1').value.trim(), termos: body.querySelector('#cf-t2').value.trim() });
         };
+        const muda = (lista, tipo, id, add) => { const o = CFO.ocultos(), k = tipo === 'g' ? 'g' : 'f'; o[k] = add ? [...o[k], id] : o[k].filter(x => x !== id); CFO.ocultosSalvar(o); };
+        body.querySelectorAll('[data-hide]').forEach(b => b.onclick = () => {
+          const [t, id] = b.dataset.hide.split(':'), d = t === 'g' ? DRAWERS_TODAS.find(x => x.id === id) : null, f = t === 'f' ? DRAWERS_TODAS.flatMap(x => x.subs).find(x => x.m === id) : null;
+          const nome = d ? 'a gaveta "' + d.name + '" inteira (com todas as funções dela)' : 'a função "' + (f || {}).name + '"';
+          if (confirm('Apagar ' + nome + '?\n\nEla some do menu e do início deste setor. Os dados ficam guardados e você pode restaurar aqui mesmo depois.')) muda(null, t, id, true);
+        });
+        body.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { const [t, id] = b.dataset.show.split(':'); muda(null, t, id, false); });
         body.querySelector('#cf-npadrao').onclick = () => { if (confirm('Voltar todos os nomes ao padrão do sistema?')) CFO.rotulosLimpar(); };
         return;
       }

@@ -52,8 +52,13 @@
   }
 
   // Salvar / voltar ao padrão (recarrega a página para o sistema inteiro usar os nomes novos)
-  CFO.rotulosSalvar = o => { CFO.store.set('rotulos', o); location.reload(); };
-  CFO.rotulosLimpar = () => { CFO.store.set('rotulos', { n: {} }); location.reload(); };
+  CFO.rotulosSalvar = o => { CFO.store.set('rotulos', { ...o, ocultos: rotulos().ocultos }); location.reload(); };
+  CFO.rotulosLimpar = () => { CFO.store.set('rotulos', { n: {}, ocultos: rotulos().ocultos }); location.reload(); };
+
+  /* ----- Funções e gavetas apagadas (só o administrador júnior do setor) -----
+     'rotulos'.ocultos = { g: [id da gaveta], f: [módulo da função] }. Some do menu, do início e do painel; os dados continuam guardados e dá para restaurar. */
+  CFO.ocultos = () => { const o = (E() && rotulos().ocultos) || {}; return { g: o.g || [], f: o.f || [] }; };
+  CFO.ocultosSalvar = o => { CFO.store.set('rotulos', { ...rotulos(), ocultos: { g: [...new Set(o.g)], f: [...new Set(o.f)] } }); location.reload(); };
 
   /* ----- Dados do setor neste aparelho ----- */
   const prefixo = id => 'cfs:' + id + ':';

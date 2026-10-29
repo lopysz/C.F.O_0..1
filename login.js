@@ -35,13 +35,16 @@
     // Entra como  demax,  rafael demax  ou  rafaeldemax  (mesma senha)
     'demax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: '38afeb57271c48f0dfcd5ef4bd4a0f2f3fb5c4fa504cf09d642497ec31137076' },
     'rafael demax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: 'bd5d314f3433d989b86e358801769c29427647836fa97c79e203a757131822b0' },
-    'rafaeldemax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: '3d26bd30872e56e352e359eb15f13bbd68a4f84886f7704e38fe54a175a25ef7' }
+    'rafaeldemax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: '3d26bd30872e56e352e359eb15f13bbd68a4f84886f7704e38fe54a175a25ef7' },
+    // João: outro setor isolado (dados só no aparelho), administrador júnior, com o Mapa livre. Entra como  joao  ou  joão  (mesma senha)
+    'joao': { nome: 'João', perfil: 'setor', setor: 'joao', jr: true, h: '8cf088d2920c2ba9302e1c0791ff56e7690ee3405a4813ee247ab8714ad9db4e' },
+    'joão': { nome: 'João', perfil: 'setor', setor: 'joao', jr: true, h: 'e706fe1c90ae77b1c640a1b20916a465c42a005f588073db8461cfab7ec4a68d' }
   };
   /* ----- Perfis criados/excluídos/limitados na engrenagem ⚙ (só o perfil principal, admin: true, mexe) -----
      Guardados em 'perfis' = { novos: { login: { nome, perfil: 'custom', h } }, excluidos: [nome normalizado], perms: { nome normalizado: { bloquear, semApagar, semEditar } } }
      ATENÇÃO: continua sendo controle na tela (no navegador), não segurança de servidor. */
   // setores = { <id>: { nome } }: "Outros setores" (cada um tem dados próprios, só no aparelho; perfil: 'setor', setor: <id>, jr: true = administrador júnior)
-  const dadosPerfis = () => { const d = CFO.store.get('perfis', null) || {}; return { novos: d.novos || {}, excluidos: d.excluidos || [], perms: d.perms || {}, setores: d.setores || {} }; };
+  const dadosPerfis = () => { const d = CFO.store.get('perfis', null) || {}; return { novos: d.novos || {}, excluidos: d.excluidos || [], perms: d.perms || {}, setores: { joao: { nome: 'Setor do João' }, ...(d.setores || {}) } }; };
   const US = () => {
     const d = dadosPerfis(), out = {};
     Object.entries(USUARIOS).forEach(([id, x]) => { if (x.admin || !d.excluidos.includes(CFO.norm(x.nome))) out[id] = x; });
@@ -109,6 +112,7 @@
   CFO.pode = (acao, area) => {
     const u = atual(), us = u && US()[u], p = us && CFO.permsDe(us.nome, us.perfil);
     if (!p) return false;
+    if (area === 'mapalivre' && !(us.admin || us.perfil === 'setor')) return false;   // Mapa livre: só perfil principal e outros setores
     if (us.admin) return true;                                   // perfil principal pode tudo
     if (acao === 'abrir') return !(p.bloquear || []).includes(area);
     if (acao === 'editar') return !(p.semEditar || []).includes(area);

@@ -6,8 +6,11 @@ const DRAWERS = [
   { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
     subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
   { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
-    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }] }
+    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Mapa livre', m: 'mapalivre' }] }
 ];
+// Lista completa (a Configuração do administrador júnior usa para restaurar); depois tira o que o setor apagou
+const DRAWERS_TODAS = DRAWERS.map(d => ({ ...d, subs: [...d.subs] }));
+{ const o = CFO.ocultos ? CFO.ocultos() : { g: [], f: [] }; for (let i = DRAWERS.length - 1; i >= 0; i--) { if (o.g.includes(DRAWERS[i].id)) DRAWERS.splice(i, 1); else DRAWERS[i].subs = DRAWERS[i].subs.filter(s => !o.f.includes(s.m)); } }
 
 const IC = {
   home: '<path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1z"/>',

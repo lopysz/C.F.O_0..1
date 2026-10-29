@@ -4,7 +4,7 @@
    Funciona "ouvindo" toda gravação do sistema (CFO.store.set): por isso este arquivo carrega depois dos de sincronização. */
 (() => {
   const K = 'registros', DIAS = 7, MAX = 600, esc = CFO.esc;
-  const AREAS = { epi: 'Planilha EPI', contratos: 'Contratos', requisicoes: 'Requisições', mapa: 'Mapa almoxarifado', 'epi:mov': 'Movimentação de EPI', 'epi:min': 'Estoque mínimo',
+  const AREAS = { epi: 'Planilha EPI', contratos: 'Contratos', requisicoes: 'Requisições', mapa: 'Mapa almoxarifado', mapalivre: 'Mapa livre', 'epi:mov': 'Movimentação de EPI', 'epi:min': 'Estoque mínimo',
     contagens: 'Contagem de estoque', 'contagem:rascunho': 'Contagem de estoque', req_negadas: 'Requisições (negadas)', req_retiradas: 'Requisições (retiradas)', perfis: 'Perfis e permissões', 'mensal:cfg': 'Controle mensal', 'mensal:comprov': 'Controle mensal', drive: 'Importação', drive_link: 'Importação' };
   const IGNORAR = new Set([K, 'wl:auto', 'contagem:rascunho', 'cfo_aparelho']);
   const poda = l => (Array.isArray(l) ? l : []).filter(e => e && e.t >= Date.now() - DIAS * 864e5).slice(-MAX);
