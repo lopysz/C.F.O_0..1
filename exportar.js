@@ -38,6 +38,10 @@ CFO.xlsxLogo = (wb, ws) => {
    folhas: [{ nome, aoa, cols, cabRow }]  (cabRow = índice da linha de cabeçalho; célula pode ser {t:'n', v, z})
    opt: { logo: true/false, svgs: [ '<svg…>' ] -> aba "Gráficos" } */
 CFO.xlsxSalvar = async (arquivo, folhas, opt = {}) => {
+  if (CFO.termo && CFO.termo.ativo()) {                            // setor com nome próprio no lugar de "EPI": título, abas e cabeçalhos (os dados não mudam)
+    arquivo = CFO.termo.t(arquivo);
+    folhas = folhas.map(f => ({ ...f, nome: CFO.termo.t(f.nome), aoa: f.aoa.map((l, r) => r <= (f.cabRow || 0) ? l.map(v => typeof v === 'string' ? CFO.termo.t(v) : v) : l) }));
+  }
   const aba = n => String(n).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31).trim() || 'Planilha';
   const larg = c => typeof c === 'number' ? c : c && c.wch;
   if (await CFO.lib('exceljs')) { /* ok */ } else await CFO.lib('xlsx');

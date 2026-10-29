@@ -107,7 +107,7 @@
 
   function conectar() {
     const eu = CFO.usuario?.();
-    if (!eu || ws) return;
+    if (!eu || ws || eu.isolado) return;                      // perfil de outro setor não aparece online (sem conexão com o servidor)
     euMeta = { nome: eu.nome, perfil: eu.perfil, desde: new Date().toISOString(), ap: aparelhoInfo(), cidade: '' };
     buscaCidade().then(cidade => { euMeta.cidade = cidade; if (ligado) envia(TOPICO, 'presence', { type: 'presence', event: 'track', payload: euMeta }); });
     try { ws = new WebSocket(WS); } catch { agendar(); return; }

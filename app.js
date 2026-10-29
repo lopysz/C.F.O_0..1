@@ -24,30 +24,39 @@ const svg = (n, cls = '') => `<svg viewBox="0 0 24 24"${cls ? ` class="${cls}"` 
 const $ = s => document.querySelector(s);
 const rail = $('#rail'), tabbar = $('#tabbar'), fan = $('#fan'), fl = $('#fl'), inicio = $('#home'), crumb = $('#crumb'), back = $('#back'), barra = $('.bar');
 const mobile = () => matchMedia('(max-width:900px)').matches;
+// Nomes das funções: o administrador júnior de um setor pode trocá-los (CFO.rot, em setores.js); para os demais perfis valem os padrão
+const nD = d => CFO.rot('d:' + d.id, d.name), nC = d => CFO.rot('c:' + d.id, d.short), nS = s => CFO.rot('s:' + s.m, s.name);
 let ctx = null, aberto = null;
 
 // Abre a função escolhida (substitui as telas abertas)
 function ir(d, s) {
   if (!CFO.pode('abrir', s.m)) return;
   while (CFO.screens.length) CFO.close();
-  ctx = d;
-  CFO.open(s.name, CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
+  ctx = { ...d, name: nD(d) };
+  CFO.open(nS(s), CFO.modules[s.m] || (b => { b.innerHTML = `<p class="empty">Esta função ainda não foi carregada. Confira se o arquivo dela está na mesma pasta do index.html e se o index.html está atualizado (depois, atualize a página com Ctrl+F5).</p>`; }));
 }
 function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 
 // Menus (a mesma lista alimenta a lateral e a barra inferior)
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
-  DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? d.name : d.short}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
-rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030d</div>`;
-tabbar.innerHTML = navHTML(false);
+  DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? nD(d) : nC(d)}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
+function montarNav() {
+  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030e</div>`;
+  tabbar.innerHTML = navHTML(false);
+  document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
+  document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
+}
+montarNav();
 back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#cfg').innerHTML = svg('gear');
 
 // Início (funções sem permissão para o perfil aparecem apagadas, com cadeado)
 function renderInicio() {
+  const eu = CFO.usuario();
   inicio.innerHTML = `<div class="wrap"><p class="sub" style="margin-top:0">Caixa de Ferramentas Operacional</p>
+  ${CFO.espaco ? `<p class="log setor-nota">🔒 Setor <b>${CFO.esc(eu?.setorNome || '')}</b>: os dados ficam só neste aparelho (sem nuvem). Exporte suas planilhas e faça o backup em ⚙ Configurações.</p>` : ''}
   <div class="sec">Painel gerencial</div><div id="painel"></div>
   <div class="sec" style="margin-top:2rem">Escolha uma função</div>
-  <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${d.name}${d.subs.every(s => !CFO.pode('abrir', s.m)) ? '<span class="tag" style="margin-left:auto">Sem acesso</span>' : ''}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}"${CFO.pode('abrir', s.m) ? '' : ' disabled'}>${s.name}${svg(CFO.pode('abrir', s.m) ? 'chev' : 'lock')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
+  <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${CFO.esc(nD(d))}${d.subs.every(s => !CFO.pode('abrir', s.m)) ? '<span class="tag" style="margin-left:auto">Sem acesso</span>' : ''}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}"${CFO.pode('abrir', s.m) ? '' : ' disabled'}>${CFO.esc(nS(s))}${svg(CFO.pode('abrir', s.m) ? 'chev' : 'lock')}</button>`).join('')}</div></div>`).join('')}</div></div>`;
   inicio.querySelectorAll('.short button:not(:disabled)').forEach(b => b.onclick = () => { const d = DRAWERS.find(x => x.id === b.dataset.d); ir(d, d.subs[+b.dataset.i]); });
   // Painel gerencial (painel.js): os botões das telinhas abrem a função correspondente
   CFO.painel?.montar($('#painel'), m => { const d = DRAWERS.find(x => x.subs.some(s => s.m === m)); if (d) ir(d, d.subs.find(s => s.m === m)); });
@@ -55,8 +64,9 @@ function renderInicio() {
 CFO.onUser = () => {
   renderInicio(); fechar();
   [['imp', 'topo'], ['env', 'topo'], ['wlbtn', 'topo'], ['regbtn', 'registros']].forEach(([id, a]) => { const b = document.getElementById(id); if (b) b.hidden = !CFO.pode('abrir', a); });
+  if (CFO.espaco) ['env', 'wlbtn', 'regbtn'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; });   // outro setor: sem nuvem, sem WL, sem registros
 };
-renderInicio();
+CFO.onUser();
 
 // Barra superior e destaque do menu conforme as telas abertas
 function atualizar() {
@@ -76,7 +86,7 @@ $('#more').onclick = e => { e.stopPropagation(); barra.classList.toggle('more');
 function fechar() { fan.classList.remove('open'); aberto = null; document.querySelectorAll('.nav[data-d]').forEach(b => b.setAttribute('aria-expanded', 'false')); }
 function abrirLeque(btn) {
   const d = DRAWERS.find(x => x.id === btn.dataset.d), n = d.subs.length, m = mobile();
-  fl.innerHTML = d.subs.map(s => { const ok = CFO.pode('abrir', s.m); return `<button class="fi" role="menuitem"${ok ? '' : ' disabled aria-disabled="true" title="Sem acesso"'}>${svg(ok ? 'doc' : 'lock')}${s.name}</button>`; }).join('');
+  fl.innerHTML = d.subs.map(s => { const ok = CFO.pode('abrir', s.m); return `<button class="fi" role="menuitem"${ok ? '' : ' disabled aria-disabled="true" title="Sem acesso"'}>${svg(ok ? 'doc' : 'lock')}${CFO.esc(nS(s))}</button>`; }).join('');
   fan.classList.remove('open');
   const r = btn.getBoundingClientRect(), h = fan.offsetHeight, w = fan.offsetWidth;
   let x, y;
@@ -87,8 +97,6 @@ function abrirLeque(btn) {
   btn.setAttribute('aria-expanded', 'true'); aberto = d.id;
   requestAnimationFrame(() => fan.classList.add('open'));
 }
-document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
-document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
 document.addEventListener('pointerdown', e => {
   if (aberto && !e.target.closest('.fan, .nav[data-d]')) fechar();
   if (barra.classList.contains('more') && !e.target.closest('.topbtns, #more')) barra.classList.remove('more');
@@ -126,7 +134,7 @@ document.getElementById('imp').onclick = () => {
   const d = document.createElement('dialog'); d.className = 'imp';
   d.innerHTML = `<form method="dialog"><h3>Importar planilhas</h3>
     <button type="button" data-a="pasta">📁 Pasta do dispositivo</button>
-    <button type="button" data-a="supa">☁️ Supabase (planilhas do bucket)</button>
+    ${CFO.espaco ? '' : '<button type="button" data-a="supa">☁️ Supabase (planilhas do bucket)</button>'}
     <button type="button" data-a="arq">📄 Arquivos (dispositivo ou Google Drive)</button>
     <p class="log">No celular, ao escolher "Arquivos", o menu do Android/iPhone mostra o Google Drive junto com as pastas do aparelho.</p>
     <button value="cancel" class="ghost" formnovalidate>Cancelar</button></form>`;

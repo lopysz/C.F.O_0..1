@@ -40,7 +40,8 @@
   /* ----- Perfis criados/excluídos/limitados na engrenagem ⚙ (só o perfil principal, admin: true, mexe) -----
      Guardados em 'perfis' = { novos: { login: { nome, perfil: 'custom', h } }, excluidos: [nome normalizado], perms: { nome normalizado: { bloquear, semApagar, semEditar } } }
      ATENÇÃO: continua sendo controle na tela (no navegador), não segurança de servidor. */
-  const dadosPerfis = () => { const d = CFO.store.get('perfis', null) || {}; return { novos: d.novos || {}, excluidos: d.excluidos || [], perms: d.perms || {} }; };
+  // setores = { <id>: { nome } }: "Outros setores" (cada um tem dados próprios, só no aparelho; perfil: 'setor', setor: <id>, jr: true = administrador júnior)
+  const dadosPerfis = () => { const d = CFO.store.get('perfis', null) || {}; return { novos: d.novos || {}, excluidos: d.excluidos || [], perms: d.perms || {}, setores: d.setores || {} }; };
   const US = () => {
     const d = dadosPerfis(), out = {};
     Object.entries(USUARIOS).forEach(([id, x]) => { if (x.admin || !d.excluidos.includes(CFO.norm(x.nome))) out[id] = x; });
@@ -59,27 +60,48 @@
     total: {},
     leve: { leve: true },
     aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal', 'registros'], semApagar: ['epi', 'contratos', 'requisicoes'] },
-    custom: { bloquear: ['registros'] }          // perfil novo: começa com tudo liberado, menos Registros; ajuste em ⚙ > Perfis
+    custom: { bloquear: ['registros'] },         // perfil novo: começa com tudo liberado, menos Registros; ajuste em ⚙ > Perfis
+    setor: { bloquear: ['registros'] }           // outro setor: dados próprios, sem nuvem/WL (isso é fixo, não depende desta lista)
   };
   // Permissões de um perfil: as da engrenagem (se existirem) valem no lugar das padrão
   CFO.permsDe = (nome, perfil) => { const o = dadosPerfis().perms[CFO.norm(nome)], b = PERFIS[perfil] || {}; return o ? { ...b, ...o } : b; };
   CFO.permsPadrao = perfil => PERFIS[perfil] || {};
-  CFO.usuario = () => { const u = atual(); return u ? { id: u, nome: US()[u].nome, perfil: US()[u].perfil, ver: !!US()[u].ver, admin: !!US()[u].admin } : null; };
+  CFO.usuario = () => {
+    const u = atual(); if (!u) return null; const x = US()[u], iso = x.perfil === 'setor';
+    return { id: u, nome: x.nome, perfil: x.perfil, ver: !!x.ver, admin: !!x.admin, isolado: iso, setor: iso ? x.setor || '' : '', setorNome: iso ? (dadosPerfis().setores[x.setor] || {}).nome || '' : '', jr: iso && !!x.jr };
+  };
   CFO.admin = () => !!(CFO.usuario() || {}).admin;
   CFO.leve = () => { const u = atual(), p = u && PERFIS[US()[u].perfil]; return !!(p && p.leve); };
   // Lista de perfis para a tela de Configurações (logins diferentes do mesmo nome contam como um perfil só)
-  CFO.perfis = () => { const g = new Map(); Object.entries(US()).forEach(([id, x]) => { const k = CFO.norm(x.nome), e = g.get(k) || { chave: k, nome: x.nome, perfil: x.perfil, logins: [], admin: false, custom: x.perfil === 'custom' }; e.logins.push(id); e.admin = e.admin || !!x.admin; g.set(k, e); }); return [...g.values()]; };
-  CFO.perfilNovo = async (nome, login, senha) => {
+  CFO.perfis = () => {
+    const g = new Map(), st = dadosPerfis().setores;
+    Object.entries(US()).forEach(([id, x]) => {
+      const k = CFO.norm(x.nome), iso = x.perfil === 'setor', e = g.get(k) || { chave: k, nome: x.nome, perfil: x.perfil, logins: [], admin: false, custom: x.perfil === 'custom' || iso, setor: iso ? x.setor || '' : '', setorNome: iso ? (st[x.setor] || {}).nome || '' : '', jr: false };
+      e.logins.push(id); e.admin = e.admin || !!x.admin; e.jr = e.jr || (iso && !!x.jr); g.set(k, e);
+    });
+    return [...g.values()];
+  };
+  CFO.setorRenomear = (id, nome) => { const d = dadosPerfis(); if (d.setores[id] && String(nome).trim()) { d.setores[id].nome = String(nome).trim(); CFO.store.set('perfis', d); } };
+  CFO.perfilJr = (chave, jr) => { const d = dadosPerfis(); Object.values(d.novos).forEach(x => { if (CFO.norm(x.nome) === chave && x.perfil === 'setor') x.jr = !!jr; }); CFO.store.set('perfis', d); };
+  // extra = { setorNome, jr }: com setorNome o perfil é de "Outros setores" (cria o setor se ainda não existir)
+  CFO.perfilNovo = async (nome, login, senha, extra = {}) => {
     login = String(login).trim().toLowerCase(); const d = dadosPerfis();
     if (!nome.trim() || !login || !senha) return 'Preencha nome, login e senha.';
     if (US()[login]) return 'Já existe um perfil com esse login.';
     if (CFO.perfis().some(p => p.chave === CFO.norm(nome))) return 'Já existe um perfil com esse nome.';
-    d.novos[login] = { nome: nome.trim(), perfil: 'custom', h: sha256(login + ':' + senha + ':cfo') };
-    CFO.store.set('perfis', d); return '';
+    const x = { nome: nome.trim(), perfil: 'custom', h: sha256(login + ':' + senha + ':cfo') }, sn = String(extra.setorNome || '').trim();
+    if (sn) {
+      let id = Object.keys(d.setores).find(i => CFO.norm(d.setores[i].nome) === CFO.norm(sn));
+      if (!id) { id = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); d.setores[id] = { nome: sn }; }
+      x.perfil = 'setor'; x.setor = id; if (extra.jr) x.jr = true;
+    }
+    d.novos[login] = x; CFO.store.set('perfis', d); return '';
   };
   CFO.perfilSenha = (chave, senha) => { const d = dadosPerfis(); Object.entries(d.novos).forEach(([id, x]) => { if (CFO.norm(x.nome) === chave) x.h = sha256(id + ':' + senha + ':cfo'); }); CFO.store.set('perfis', d); };
   CFO.perfilExcluir = chave => {
-    const d = dadosPerfis(); Object.entries(d.novos).forEach(([id, x]) => { if (CFO.norm(x.nome) === chave) delete d.novos[id]; });
+    const d = dadosPerfis(), setores = [];
+    Object.entries(d.novos).forEach(([id, x]) => { if (CFO.norm(x.nome) === chave) { if (x.setor) setores.push(x.setor); delete d.novos[id]; } });
+    setores.forEach(s => { if (!Object.values(d.novos).some(x => x.setor === s)) { delete d.setores[s]; CFO.setorApagarDados && CFO.setorApagarDados(s); } });   // último perfil do setor: some o setor e os dados dele deste aparelho
     if (!d.excluidos.includes(chave)) d.excluidos.push(chave); delete d.perms[chave]; CFO.store.set('perfis', d);
   };
   CFO.perfilPerms = (chave, perms) => { const d = dadosPerfis(); d.perms[chave] = perms; CFO.store.set('perfis', d); };
@@ -93,6 +115,10 @@
     if (acao === 'apagar') return !(p.semApagar || []).includes(area) && !(p.semEditar || []).includes(area);
     return true;
   };
+
+  // Espaço de dados do perfil logado: '' = dados principais (nuvem) | 's_<setor>' = setor isolado (só neste aparelho). Definido aqui, antes de qualquer outro arquivo ler dados.
+  const espacoDe = x => x && x.perfil === 'setor' ? 's_' + (x.setor || 'sem') : '';
+  CFO.espaco = (() => { const u = atual(); return u ? espacoDe(US()[u]) : ''; })();
 
   const ov = document.createElement('div'); ov.id = 'login';
   ov.innerHTML = `<div class="lg-top"><h1>Bem vindo</h1><h2>C.F.O</h2></div>
@@ -108,11 +134,15 @@
   const topo = document.querySelector('.topbtns'); if (topo) topo.append(sair);
 
   const entrar = u => {
-    localStorage.setItem(SK, u); ov.hidden = true; document.body.classList.remove('locked'); document.body.classList.toggle('leve', CFO.leve());
-    sair.textContent = 'Sair · ' + US()[u].nome; sair.hidden = false; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
+    localStorage.setItem(SK, u);
+    if (espacoDe(US()[u]) !== CFO.espaco) { location.reload(); return; }   // mudou de espaço de dados (principal <-> setor): recarrega limpo
+    ov.hidden = true; document.body.classList.remove('locked'); document.body.classList.toggle('leve', CFO.leve());
+    sair.textContent = 'Sair · ' + US()[u].nome + (CFO.espaco ? ' · ' + ((dadosPerfis().setores[US()[u].setor] || {}).nome || 'outro setor') : ''); sair.hidden = false; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
   };
   const bloquear = () => {
-    localStorage.removeItem(SK); document.body.classList.remove('leve'); while (CFO.screens.length) CFO.close();
+    localStorage.removeItem(SK);
+    if (CFO.espaco) { location.reload(); return; }                            // saindo de um setor isolado: recarrega para limpar tudo da tela
+    document.body.classList.remove('leve'); while (CFO.screens.length) CFO.close();
     ov.hidden = false; document.body.classList.add('locked'); sair.hidden = true;
     ov.querySelector('#lg-p').value = ''; ov.querySelector('#lg-e').textContent = ''; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
     setTimeout(() => ov.querySelector('#lg-u').focus(), 50);

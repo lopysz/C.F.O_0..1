@@ -31,6 +31,7 @@
   };
 
   async function sincronizar({ completa = false } = {}) {
+    if (CFO.espaco) return { erro: 'Sincronização desligada neste perfil (outro setor).' };
     if (rodando) return { erro: 'Já está sincronizando.' };
     rodando = true;
     const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, status: {}, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, lista: [], amostraItem: null, amostraCat: null };
@@ -113,7 +114,7 @@
   };
 
   // Automático: ao abrir o sistema e a cada N minutos enquanto ele estiver aberto
-  const auto = () => { if (CFO.store.get('wl:auto', true)) sincronizar(); };
+  const auto = () => { if (!CFO.espaco && CFO.store.get('wl:auto', true)) sincronizar(); };
   setTimeout(auto, 5000);
   setInterval(auto, C.minutosAuto * 60000);
 })();

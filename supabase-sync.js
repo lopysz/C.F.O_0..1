@@ -54,14 +54,14 @@
   const raw = { put: CFO.db.put, del: CFO.db.del, clear: CFO.db.clear, get: CFO.db.get, all: CFO.db.all, keys: CFO.db.keys };
   const envObj = (nome, obj) => CFO.supaEnviar(nome, new Blob([JSON.stringify(obj)], { type: 'application/json' }), 'application/json', true);
   let t = null;
-  const agendar = () => { if (ativo && meta.synced) { clearTimeout(t); t = setTimeout(sync, 2500); } };
-  const marca = (st, id, op) => { if (STORES.includes(st) && id !== undefined) { meta.dbDirty[st + '/' + id] = { op, ts: Date.now() }; salvaMeta(); agendar(); } };
+  const agendar = () => { if (ativo && meta.synced && !CFO.espaco) { clearTimeout(t); t = setTimeout(sync, 2500); } };
+  const marca = (st, id, op) => { if (!CFO.espaco && STORES.includes(st) && id !== undefined) { meta.dbDirty[st + '/' + id] = { op, ts: Date.now() }; salvaMeta(); agendar(); } };
   CFO.db.put = async (st, v) => { const r = await raw.put(st, v); marca(st, v && v.id, 'put'); return r; };
   CFO.db.del = async (st, id) => { const r = await raw.del(st, id); marca(st, id, 'del'); return r; };
   CFO.db.clear = async st => { const todos = await raw.all(st); const r = await raw.clear(st); todos.forEach(x => marca(st, x.id, 'del')); return r; };
   CFO.db.get = async (st, id) => {                        // foto completa: se não estiver neste aparelho, baixa da nuvem na hora
     let r = await raw.get(st, id);
-    if (!r && st === 'imgs' && ativo) {
+    if (!r && st === 'imgs' && ativo && !CFO.espaco) {
       try { const d = await baixar(nomeDb('imgs', id)); if (d && !d.deleted && d.value) { await raw.put('imgs', d.value); r = d.value; } } catch {}
     }
     return r;
@@ -69,18 +69,21 @@
 
   let rodando = null, pendente = false, avisoMudou = false;
   async function sync({ forcar = false, manual = false, reenviar = false } = {}) {
-    if (!ativo) return;
+    if (!ativo || CFO.espaco) return;                    // perfil de outro setor: nenhuma sincronia
     if (rodando) { pendente = true; return rodando; }
     rodando = (async () => {
       mostra('work');
       try {
         const remoto = await listar(); let mudou = false;
+        const restrito = !(CFO.usuario && CFO.usuario());   // antes do login só baixa a lista de perfis (para o login de perfis criados funcionar); o resto, depois de entrar
         for (const [nome, upd] of remoto) {
+          if (restrito && nome !== nomeObj('perfis')) continue;
           if (!forcar && meta.seen[nome] === upd) continue;
           const d = await baixar(nome); if (!d || !d.key) continue;
           const localNovo = meta.dirty[d.key] && meta.synced && (meta.mod[d.key] || 0) > (d.updatedAt || 0);
           if (forcar || !localNovo) { aplica(d, nome, upd); mudou = true; }
         }
+        if (restrito) { salvaMeta(); mostra('ok', 'Aguardando login'); if (mudou) document.dispatchEvent(new Event('cfo-sync')); return; }
         const nomesEnv = [];
         for (const k of chavesLocais()) {
           const nome = nomeObj(k);
@@ -134,6 +137,7 @@
   const gravaOriginal = CFO.store.set;
   CFO.store.set = (k, v) => {
     gravaOriginal(k, v);
+    if (CFO.espaco && k !== 'perfis') return;                        // dados de setor isolado nunca entram na fila da nuvem
     meta.mod[k] = Date.now(); meta.dirty[k] = 1; salvaMeta();
     agendar();
   };
@@ -178,4 +182,5 @@
   setInterval(() => { if (!document.hidden) sync(); }, 60000);       // confere a cada 60 s
   document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
   addEventListener('online', () => sync());
+  window.addEventListener('cfo-user', () => { if (CFO.usuario && CFO.usuario() && !CFO.espaco) sync(); });   // entrou: agora sincroniza tudo
 })();

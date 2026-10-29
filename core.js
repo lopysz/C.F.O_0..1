@@ -15,9 +15,14 @@ CFO.lib = (() => {
 })();
 
 // Dados salvos no navegador (localStorage)
+// CFO.espaco = '' -> dados principais ('cfo:', sincronizam com a nuvem) | 's_<id>' -> setor isolado ('cfs:<espaço>:', ficam só neste aparelho, nunca vão para a nuvem).
+// Quem define é o login.js (antes de qualquer outro arquivo ler dados). 'perfis' (lista de perfis e setores) é sempre o dado principal.
+CFO.espaco = '';
+const CHAVES_GERAIS = new Set(['perfis']);
+const chaveLocal = k => (CFO.espaco && !CHAVES_GERAIS.has(k) ? 'cfs:' + CFO.espaco + ':' : 'cfo:') + k;
 CFO.store = {
-  get(k, d) { try { return JSON.parse(localStorage.getItem('cfo:' + k)) ?? d; } catch { return d; } },
-  set(k, v) { localStorage.setItem('cfo:' + k, JSON.stringify(v)); }
+  get(k, d) { try { return JSON.parse(localStorage.getItem(chaveLocal(k))) ?? d; } catch { return d; } },
+  set(k, v) { localStorage.setItem(chaveLocal(k), JSON.stringify(v)); }
 };
 
 // Abre uma tela cobrindo a atual (com X para voltar)
@@ -48,7 +53,7 @@ CFO.dialog = (title, fields, onOk) => {
 // Banco para dados grandes (fotos) - IndexedDB. Lojas: 'fotos' (dados + miniatura), 'imgs' (foto completa) e 'fichas' (identificação)
 CFO.db = (() => {
   const open = () => new Promise((res, rej) => {
-    const r = indexedDB.open('cfo', 2);
+    const r = indexedDB.open(CFO.espaco ? 'cfo_' + CFO.espaco : 'cfo', 2);   // setor isolado = banco de fotos separado
     r.onupgradeneeded = () => ['fotos', 'imgs', 'fichas'].forEach(s => { if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, { keyPath: 'id' }); });
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
@@ -85,7 +90,7 @@ CFO.print = html => {
   document.querySelectorAll('iframe.print-frame').forEach(f => f.remove());
   const f = document.createElement('iframe'); f.className = 'print-frame';
   f.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:0;visibility:hidden';
-  f.srcdoc = CFO.printDoc(html);
+  f.srcdoc = CFO.printDoc(CFO.termo ? CFO.termo.html(html) : html);   // setor com nome próprio no lugar de "EPI"
   f.onload = () => setTimeout(() => {
     const w = f.contentWindow; if (!w) return;
     w.addEventListener('afterprint', () => setTimeout(() => f.remove(), 500));

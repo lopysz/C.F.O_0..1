@@ -581,3 +581,11 @@ body.locked .onl{display:none}
 .rg-it{display:flex;gap:.8rem;padding:.55rem .7rem;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:.4rem}
 .rg-h{color:var(--muted);font-variant-numeric:tabular-nums;min-width:2.8rem}
 .rg-a{color:var(--accent);font-size:.8rem}.rg-d{color:var(--muted);font-size:.85rem;overflow-wrap:anywhere}
+
+/* ===== Outros setores (perfis isolados, divisões em Configurações) ===== */
+.cf-setor{margin-top:.8rem}
+.cf-setor h4{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin:0 0 .2rem;font-size:.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.cf-setor h4 .cf-rn{padding:.2rem .5rem;font-size:.85rem}
+.cf-nm{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+@media (max-width:560px){.cf-nm{grid-template-columns:1fr}}
+.setor-nota{margin:.2rem 0 .8rem;padding:.55rem .8rem;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
