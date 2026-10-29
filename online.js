@@ -5,6 +5,9 @@
    - Quando alguém entra, aparece um aviso rápido ("Robson entrou"). Quem sai ou fecha a aba some da lista sozinho.
    - Pessoa = nome do perfil (os logins "demax", "rafael demax" e "rafaeldemax" contam como um só: Rafael Demax).
      O mesmo perfil em 2 aparelhos conta 1 pessoa, mas a lista mostra "2 aparelhos".
+   - Mostra também o aparelho/navegador (ex.: "Android · Chrome") e a cidade aproximada (pelo IP, sem pedir permissão de localização).
+     A cidade é só uma estimativa da operadora/provedor de internet: pode errar o bairro e, em internet móvel, até a cidade.
+   - A lista se atualiza sozinha a cada 30s (o "desde HH:MM" é fixo: é o horário em que a pessoa entrou, não muda).
    - Não grava nada no banco: a presença só existe enquanto a aba está aberta. */
 (() => {
   const c = window.CFO_SUPABASE || {};
@@ -33,13 +36,35 @@
     const g = new Map();
     Object.values(estado).flat().forEach(m => {
       if (!m || !m.nome) return;
-      const x = g.get(m.nome) || { nome: m.nome, perfil: m.perfil, desde: m.desde, n: 0 };
-      x.n++; if (m.desde && m.desde < x.desde) x.desde = m.desde; g.set(m.nome, x);
+      const x = g.get(m.nome) || { nome: m.nome, perfil: m.perfil, desde: m.desde, ap: m.ap, cidade: m.cidade, n: 0 };
+      x.n++; if (m.desde && m.desde < x.desde) { x.desde = m.desde; x.ap = m.ap; x.cidade = m.cidade; } g.set(m.nome, x);
     });
     return [...g.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   };
   const hora = iso => { try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
   const PERFIL = { total: 'Acesso total', leve: 'Modo leve', aprendiz: 'Aprendiz' };
+
+  // Aparelho/navegador (sem pedir nada: só olha o user-agent)
+  const aparelhoInfo = () => {
+    const ua = navigator.userAgent || '';
+    const so = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /CriOS/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : /Safari/.test(ua) ? 'Safari' : '';
+    return [so, nav].filter(Boolean).join(' · ');
+  };
+
+  // Cidade aproximada pelo IP (não pede permissão; é a localização "de internet", não o GPS do aparelho)
+  const CK = 'cfo_cidade';
+  const cidadeCache = () => { try { return JSON.parse(sessionStorage.getItem(CK) || 'null'); } catch { return null; } };
+  const buscaCidade = async () => {
+    const c0 = cidadeCache(); if (c0) return c0;
+    try {
+      const r = await fetch('https://ipapi.co/json/', { cache: 'no-store' });
+      const j = await r.json();
+      const cidade = j && !j.error ? [j.city, j.region_code || j.region].filter(Boolean).join('/') : '';
+      try { sessionStorage.setItem(CK, JSON.stringify(cidade)); } catch {}
+      return cidade;
+    } catch { return ''; }
+  };
 
   const aviso = txt => {
     const t = document.createElement('div'); t.className = 'onl-toast'; t.textContent = txt;
@@ -62,7 +87,8 @@
 
   const html = (lista, eu) => !ligado ? '<p class="onl-vazio">Sem conexão com o servidor. Tentando reconectar...</p>'
     : lista.length ? lista.map(p => `<div class="onl-p"><i class="onl-dot"></i><div><b>${esc(p.nome)}${eu && p.nome === eu.nome ? ' (você)' : ''}</b>
-        <small>${esc(PERFIL[p.perfil] || p.perfil || '')}${p.n > 1 ? ' · ' + p.n + ' aparelhos' : ''}${p.desde ? ' · desde ' + hora(p.desde) : ''}</small></div></div>`).join('')
+        <small>${esc(PERFIL[p.perfil] || p.perfil || '')}${p.n > 1 ? ' · ' + p.n + ' aparelhos' : ''}${p.desde ? ' · desde ' + hora(p.desde) : ''}</small>
+        <small>${esc([p.ap, p.cidade].filter(Boolean).join(' · ')) || '-'}</small></div></div>`).join('')
       : '<p class="onl-vazio">Ninguém online.</p>';
 
   pill.onclick = e => {
@@ -82,7 +108,8 @@
   function conectar() {
     const eu = CFO.usuario?.();
     if (!eu || ws) return;
-    euMeta = { nome: eu.nome, perfil: eu.perfil, desde: new Date().toISOString() };
+    euMeta = { nome: eu.nome, perfil: eu.perfil, desde: new Date().toISOString(), ap: aparelhoInfo(), cidade: '' };
+    buscaCidade().then(cidade => { euMeta.cidade = cidade; if (ligado) envia(TOPICO, 'presence', { type: 'presence', event: 'track', payload: euMeta }); });
     try { ws = new WebSocket(WS); } catch { agendar(); return; }
     const w = ws;
     w.onopen = () => {
@@ -125,5 +152,6 @@
   // celular que "acorda": reconecta ao voltar para a aba
   document.addEventListener('visibilitychange', () => { if (!document.hidden && CFO.usuario?.() && !ws) { tent = 0; conectar(); } });
 
+  setInterval(() => { if (CFO.usuario?.()?.ver) desenha(); }, 30000);   // mantém a lista/relógio atualizados mesmo sem ninguém entrar ou sair
   desenha(); conectar();
 })();
