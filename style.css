@@ -525,3 +525,10 @@ button.pg-a:hover{background:var(--panel2)}
 
 /* Perfil leve (computador antigo): sem animações, sombras nem desfoque */
 body.leve *,body.leve *::before,body.leve *::after{transition:none!important;animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important;text-shadow:none!important}
+
+/* Botão "Filtros" (telinha com todos os filtros da tela) */
+dialog.fdlg{width:min(94vw,440px)}
+.fdlg .fbody{display:grid;gap:.7rem;margin:.7rem 0;max-height:58vh;overflow:auto}
+.fgrp{display:grid;gap:.2rem}.fgrp small{opacity:.7;font-size:.72rem}
+.fgrp select,.fgrp input[type=date],.fgrp>button{width:100%;margin:0}.fgrp label{display:flex;align-items:center;gap:.4rem}
+.fbtn.on{outline:2px solid #34d399}

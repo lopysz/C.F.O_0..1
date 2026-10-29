@@ -152,7 +152,7 @@ CFO.mapa3d = (canvas, api) => {
           const k = r.id + '|' + p + '|' + a, y0 = (a - 1) * HA + .05, face = (u0, u1, yy0, yy1) => [P(u0, yy0, .1), P(u1, yy0, .1), P(u1, yy1, .1), P(u0, yy1, .1)];
           if (hit.has(k)) extras.push({ q: face(p - .96, p - .04, y0 - .03, a * HA - .05), fill: '#f59e0b', alpha: 1, stroke: '#fff' });
           else if (ocup.has(k)) {
-            const cf = cores && cores.get(k), sd = r.p * 31 + p * 7 + a, col = (cf ? cf.rgb : MODELO.caixa[sd % 3]).join(','), q = face(p - .9, p - .1, y0, y0 + .4 + rnd(sd) * .32);
+            const cf = cores && cores.get(k), sd = r.p * 31 + p * 7 + a, col = (cf ? cf.rgb : [40, 168, 80]).join(','), q = face(p - .9, p - .1, y0, y0 + .4 + rnd(sd) * .32);
             (fills.get(col) || fills.set(col, []).get(col)).push(q);
           }
           if (alvo && alvo.f === r.id && alvo.p === p && alvo.a === a) extras.push({ q: face(p - .96, p - .04, y0 - .03, a * HA - .05), fill: 'rgba(56,140,255,.55)', alpha: 1, stroke: '#9cc7ff' });
@@ -207,12 +207,12 @@ CFO.mapa3d = (canvas, api) => {
         arr.forEach(([a, b]) => { const p = proj(a), q = proj(b); if (p && q) { ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); } });
         ctx.globalAlpha = al; ctx.strokeStyle = cor; ctx.lineWidth = lw; ctx.stroke(); ctx.globalAlpha = 1;
       };
-      traca(seg.gh, '#8fa6c4', .35, 1);
+      traca(seg.gh, '#8b95a1', .35, 1);
       fills.forEach((qs, cor) => {
         ctx.beginPath(); qs.forEach(q => { const t = q.map(proj); if (t.every(Boolean)) { ctx.moveTo(t[0].x, t[0].y); for (let i = 1; i < 4; i++) ctx.lineTo(t[i].x, t[i].y); ctx.closePath(); } });
         ctx.fillStyle = 'rgb(' + cor + ')'; ctx.fill();
       });
-      traca(seg.la, '#e8731a', 1, 1.6); traca(seg.az, '#3f78c4', 1, 2.2);
+      traca(seg.la, '#aab3bd', 1, 1.5); traca(seg.az, '#8b95a1', 1, 2);       // estrutura simples em cinza; caixas em verde
       extras.forEach(e => { const t = e.q.map(proj); if (t.every(Boolean)) poly(t, e.fill, e.alpha, e.stroke); });
     }
     // nomes: cada rótulo só é desenhado se não encobrir outro (se não couber, tenta acima/abaixo; senão some até aproximar o zoom)

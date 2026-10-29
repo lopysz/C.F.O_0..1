@@ -130,6 +130,45 @@ CFO.periodo = (() => {
   };
 })();
 
+// Botão "Filtros": junta os filtros de uma barra (selects, "só com...", datas) numa telinha, deixando a barra limpa.
+// Os controles são os MESMOS (só mudam de lugar), então tudo continua funcionando; é possível combinar vários filtros ao mesmo tempo.
+CFO.filtros = (() => {
+  const aberto = new WeakMap(), SEL = 'select, label.chk, label.hm-d, [data-f]';
+  const inp = el => el.matches('input') ? el : el.querySelector('input');
+  const ativo = el => el.matches('select') ? el.selectedIndex > 0 : el.matches('[data-f]') ? el.dataset.on === '1' : (i => i && (i.type === 'checkbox' ? i.checked : i.value !== ''))(inp(el));
+  const chave = el => el.id || (el.querySelector('[id]') || {}).id;
+  return body => body.querySelectorAll('.bar').forEach(bar => {
+    if (bar.__f) return;
+    const ctr = [...bar.querySelectorAll(SEL)].filter(e => !e.closest('dialog'));
+    if (ctr.length < 2) return;
+    bar.__f = true;
+    const dlg = document.createElement('dialog'); dlg.className = 'mp-dlg fdlg';
+    dlg.innerHTML = '<h3>Filtros</h3><p class="log" style="margin:0">Combine quantos quiser: a lista muda na hora.</p><div class="fbody"></div><div class="row"><button type="button" class="ghost" data-lim>Limpar filtros</button><button type="button" data-ok>Pronto</button></div>';
+    const fb = dlg.querySelector('.fbody'), btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ghost fbtn';
+    ctr[0].before(btn);
+    const ids = ctr.map(chave);
+    ctr.forEach(el => { const g = document.createElement('div'); g.className = 'fgrp'; const cap = el.getAttribute('aria-label') || el.dataset.cap; if (cap && el.matches('select')) { const sm = document.createElement('small'); sm.textContent = cap; g.append(sm); } g.append(el); fb.append(g); });
+    bar.append(dlg);
+    const atual = () => ids.map(i => i && body.querySelector('#' + CSS.escape(i))).filter(Boolean).map(e => e.closest('label.chk, label.hm-d') || e);
+    const atualiza = () => { const n = atual().filter(ativo).length; btn.textContent = '🎚️ Filtros' + (n ? ' (' + n + ')' : ''); btn.classList.toggle('on', n > 0); };
+    const fecha = () => { aberto.set(body, false); dlg.close(); atualiza(); };
+    btn.onclick = () => { aberto.set(body, true); dlg.showModal(); };
+    dlg.querySelector('[data-ok]').onclick = fecha;
+    dlg.addEventListener('close', () => { if (dlg.isConnected) { aberto.set(body, false); atualiza(); } });
+    ['change', 'input'].forEach(t => dlg.addEventListener(t, atualiza)); dlg.addEventListener('click', () => setTimeout(atualiza, 0));
+    // Limpar: algumas telas se redesenham a cada mudança, então cada controle é procurado de novo na tela
+    dlg.querySelector('[data-lim]').onclick = () => {
+      ids.forEach(i => { const e = i && body.querySelector('#' + CSS.escape(i)); if (!e) return; const u = e.closest('label.chk, label.hm-d') || e; if (!ativo(u)) return;
+        if (e.matches('select')) { e.selectedIndex = 0; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }
+        else if (e.matches('[data-f]')) e.click();
+        else { if (e.type === 'checkbox') e.checked = false; else e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); } });
+      const b2 = body.querySelector('.fbtn'); if (b2 && !b2.isConnected) return; atualiza();
+    };
+    atualiza(); setTimeout(atualiza, 0); setTimeout(atualiza, 400);   // valores iniciais podem ser definidos logo depois pela tela
+    if (aberto.get(body)) dlg.showModal();                              // a tela se redesenhou com a telinha aberta: reabre
+  });
+})();
+
 // Filtro de Tipo da requisição (coluna Motivo): TODOS, ADMISSÃO, EVENTUAL, MENSAL... (usado em EPI, Requisição, EPIs por contrato e Gastos em EPIs)
 CFO.motivo = (() => {
   const LISTA = ['ADMISSÃO', 'EVENTUAL', 'MENSAL', 'RETIRADA MENSAL', 'TROCA (DANO)', 'TROCA (REGULAR)'];

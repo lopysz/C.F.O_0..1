@@ -25,6 +25,7 @@
         <label class="hm-d">De <input id="hde" type="date"></label><label class="hm-d">Até <input id="hate" type="date"></label>
         <button id="hexp" class="ghost">Exportar</button></div>
       <div id="hout"></div>`;
+    CFO.filtros(body);
     const $ = s => body.querySelector(s), out = $('#hout');
 
     const filtrar = () => CFO.store.get('epi:mov', []).filter(m => m && m.data)

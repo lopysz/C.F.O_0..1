@@ -64,6 +64,7 @@
       <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fq" aria-label="Filtrar por saídas"><option value="">Todos os contratos</option><option value="1">Só contratos com saídas</option></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select><select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
         <span class="exp"><button id="exp" class="ghost">Exportar</button></span></div>
       <div id="out"></div>`;
+    CFO.filtros(body);
     const $ = s => body.querySelector(s);
     const keep = fn => { const sc = body.closest('.screen'), y = sc ? sc.scrollTop : 0; fn(); if (sc) sc.scrollTop = y; };
 

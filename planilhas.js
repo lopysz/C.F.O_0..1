@@ -82,7 +82,7 @@ CFO.sheet = cfg => {
         <div class="bar">
           <input id="q" type="search" placeholder="Buscar..." value="${CFO.esc(q)}">
           ${cfg.calc ? CFO.periodo.html() + CFO.motivo.html() : ''}
-          ${cx.filtro ? `<button id="solo" class="ghost">${solo ? '✓ ' : ''}${cx.filtro.label}</button>` : ''}
+          ${cx.filtro ? `<button id="solo" class="ghost" data-f data-on="${solo ? 1 : 0}">${solo ? '✓ ' : ''}${cx.filtro.label}</button>` : ''}
           <button id="add">+ Adicionar</button>
           <button id="imp" class="ghost">Importar</button>
           <button id="exp" class="ghost">Exportar</button>
@@ -102,7 +102,7 @@ CFO.sheet = cfg => {
         CFO.motivo.fill(body, cx.todas, 'ft', per.t);
         body.querySelector('#ft').onchange = e => { per.t = e.target.value; draw(); };
       }
-      bind();
+      bind(); CFO.filtros(body);
     }
 
     function bind() {

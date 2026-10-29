@@ -66,6 +66,7 @@
         <select id="fb" aria-label="Base da previsão"><option value="3">Previsão: média de 3 meses</option><option value="6">Previsão: média de 6 meses</option><option value="12">Previsão: média de 12 meses</option></select>
         <span class="exp"><button id="exp" class="ghost" title="Exportar o que está na tela em Excel ou PDF">Exportar</button></span></div>
       <div id="out"></div>`;
+    CFO.filtros(body);
     const $ = s => body.querySelector(s);
     const todas = () => CFO.store.get('requisicoes', []);
     const curKey = () => { const d = new Date(); return d.getFullYear() * 100 + d.getMonth() + 1; };

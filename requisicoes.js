@@ -99,6 +99,7 @@
         <button id="imp" class="ghost">Importar</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
         <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden></div>
       <div id="lst"></div>`;
+    CFO.filtros(body);
     const $ = s => body.querySelector(s);
 
     // Lê tudo do armazenamento UMA vez (e quando importar/apagar); digitar na busca só filtra o que já está na memória

@@ -60,6 +60,7 @@
     body.innerHTML = `<div class="bar"><input id="q" type="search" placeholder="Buscar contrato...">
       ${CFO.periodo.html()}
       <label class="chk"><input id="so" type="checkbox"> Só com requisições</label></div><p class="log" id="count"></p><div id="lst"></div>`;
+    CFO.filtros(body);
     const $ = s => body.querySelector(s);
 
     function render() {
