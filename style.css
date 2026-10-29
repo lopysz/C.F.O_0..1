@@ -532,3 +532,22 @@ dialog.fdlg{width:min(94vw,440px)}
 .fgrp{display:grid;gap:.2rem}.fgrp small{opacity:.7;font-size:.72rem}
 .fgrp select,.fgrp input[type=date],.fgrp>button{width:100%;margin:0}.fgrp label{display:flex;align-items:center;gap:.4rem}
 .fbtn.on{outline:2px solid #34d399}
+
+/* ===== Quem está online ===== */
+.onl{display:inline-flex;align-items:center;gap:7px;padding:.4rem .7rem;font-size:14px;white-space:nowrap}
+.onl[hidden]{display:none}
+.onl-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.22);flex:none}
+.onl.off .onl-dot{background:var(--muted);box-shadow:none}
+.onl-dlg{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);color:var(--text);padding:1rem;width:min(92vw,360px);box-shadow:var(--shadow)}
+.onl-dlg::backdrop{background:rgba(0,0,0,.45)}
+.onl-dlg h3{margin-bottom:.6rem}
+.onl-dlg .row{display:flex;justify-content:flex-end;margin-top:.8rem}
+.onl-p{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.onl-p:last-child{border-bottom:0}
+.onl-p small{display:block;color:var(--muted);font-size:12px}
+.onl-vazio{color:var(--muted);padding:.5rem 0}
+.onl-toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 16px);transform:translateX(-50%);z-index:9999;background:var(--panel);color:var(--text);border:1px solid var(--accent);border-radius:999px;padding:.5rem 1rem;box-shadow:var(--shadow);font-size:14px;animation:onlIn .25s ease both}
+.onl-toast.sai{opacity:0;transition:opacity .4s}
+@keyframes onlIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+body.locked .onl{display:none}
+@media (prefers-reduced-motion:reduce){.onl-toast{animation:none}}

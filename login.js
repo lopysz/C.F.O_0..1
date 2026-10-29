@@ -25,15 +25,17 @@
   };
   CFO.sha256 = sha256;
 
+  // ver: true = enxerga quem está online (bolinha verde e avisos). Os outros perfis aparecem na lista, mas não veem.
   const USUARIOS = {
-    rafael:   { nome: 'Rafael',   perfil: 'total', h: '17b0efd9ab3c75a398574ee900efc9a26b4207fa6222007502cacce62e238078' },
+    rafael:   { nome: 'Rafael',   perfil: 'total', ver: true, h: '17b0efd9ab3c75a398574ee900efc9a26b4207fa6222007502cacce62e238078' },
     aprendiz: { nome: 'Aprendiz', perfil: 'aprendiz', h: '8018fc30c1a0af469ac65a3551d2f65cf7155fc855982718d3c441acc63a2b63' },
     robson:   { nome: 'Robson',   perfil: 'total', h: 'cef4d6fa0dd2858f97018eb8f3372b368bd6ebd65500d2cd2687c1cdb1cb5e0b' },
+    wellington: { nome: 'Wellington', perfil: 'total', h: '28f3db7567fab1c00379dff3e8ec466f6211f9f9f93d9ec2b8d9f9459b5d8ad7' },
     // Perfil "leve" (computador antigo): mesmas permissões do total, mas o mapa 3D é desenhado só com linhas e a tela perde sombras/animações.
     // Entra como  demax,  rafael demax  ou  rafaeldemax  (mesma senha)
-    'demax': { nome: 'Rafael Demax', perfil: 'leve', h: '38afeb57271c48f0dfcd5ef4bd4a0f2f3fb5c4fa504cf09d642497ec31137076' },
-    'rafael demax': { nome: 'Rafael Demax', perfil: 'leve', h: 'bd5d314f3433d989b86e358801769c29427647836fa97c79e203a757131822b0' },
-    'rafaeldemax': { nome: 'Rafael Demax', perfil: 'leve', h: '3d26bd30872e56e352e359eb15f13bbd68a4f84886f7704e38fe54a175a25ef7' }
+    'demax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: '38afeb57271c48f0dfcd5ef4bd4a0f2f3fb5c4fa504cf09d642497ec31137076' },
+    'rafael demax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: 'bd5d314f3433d989b86e358801769c29427647836fa97c79e203a757131822b0' },
+    'rafaeldemax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: '3d26bd30872e56e352e359eb15f13bbd68a4f84886f7704e38fe54a175a25ef7' }
   };
   const SK = 'cfo_login';
   const atual = () => { try { const u = localStorage.getItem(SK); return USUARIOS[u] ? u : null; } catch { return null; } };
@@ -48,6 +50,7 @@
     leve: { leve: true },
     aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal'], semApagar: ['epi', 'contratos', 'requisicoes'] }
   };
+  CFO.usuario = () => { const u = atual(); return u ? { id: u, nome: USUARIOS[u].nome, perfil: USUARIOS[u].perfil, ver: !!USUARIOS[u].ver } : null; };
   CFO.leve = () => { const u = atual(), p = u && PERFIS[USUARIOS[u].perfil]; return !!(p && p.leve); };
   // CFO.pode('abrir', 'controle_mensal')  |  CFO.pode('apagar', 'contratos')
   CFO.pode = (acao, area) => {
@@ -73,12 +76,12 @@
 
   const entrar = u => {
     localStorage.setItem(SK, u); ov.hidden = true; document.body.classList.remove('locked'); document.body.classList.toggle('leve', CFO.leve());
-    sair.textContent = 'Sair · ' + USUARIOS[u].nome; sair.hidden = false; CFO.onUser?.();
+    sair.textContent = 'Sair · ' + USUARIOS[u].nome; sair.hidden = false; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
   };
   const bloquear = () => {
     localStorage.removeItem(SK); document.body.classList.remove('leve'); while (CFO.screens.length) CFO.close();
     ov.hidden = false; document.body.classList.add('locked'); sair.hidden = true;
-    ov.querySelector('#lg-p').value = ''; ov.querySelector('#lg-e').textContent = ''; CFO.onUser?.();
+    ov.querySelector('#lg-p').value = ''; ov.querySelector('#lg-e').textContent = ''; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
     setTimeout(() => ov.querySelector('#lg-u').focus(), 50);
   };
   sair.onclick = bloquear;
