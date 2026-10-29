@@ -17,7 +17,8 @@ const IC = {
   chev: '<path d="M9 6l6 6-6 6"/>', doc: '<path d="M7 4h7l4 4v12H7z"/><path d="M14 4v4h4"/>',
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
   back: '<path d="M15 6l-6 6 6 6"/>', more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
-  moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>'
+  moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'
 };
 const svg = (n, cls = '') => `<svg viewBox="0 0 24 24"${cls ? ` class="${cls}"` : ''}>${IC[n]}</svg>`;
 const $ = s => document.querySelector(s);
@@ -37,9 +38,9 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 // Menus (a mesma lista alimenta a lateral e a barra inferior)
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? d.name : d.short}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
-rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261026j</div>`;
+rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030d</div>`;
 tabbar.innerHTML = navHTML(false);
-back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#theme').innerHTML = svg('moon');
+back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#cfg').innerHTML = svg('gear');
 
 // Início (funções sem permissão para o perfil aparecem apagadas, com cadeado)
 function renderInicio() {
@@ -51,7 +52,10 @@ function renderInicio() {
   // Painel gerencial (painel.js): os botões das telinhas abrem a função correspondente
   CFO.painel?.montar($('#painel'), m => { const d = DRAWERS.find(x => x.subs.some(s => s.m === m)); if (d) ir(d, d.subs.find(s => s.m === m)); });
 }
-CFO.onUser = () => { renderInicio(); fechar(); };
+CFO.onUser = () => {
+  renderInicio(); fechar();
+  [['imp', 'topo'], ['env', 'topo'], ['wlbtn', 'topo'], ['regbtn', 'registros']].forEach(([id, a]) => { const b = document.getElementById(id); if (b) b.hidden = !CFO.pode('abrir', a); });
+};
 renderInicio();
 
 // Barra superior e destaque do menu conforme as telas abertas
@@ -99,11 +103,12 @@ new ResizeObserver(medidas).observe(barra); new ResizeObserver(medidas).observe(
 // Tema claro/escuro (a escolha fica salva no aparelho)
 const raiz = document.documentElement;
 try { const t = localStorage.getItem('cfo_tema'); if (t) raiz.dataset.theme = t; } catch {}
-$('#theme').onclick = () => {
-  const escuro = raiz.dataset.theme ? raiz.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches;
-  raiz.dataset.theme = escuro ? 'light' : 'dark';
-  try { localStorage.setItem('cfo_tema', raiz.dataset.theme); } catch {}
+CFO.tema = {
+  escuro: () => raiz.dataset.theme ? raiz.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches,
+  alternar() { raiz.dataset.theme = this.escuro() ? 'light' : 'dark'; try { localStorage.setItem('cfo_tema', raiz.dataset.theme); } catch {} }
 };
+// Engrenagem ⚙ (no lugar da lua): abre as Configurações (tema claro/escuro e, para o perfil principal, os perfis)
+$('#cfg').onclick = () => ir({ id: '', name: 'Opções' }, { name: 'Configurações', m: 'config' });
 atualizar();
 
 // Botão "Importar planilhas" (topo): escolhe de onde vêm as planilhas e distribui cada uma para a função certa
@@ -136,4 +141,5 @@ document.getElementById('imp').onclick = () => {
 };
 
 // Botão "Sincronizar WL" (menu dos três pontinhos, junto de Importar planilhas e Nuvem)
+document.getElementById('regbtn').onclick = () => ir({ id: '', name: 'Opções' }, { name: 'Registros', m: 'registros' });
 document.getElementById('wlbtn').onclick = () => ir({ id: '', name: 'Opções' }, { name: 'Sincronizar WL', m: 'wl' });

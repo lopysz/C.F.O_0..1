@@ -81,6 +81,10 @@
     CFO.print(html);
   };
 
+  // Ícones em traço (sem cor própria): herdam a cor do texto, visual discreto
+  const SV = d => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICO_OK = SV('<path d="M5 12.5l4.5 4.5L19 7.5"/>'), ICO_X = SV('<path d="M6 6l12 12M18 6L6 18"/>');
+
   const api = body => {
     let q = '', fotos = [], base = [], limite = 100, timer = 0;
     const meta = new Map(), fotosPor = new Map();      // cache: texto de busca/totais de cada requisição e retiradas por nº (calculados 1 vez, não a cada letra digitada)
@@ -88,15 +92,17 @@
     const fmtDH = iso => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
     const negs = () => CFO.store.get('req_negadas', {});          // { 'RQ-3370': 'data/hora em que foi marcada como negada' }  (guardado à parte: a sincronização do WL não apaga)
     // Retirada vem das fotos de separação ligadas ao nº da requisição (mesma regra do Painel)
+    const rets = () => CFO.store.get('req_retiradas', {});       // { 'RQ-3370': 'data/hora em que foi marcada como retirada' }  (marcação manual, botão ✓)
     const retirada = r => fotosPor.get(CFO.norm(r.id)) || null;
+    const foiRetirada = r => { const x = retirada(r); return !!rets()[r.id] || !!(x && x.ok === x.total); };
     const retHtml = x => !x ? '' : x.ok === x.total ? `<span class="rqret">✔ RETIRADA${x.ts ? `<small>${fmtDH(x.ts)}</small>` : ''}</span>`
       : x.ok ? `<span class="rqret par">Retirada parcial<small>${x.ok} de ${x.total} fotos</small></span>` : '<span class="rqret esp">Aguardando retirada</span>';
     const all = () => CFO.store.get('requisicoes', []).sort((a, b) => mesKey(b.mes).localeCompare(mesKey(a.mes)) || numCmp(b.id, a.id));
     body.innerHTML = `
       <div class="cards" id="cards"></div>
       <div class="bar"><input id="q" type="search" placeholder="Buscar nº, contrato, solicitante ou item...">
-        ${CFO.periodo.html()}${CFO.motivo.html()}<select id="fn" aria-label="Negadas"><option value="">Todas</option><option value="neg">Negadas</option><option value="nao">Sem as negadas</option></select>
-        <button id="imp" class="ghost">Importar</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
+        ${CFO.periodo.html()}${CFO.motivo.html()}<select id="fn" aria-label="Negadas"><option value="">Todas</option><option value="neg">Negadas</option><option value="ret">Retiradas</option><option value="pend">Não retiradas</option><option value="nao">Sem as negadas</option></select>
+        ${CFO.pode('editar', 'requisicoes') ? '<button id="imp" class="ghost">Importar</button>' : ''}${CFO.pode('apagar', 'requisicoes') ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
         <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden></div>
       <div id="lst"></div>`;
     CFO.filtros(body);
@@ -116,23 +122,29 @@
     const filtros = () => { limite = POR_PAGINA; render(); };
 
     function render() {
-      const neg = negs(), fn = $('#fn').value, t = CFO.norm(q);
-      const rs = base.filter(CFO.periodo.test(body)).filter(CFO.motivo.test(body)).filter(r => !fn || (fn === 'neg') === !!neg[r.id]);
+      const neg = negs(), rt = rets(), fn = $('#fn').value, t = CFO.norm(q), ed = CFO.pode('editar', 'requisicoes');
+      const rs = base.filter(CFO.periodo.test(body)).filter(CFO.motivo.test(body)).filter(r => !fn || (fn === 'neg' ? !!neg[r.id] : fn === 'nao' ? !neg[r.id] : fn === 'ret' ? foiRetirada(r) && !neg[r.id] : !foiRetirada(r) && !neg[r.id]));
       const v = t ? rs.filter(r => meta.get(r).t.includes(t)) : rs;
       $('#cards').innerHTML = [['Requisições', rs.length], ['Itens aprovados', rs.reduce((a, r) => a + meta.get(r).qt, 0)],
         ['Valor aprovado', R$(rs.reduce((a, r) => a + meta.get(r).tot, 0))], ['Contratos atendidos', new Set(rs.map(r => r.contrato)).size]]
         .map(d => `<div class="card"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('');
       $('#lst').innerHTML = v.slice(0, limite).map(r => { const n = neg[r.id]; return `<div class="foto rq${n ? ' neg' : ''}" data-id="${esc(r.id)}"><div class="rqtxt"><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>${esc(r.sol)}<br>
         <small>${esc(r.mes)} · ${r.itens.length} linha(s) · ${R$(total(r))}</small></div>
-        <div class="rqdir">${n ? `<span class="rqneg">🚫 NEGADA<small>${fmtDH(n)}</small></span>` : ''}${retHtml(retirada(r))}<label class="fchk rqn" title="Marcar como negada (recusada depois de aprovada)"><input type="checkbox" class="ng" ${n ? 'checked' : ''}></label></div></div>`; }).join('')
+        <div class="rqdir">${n ? `<span class="rqneg">🚫 NEGADA<small>${fmtDH(n)}</small></span>` : ''}${rt[r.id] ? `<span class="rqret">✔ RETIRADA<small>${fmtDH(rt[r.id])} · manual</small></span>` : retHtml(retirada(r))}${ed ? `<span class="rqbtns" role="group" aria-label="Situação da requisição"><button type="button" class="rqb${rt[r.id] ? ' on' : ''}" data-a="ret" title="${rt[r.id] ? 'Desmarcar retirada' : 'Marcar como retirada'}" aria-pressed="${!!rt[r.id]}" aria-label="Marcar como retirada">${ICO_OK}</button><button type="button" class="rqb${n ? ' on' : ''}" data-a="neg" title="${n ? 'Desmarcar negada' : 'Marcar como negada (recusada depois de aprovada)'}" aria-pressed="${!!n}" aria-label="Marcar como negada">${ICO_X}</button></span>` : ''}</div></div>`; }).join('')
         || '<p class="empty">Nenhuma requisição. Importe a planilha de aprovações ou use "Importar pasta".</p>';
       if (v.length > limite) { $('#lst').insertAdjacentHTML('beforeend', `<div class="bar" style="justify-content:center"><button id="mais" class="ghost">Mostrar mais (${v.length - limite} restantes)</button></div>`); $('#mais').onclick = () => { limite += POR_PAGINA; render(); }; }
-      body.querySelectorAll('.foto .rqn').forEach(l => l.onclick = e => e.stopPropagation());
-      body.querySelectorAll('.foto .ng').forEach(c => c.onchange = () => {
-        const id = c.closest('.foto').dataset.id, m = { ...negs() };
-        if (c.checked) { if (!confirm('Marcar ' + id + ' como NEGADA (recusada mesmo depois de aprovada)?')) { c.checked = false; return; } m[id] = new Date().toISOString(); }
-        else delete m[id];
-        CFO.store.set('req_negadas', m); render();
+      body.querySelectorAll('.foto .rqbtns').forEach(l => l.onclick = e => e.stopPropagation());
+      body.querySelectorAll('.foto .rqb').forEach(btn => btn.onclick = e => {
+        e.stopPropagation();
+        const id = btn.closest('.foto').dataset.id, ng = { ...negs() }, rr = { ...rets() }, agora = new Date().toISOString();
+        if (btn.dataset.a === 'neg') {
+          if (ng[id]) delete ng[id];
+          else { if (!confirm('Marcar ' + id + ' como NEGADA (recusada mesmo depois de aprovada)?' + (rr[id] ? '\n\nA marcação de retirada será removida.' : ''))) return; ng[id] = agora; delete rr[id]; }
+        } else {
+          if (rr[id]) delete rr[id];
+          else { if (ng[id] && !confirm(id + ' está marcada como NEGADA. Marcar como RETIRADA e remover a marcação de negada?')) return; rr[id] = agora; delete ng[id]; }
+        }
+        CFO.store.set('req_negadas', ng); CFO.store.set('req_retiradas', rr); render();
       });
       body.querySelectorAll('.foto').forEach(el => el.onclick = () => detail(base.find(r => r.id === el.dataset.id)));
     }
@@ -140,7 +152,7 @@
     function detail(r) {
       CFO.open('Requisição ' + r.id, b => {
         b.innerHTML = `<div class="card" style="margin-bottom:1rem"><b style="font-size:1.1rem">${esc(r.id)}</b>
-          <p class="log">Contrato: ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>Data: ${esc(r.mes)}<br>Solicitante: ${esc(r.sol)}<br>Motivo: ${esc(r.motivo)}${negs()[r.id] ? `<br><b style="color:#e74c3c">🚫 NEGADA em ${fmtDH(negs()[r.id])}</b>` : ''}${(x => x ? `<br>Retirada: ${x.ok === x.total ? '✔ ' + (fmtDH(x.ts) || 'retirada') : x.ok ? 'parcial (' + x.ok + ' de ' + x.total + ' fotos)' : 'aguardando'}` : '')(retirada(r))}</p></div>
+          <p class="log">Contrato: ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>Data: ${esc(r.mes)}<br>Solicitante: ${esc(r.sol)}<br>Motivo: ${esc(r.motivo)}${negs()[r.id] ? `<br><b style="color:#e74c3c">🚫 NEGADA em ${fmtDH(negs()[r.id])}</b>` : ''}${(x => rets()[r.id] ? `<br>Retirada: ✔ ${fmtDH(rets()[r.id])} (marcada manualmente)` : x ? `<br>Retirada: ${x.ok === x.total ? '✔ ' + (fmtDH(x.ts) || 'retirada') : x.ok ? 'parcial (' + x.ok + ' de ' + x.total + ' fotos)' : 'aguardando'}` : '')(retirada(r))}</p></div>
           <div class="tw"><table><thead><tr><th>Item</th><th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
           ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(i.preco)}</td><td>${R$(i.qa * i.preco)}</td></tr>`).join('')}
           <tr><th>Totais</th><th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
@@ -155,7 +167,7 @@
 
     $('#q').oninput = e => { q = e.target.value; clearTimeout(timer); timer = setTimeout(filtros, 200); };   // espera parar de digitar
     $('#fm').onchange = $('#fa').onchange = $('#ft').onchange = $('#fn').onchange = filtros;
-    $('#imp').onclick = () => $('#file').click();
+    if ($('#imp')) $('#imp').onclick = () => $('#file').click();
     $('#file').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
       const s = (await CFO.readBook(f)).find(x => score(x.data) >= 4);

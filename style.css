@@ -551,3 +551,33 @@ dialog.fdlg{width:min(94vw,440px)}
 @keyframes onlIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 body.locked .onl{display:none}
 @media (prefers-reduced-motion:reduce){.onl-toast{animation:none}}
+
+/* ===== Requisição: botões Retirada (✓) e Negada (✕), lado a lado, em traço sem cor ===== */
+.foto.rq .rqbtns{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none;background:var(--panel)}
+.foto.rq .rqb{display:grid;place-items:center;width:42px;height:38px;padding:0;border:0;border-radius:0;background:transparent;color:var(--muted);transition:background .15s,color .15s}
+.foto.rq .rqb+.rqb{border-left:1px solid var(--line)}
+.foto.rq .rqb:hover{background:var(--panel2);color:var(--text)}
+.foto.rq .rqb.on{background:var(--text);color:var(--bg)}
+.foto.rq .rqb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* ===== Configurações (engrenagem) ===== */
+.cf{max-width:760px;margin:0 auto;padding:1rem}
+.cf-sec{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1rem 1.1rem;margin-bottom:1rem}
+.cf-sec h3{font-size:.95rem;margin:0 0 .7rem}
+.cf-row{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.6rem 0;border-top:1px solid var(--line)}
+.cf-sec h3+.cf-row,.cf-sec .log+.cf-lista .cf-row:first-child{border-top:0}
+.cf-row>span{display:flex;align-items:center;gap:.6rem;min-width:0;flex-wrap:wrap}
+.cf-row small{color:var(--muted);flex-basis:100%;margin-left:1.7rem;font-size:.78rem}
+.cf-row select{width:auto;min-width:170px}
+.cf-i{flex:none}
+.cf-perfil{cursor:pointer;border-radius:8px;padding:.6rem .4rem}.cf-perfil:hover{background:var(--bg)}
+.cf-ac{display:flex;align-items:center;gap:.4rem;color:var(--muted)}
+.cf-ac .cf-del{padding:.3rem .45rem;color:var(--muted);display:grid;place-items:center}
+.cf-g{margin:.2rem 0 .8rem}.cf-g h4{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:.4rem 0}
+.cf-ck{display:flex;align-items:center;gap:.6rem;padding:.4rem .2rem;cursor:pointer}.cf-ck input{width:auto;accent-color:var(--accent)}
+
+/* ===== Registros ===== */
+.rg-dia{margin-bottom:1.2rem}.rg-dia h4{text-transform:capitalize;color:var(--muted);font-size:.85rem;margin:0 0 .4rem}
+.rg-it{display:flex;gap:.8rem;padding:.55rem .7rem;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:.4rem}
+.rg-h{color:var(--muted);font-variant-numeric:tabular-nums;min-width:2.8rem}
+.rg-a{color:var(--accent);font-size:.8rem}.rg-d{color:var(--muted);font-size:.85rem;overflow-wrap:anywhere}

@@ -27,7 +27,7 @@
 
   // ver: true = enxerga quem está online (bolinha verde e avisos). Os outros perfis aparecem na lista, mas não veem.
   const USUARIOS = {
-    rafael:   { nome: 'Rafael',   perfil: 'total', ver: true, h: '17b0efd9ab3c75a398574ee900efc9a26b4207fa6222007502cacce62e238078' },
+    rafael:   { nome: 'Rafael',   perfil: 'total', ver: true, admin: true, h: '17b0efd9ab3c75a398574ee900efc9a26b4207fa6222007502cacce62e238078' },
     aprendiz: { nome: 'Aprendiz', perfil: 'aprendiz', h: '8018fc30c1a0af469ac65a3551d2f65cf7155fc855982718d3c441acc63a2b63' },
     robson:   { nome: 'Robson',   perfil: 'total', h: 'cef4d6fa0dd2858f97018eb8f3372b368bd6ebd65500d2cd2687c1cdb1cb5e0b' },
     wellington: { nome: 'Wellington', perfil: 'total', h: '28f3db7567fab1c00379dff3e8ec466f6211f9f9f93d9ec2b8d9f9459b5d8ad7' },
@@ -37,8 +37,18 @@
     'rafael demax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: 'bd5d314f3433d989b86e358801769c29427647836fa97c79e203a757131822b0' },
     'rafaeldemax': { nome: 'Rafael Demax', perfil: 'leve', ver: true, h: '3d26bd30872e56e352e359eb15f13bbd68a4f84886f7704e38fe54a175a25ef7' }
   };
+  /* ----- Perfis criados/excluídos/limitados na engrenagem ⚙ (só o perfil principal, admin: true, mexe) -----
+     Guardados em 'perfis' = { novos: { login: { nome, perfil: 'custom', h } }, excluidos: [nome normalizado], perms: { nome normalizado: { bloquear, semApagar, semEditar } } }
+     ATENÇÃO: continua sendo controle na tela (no navegador), não segurança de servidor. */
+  const dadosPerfis = () => { const d = CFO.store.get('perfis', null) || {}; return { novos: d.novos || {}, excluidos: d.excluidos || [], perms: d.perms || {} }; };
+  const US = () => {
+    const d = dadosPerfis(), out = {};
+    Object.entries(USUARIOS).forEach(([id, x]) => { if (x.admin || !d.excluidos.includes(CFO.norm(x.nome))) out[id] = x; });
+    Object.entries(d.novos).forEach(([id, x]) => { if (!out[id]) out[id] = x; });
+    return out;
+  };
   const SK = 'cfo_login';
-  const atual = () => { try { const u = localStorage.getItem(SK); return USUARIOS[u] ? u : null; } catch { return null; } };
+  const atual = () => { try { const u = localStorage.getItem(SK); return US()[u] ? u : null; } catch { return null; } };
 
 
   /* ----- Permissões por perfil (valem só na tela: não são segurança de servidor) -----
@@ -48,16 +58,39 @@
   const PERFIS = {
     total: {},
     leve: { leve: true },
-    aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal'], semApagar: ['epi', 'contratos', 'requisicoes'] }
+    aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal', 'registros'], semApagar: ['epi', 'contratos', 'requisicoes'] },
+    custom: { bloquear: ['registros'] }          // perfil novo: começa com tudo liberado, menos Registros; ajuste em ⚙ > Perfis
   };
-  CFO.usuario = () => { const u = atual(); return u ? { id: u, nome: USUARIOS[u].nome, perfil: USUARIOS[u].perfil, ver: !!USUARIOS[u].ver } : null; };
-  CFO.leve = () => { const u = atual(), p = u && PERFIS[USUARIOS[u].perfil]; return !!(p && p.leve); };
+  // Permissões de um perfil: as da engrenagem (se existirem) valem no lugar das padrão
+  CFO.permsDe = (nome, perfil) => { const o = dadosPerfis().perms[CFO.norm(nome)], b = PERFIS[perfil] || {}; return o ? { ...b, ...o } : b; };
+  CFO.permsPadrao = perfil => PERFIS[perfil] || {};
+  CFO.usuario = () => { const u = atual(); return u ? { id: u, nome: US()[u].nome, perfil: US()[u].perfil, ver: !!US()[u].ver, admin: !!US()[u].admin } : null; };
+  CFO.admin = () => !!(CFO.usuario() || {}).admin;
+  CFO.leve = () => { const u = atual(), p = u && PERFIS[US()[u].perfil]; return !!(p && p.leve); };
+  // Lista de perfis para a tela de Configurações (logins diferentes do mesmo nome contam como um perfil só)
+  CFO.perfis = () => { const g = new Map(); Object.entries(US()).forEach(([id, x]) => { const k = CFO.norm(x.nome), e = g.get(k) || { chave: k, nome: x.nome, perfil: x.perfil, logins: [], admin: false, custom: x.perfil === 'custom' }; e.logins.push(id); e.admin = e.admin || !!x.admin; g.set(k, e); }); return [...g.values()]; };
+  CFO.perfilNovo = async (nome, login, senha) => {
+    login = String(login).trim().toLowerCase(); const d = dadosPerfis();
+    if (!nome.trim() || !login || !senha) return 'Preencha nome, login e senha.';
+    if (US()[login]) return 'Já existe um perfil com esse login.';
+    if (CFO.perfis().some(p => p.chave === CFO.norm(nome))) return 'Já existe um perfil com esse nome.';
+    d.novos[login] = { nome: nome.trim(), perfil: 'custom', h: sha256(login + ':' + senha + ':cfo') };
+    CFO.store.set('perfis', d); return '';
+  };
+  CFO.perfilSenha = (chave, senha) => { const d = dadosPerfis(); Object.entries(d.novos).forEach(([id, x]) => { if (CFO.norm(x.nome) === chave) x.h = sha256(id + ':' + senha + ':cfo'); }); CFO.store.set('perfis', d); };
+  CFO.perfilExcluir = chave => {
+    const d = dadosPerfis(); Object.entries(d.novos).forEach(([id, x]) => { if (CFO.norm(x.nome) === chave) delete d.novos[id]; });
+    if (!d.excluidos.includes(chave)) d.excluidos.push(chave); delete d.perms[chave]; CFO.store.set('perfis', d);
+  };
+  CFO.perfilPerms = (chave, perms) => { const d = dadosPerfis(); d.perms[chave] = perms; CFO.store.set('perfis', d); };
   // CFO.pode('abrir', 'controle_mensal')  |  CFO.pode('apagar', 'contratos')
   CFO.pode = (acao, area) => {
-    const u = atual(), p = u && PERFIS[USUARIOS[u].perfil];
+    const u = atual(), us = u && US()[u], p = us && CFO.permsDe(us.nome, us.perfil);
     if (!p) return false;
+    if (us.admin) return true;                                   // perfil principal pode tudo
     if (acao === 'abrir') return !(p.bloquear || []).includes(area);
-    if (acao === 'apagar') return !(p.semApagar || []).includes(area);
+    if (acao === 'editar') return !(p.semEditar || []).includes(area);
+    if (acao === 'apagar') return !(p.semApagar || []).includes(area) && !(p.semEditar || []).includes(area);
     return true;
   };
 
@@ -76,7 +109,7 @@
 
   const entrar = u => {
     localStorage.setItem(SK, u); ov.hidden = true; document.body.classList.remove('locked'); document.body.classList.toggle('leve', CFO.leve());
-    sair.textContent = 'Sair · ' + USUARIOS[u].nome; sair.hidden = false; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
+    sair.textContent = 'Sair · ' + US()[u].nome; sair.hidden = false; CFO.onUser?.(); window.dispatchEvent(new Event('cfo-user'));
   };
   const bloquear = () => {
     localStorage.removeItem(SK); document.body.classList.remove('leve'); while (CFO.screens.length) CFO.close();
@@ -90,7 +123,7 @@
   ov.querySelector('form').onsubmit = async ev => {
     ev.preventDefault();
     const u = ov.querySelector('#lg-u').value.trim().toLowerCase(), p = ov.querySelector('#lg-p').value, err = ov.querySelector('#lg-e'), btn = ev.target.querySelector('button');
-    const ok = USUARIOS[u] && sha256(u + ':' + p + ':cfo') === USUARIOS[u].h;
+    const ok = US()[u] && sha256(u + ':' + p + ':cfo') === US()[u].h;
     if (ok) { falhas = 0; entrar(u); return; }
     falhas++; err.textContent = 'Login ou senha incorretos.'; btn.disabled = true;
     await new Promise(r => setTimeout(r, Math.min(500 * falhas, 5000)));   // atraso crescente contra tentativas em sequência

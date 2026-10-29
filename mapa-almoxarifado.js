@@ -648,6 +648,7 @@ CFO.modules.mapa = body => {
     desenhar();
   };
   $('#mg').onclick = () => { edit = !edit; desenhar(); };
+  if (!CFO.pode('editar', 'mapa')) $('#mg').hidden = true;
   $('#mf').onclick = telaFiltro;
   $('#m3').onclick = () => {
     v3 = !v3; sug = !v3;                                    // 3D sempre começa com as sugestões desligadas

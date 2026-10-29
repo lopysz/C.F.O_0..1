@@ -76,22 +76,21 @@ CFO.sheet = cfg => {
     const form = (r = {}) => cfg.columns.map(c => field(c, r[c.k])).join('');
 
     function draw() {
-      const cx = calcular(), list = rows.filter(r => JSON.stringify(Object.values(r)).toLowerCase().includes(q)).filter(r => !(solo && cx.filtro) || cx.filtro.test(r));
+      const ed = CFO.pode('editar', K), cx = calcular(), list = rows.filter(r => JSON.stringify(Object.values(r)).toLowerCase().includes(q)).filter(r => !(solo && cx.filtro) || cx.filtro.test(r));
       body.innerHTML = `
         <div class="cards">${[...cfg.dash(rows, movs), ...cx.cards].map(d => `<div class="card ${d[2] || ''}"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('')}</div>
         <div class="bar">
           <input id="q" type="search" placeholder="Buscar..." value="${CFO.esc(q)}">
           ${cfg.calc ? CFO.periodo.html() + CFO.motivo.html() : ''}
           ${cx.filtro ? `<button id="solo" class="ghost" data-f data-on="${solo ? 1 : 0}">${solo ? '✓ ' : ''}${cx.filtro.label}</button>` : ''}
-          <button id="add">+ Adicionar</button>
-          <button id="imp" class="ghost">Importar</button>
+          ${ed ? '<button id="add">+ Adicionar</button><button id="imp" class="ghost">Importar</button>' : ''}
           <button id="exp" class="ghost">Exportar</button>
           ${CFO.pode('apagar', K) ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
           <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
         </div>
         <div class="tw"><table><thead><tr>${cfg.columns.map(c => `<th>${c.label}</th>`).join('')}${cx.cols.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>
           ${list.map(r => `<tr>${cfg.columns.map(c => `<td>${CFO.esc(r[c.k])}</td>`).join('')}${cx.cols.map(c => `<td>${CFO.esc(c.get(r))}</td>`).join('')}
-            <td class="act">${cfg.moves ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}<button data-e="${r.id}" title="Editar">✎</button>${CFO.pode('apagar', K) ? `<button data-d="${r.id}" title="Excluir">🗑</button>` : ''}</td></tr>`).join('')
+            <td class="act">${ed && cfg.moves ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}${ed ? `<button data-e="${r.id}" title="Editar">✎</button>` : ''}${CFO.pode('apagar', K) ? `<button data-d="${r.id}" title="Excluir">🗑</button>` : ''}</td></tr>`).join('')
             || '<tr><td colspan="99" class="empty">Nenhum registro. Adicione um item ou importe uma planilha.</td></tr>'}
         </tbody></table></div>
         ${cfg.moves && movs.length ? `<ul class="log"><b>Últimas movimentações</b>${movs.slice(-5).reverse().map(m => `<li>${m.tipo}: ${CFO.esc(m.item)} (${m.qtd}) - ${CFO.esc(m.resp)} - ${m.data.slice(0, 10)}</li>`).join('')}</ul>` : ''}`;
@@ -109,7 +108,7 @@ CFO.sheet = cfg => {
       const $ = s => body.querySelector(s), find = id => rows.find(r => r.id === id);
       $('#q').oninput = e => { q = e.target.value.toLowerCase(); draw(); const n = $('#q'); n.focus(); n.setSelectionRange(99, 99); };
       if ($('#solo')) $('#solo').onclick = () => { solo = !solo; draw(); };
-      $('#add').onclick = () => CFO.dialog('Novo registro', form(), d => { rows.push({ id: Date.now() + Math.random().toString(36).slice(2, 5), ...clean(d) }); save(); });
+      if ($('#add')) $('#add').onclick = () => CFO.dialog('Novo registro', form(), d => { rows.push({ id: Date.now() + Math.random().toString(36).slice(2, 5), ...clean(d) }); save(); });
       body.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { const r = find(b.dataset.e); CFO.dialog('Editar registro', form(r), d => { Object.assign(r, clean(d)); save(); }); });
       body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { if (confirm('Excluir este registro?')) { rows = rows.filter(r => r.id !== b.dataset.d); save(); } });
       body.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
@@ -132,8 +131,8 @@ CFO.sheet = cfg => {
         } });
       };
       ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(); } };
-      $('#imp').onclick = () => $('#file').click();
-      $('#file').onchange = async e => {
+      if ($('#imp')) $('#imp').onclick = () => $('#file').click();
+      if ($('#file')) $('#file').onchange = async e => {
         const f = e.target.files[0]; e.target.value = ''; if (!f) return;
         const sheets = await CFO.readBook(f), s = sheets.find(x => score(x.data) >= 2) || sheets[0];
         const { add, dup } = importData(s.data);

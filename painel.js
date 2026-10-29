@@ -29,7 +29,8 @@
       const k = norm(f.req), x = g.get(k) || { req: f.req.trim(), sol: '', ts: f.ts, ids: [] };
       x.sol = x.sol || f.sol || sol.get(k) || ''; x.ids.push(f.id); if (f.ts < x.ts) x.ts = f.ts; g.set(k, x);
     });
-    const lista = [...g.values()].sort((a, b) => a.ts.localeCompare(b.ts));      // quem espera há mais tempo fica em cima
+    const manual = CFO.store.get('req_retiradas', {});
+    const lista = [...g.values()].filter(x => !manual[x.req]).sort((a, b) => a.ts.localeCompare(b.ts));      // quem espera há mais tempo fica em cima
     const rows = lista.map(x => {
       const atraso = dias(x.ts) >= 5;                                              // prazo de retirada do relatório: 5 dias
       return `<div class="pg-r" data-ids="${esc(x.ids.join(','))}"><span class="pg-n"><b>${esc(x.req)}</b>${x.sol ? ' - ' + esc(x.sol) : ''}</span>
