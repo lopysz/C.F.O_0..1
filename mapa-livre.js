@@ -10,6 +10,8 @@
    Zoom no Plano: pinça (2 dedos) ou roda do mouse. 👆 Selecionar liga/desliga (desligado = navegar). Objeto ▾ = palete e prateleira tipo 1/2; Ambiente ▾ = área, demarcar e parede.
    No 3D o nome/conteúdo é escrito no próprio palete ou prateleira (na face mais voltada para a câmera).
    Dados 'mapalivre' = { m, areas:[{id,x,y,w,h,nome}], zonas:[{id,x,y,w,h,nome,cor}], objs:[{id,t:'p'|'s'|'w',x,y,w,h,nome,conteudo,camadas,cpc,andares,alt}] }
+   Busca (🔎 no topo): nome/código de item da planilha do setor, ou nome/conteúdo de palete, prateleira e demarcação. Destaca em amarelo no Plano e no 3D (resto apagado, alfinete em cima),
+   leva a câmera até lá e, se o item estiver em mais de um lugar, ◀ ▶ alternam entre os locais. Um item "está" num palete/prateleira quando o campo Conteúdo dele cita o nome do item.
    Permissão: só perfis de "Outros setores" e o perfil principal (veja CFO.pode em login.js). */
 (() => {
   const K = 'mapalivre', FW = 100, FH = 70, esc = CFO.esc;
@@ -65,35 +67,69 @@
     const novoZ = { nome: '', cor: CORES[0] };
     const cam = { yaw: -.55, pitch: .75, dist: 40, tx: 0, ty: 0, tz: 0 }; let camOk = false, pend = 0;
 
-    body.innerHTML = `<div class="ml"><div class="ml-tb ml-busca"><input id="ml-q" type="search" list="ml-bl" placeholder="🔎 Pesquisar e ir até o item/local" autocomplete="off"><datalist id="ml-bl"></datalist>${podeE() ? '<button id="ml-gear" class="ghost" aria-label="Editar layout">⚙ Editar layout</button>' : ''}<button id="ml-img" class="ghost" aria-label="Salvar imagem do mapa">⬇ Imagem</button></div>
-      <div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p>
+    body.innerHTML = `<div class="ml"><div class="ml-tb ml-busca"><input id="ml-q" type="search" placeholder="🔎 Pesquisar item, código ou local" autocomplete="off">${podeE() ? '<button id="ml-gear" class="ghost" aria-label="Editar layout">⚙ Editar layout</button>' : ''}<button id="ml-img" class="ghost" aria-label="Salvar imagem do mapa">⬇ Imagem</button></div>
+      <div id="ml-res"></div><div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p>
       <div class="ml-cv" id="ml-cv"><canvas id="ml-c"></canvas></div><div id="ml-pn"></div><datalist id="ml-itens"></datalist></div>`;
     const $ = s => body.querySelector(s), cv = $('#ml-c'), ctx = cv.getContext('2d'), wrap = $('#ml-cv');
 
-    /* ---------- pesquisar item e ir até o local ---------- */
-    const dlItens = $('#ml-itens'), dlBusca = $('#ml-bl'), qi = $('#ml-q');
+    /* ---------- pesquisar item e ir até o local (mesma ideia da busca do Mapa almoxarifado de EPIs) ----------
+       Digite nome/código do item da planilha do setor (ou o nome/conteúdo de um palete, prateleira ou demarcação).
+       O mapa destaca em AMARELO o que foi achado (no Plano e no 3D), escurece o resto, põe um alfinete em cima e
+       leva a câmera até lá. Item guardado em mais de um lugar: ◀ ▶ alternam entre os locais.
+       Um item "está" num palete/prateleira quando o campo Conteúdo dele cita o nome do item. */
+    const dlItens = $('#ml-itens'), qi = $('#ml-q'), res = $('#ml-res');
     dlItens.innerHTML = itensPlanilha().map(n => `<option value="${esc(n)}">`).join('');
-    const buscaveis = () => {
-      const r = [];
-      D.objs.forEach(o => { if (o.t === 'w') return; const rot = o.t === 'p' ? 'Palete' : 'Prateleira'; const nome = o.nome || rot; r.push({ id: o.id, label: `${nome}${o.conteudo ? ' — ' + o.conteudo : ''}`, busca: nome + ' ' + (o.conteudo || ''), x: o.x + o.w / 2, y: o.y + o.h / 2, w: o.w, h: o.h }); });
-      D.zonas.forEach(z => { if (z.nome) r.push({ id: z.id, label: `▨ ${z.nome}`, busca: z.nome, x: z.x + z.w / 2, y: z.y + z.h / 2, w: z.w, h: z.h }); });
-      return r;
+    let foco = null;                                                   // { titulo, sub, ids: [objetos/demarcações achados], i }
+    const nrm = s => CFO.norm(String(s ?? ''));
+    const nomeObj = o => o.nome || (o.t === 'p' ? 'Palete' : 'Prateleira');
+    const areaDe = it => { const a = D.areas.find(a => it.x + it.w / 2 >= a.x && it.y + it.h / 2 >= a.y && it.x + it.w / 2 < a.x + a.w && it.y + it.h / 2 < a.y + a.h); return a && a.nome ? a.nome : ''; };
+    const localTxt = id => { const f = achar(id); if (!f) return 'local removido'; const it = f.it, ar = areaDe(it); return f.k === 'z' ? `▨ ${it.nome}` : `${nomeObj(it)}${ar ? ' · ' + ar : ''}`; };
+    const tem = (conteudo, item) => { const c = nrm(conteudo), i = nrm(item); return !!c && !!i && (c.includes(i) || (c.length >= 4 && i.includes(c))); };
+    const resultadosBusca = () => {
+      const palavras = nrm(qi.value).split(/\s+/).filter(Boolean); if (!palavras.length) return [];
+      const todas = t => palavras.every(w => nrm(t).includes(w)), out = [], cobertos = new Set();
+      CFO.store.get('epi', []).filter(r => todas(r.item + ' ' + (r.codigo || ''))).slice(0, 30).forEach(r => {
+        const ids = D.objs.filter(o => o.t !== 'w' && tem(o.conteudo, r.item)).map(o => o.id); ids.forEach(i => cobertos.add(i));
+        out.push({ titulo: r.item, sub: `${r.codigo ? r.codigo + ' · ' : ''}estoque ${r.qtd ?? '-'}`, ids, exato: nrm(r.item) === nrm(qi.value) });
+      });
+      D.objs.filter(o => o.t !== 'w' && !cobertos.has(o.id) && todas((o.nome || '') + ' ' + (o.conteudo || ''))).slice(0, 20)
+        .forEach(o => out.push({ titulo: nomeObj(o), sub: o.conteudo || '', ids: [o.id], exato: !!o.nome && nrm(o.nome) === nrm(qi.value) }));
+      D.zonas.filter(z => z.nome && todas(z.nome)).slice(0, 10).forEach(z => out.push({ titulo: '▨ ' + z.nome, sub: 'demarcação', ids: [z.id], exato: nrm(z.nome) === nrm(qi.value) }));
+      return out;
     };
+    const vivos = () => foco ? foco.ids.filter(id => achar(id)) : [];
     const irPara = it => {
       selId = it.id; editando = false;
       if (vista === 'plano') { const px = (it.x) * cs, py = (it.y) * cs; wrap.scrollLeft = Math.max(0, px - wrap.clientWidth / 2); wrap.scrollTop = Math.max(0, py - wrap.clientHeight / 2); }
       else { cam.tx = it.x; cam.tz = it.y; cam.dist = clamp(Math.max(it.w, it.h) * 5, 8, 400); camOk = true; B = basis(); pedir(); }
       tool = 'sel'; barra(); painel(); draw();
     };
-    const buscar = () => {
-      const q = CFO.norm(qi.value.trim()); if (!q) return;
-      const lista = buscaveis(); const exato = lista.find(it => it.label === qi.value.trim());
-      const achado = exato || lista.find(it => CFO.norm(it.busca).includes(q));
-      if (achado) irPara(achado); else alert('Não achei nada com esse nome no mapa.');
+    const ir = () => { const id = vivos()[foco.i]; const f = id && achar(id); if (f) { const it = f.it; irPara({ id, x: it.x + it.w / 2, y: it.y + it.h / 2, w: it.w, h: it.h }); } else draw(); };
+    const escolher = (e, i = 0) => { foco = { ...e, i }; res.innerHTML = statusBusca(); ir(); };
+    const statusBusca = () => {
+      const ids = vivos(); if (!foco) return '';
+      const i = Math.min(foco.i, Math.max(ids.length - 1, 0));
+      return `<div class="mp-st"><div class="mp-t"><b>${esc(foco.titulo)}</b><small>${esc(foco.sub || '')}</small></div>
+        <div class="mp-nav">${ids.length > 1 ? `<button class="ghost" data-nav="-1" aria-label="Local anterior">◀</button><span>${i + 1}/${ids.length}</span><button class="ghost" data-nav="1" aria-label="Próximo local">▶</button>` : ''}
+        <span>${ids.length ? '📍 ' + esc(localTxt(ids[i])) : 'ainda sem local no mapa (escreva o nome do item em Conteúdo, ao editar o palete ou a prateleira)'}</span><button class="ghost" data-x aria-label="Limpar busca">✕</button></div></div>`;
     };
-    qi.addEventListener('input', () => { dlBusca.innerHTML = buscaveis().filter(it => !qi.value.trim() || CFO.norm(it.busca).includes(CFO.norm(qi.value.trim()))).slice(0, 25).map(it => `<option value="${esc(it.label)}">`).join(''); });
-    qi.addEventListener('change', buscar);
-    qi.addEventListener('keydown', e => { if (e.key === 'Enter') buscar(); });
+    const listaBusca = lista => !qi.value.trim() ? '' : !lista.length ? '<p class="empty">Nada encontrado no mapa nem na planilha deste setor.</p>'
+      : `<div class="mp-res">${lista.map((e, n) => `<div class="mp-it" data-e="${n}"><div class="mp-t"><b>${esc(e.titulo)}</b><small>${esc(e.sub || '')}</small></div>
+          <div class="mp-ls">${e.ids.map((id, k) => `<button class="mp-loc" data-e="${n}" data-k="${k}">📍 ${esc(localTxt(id))}</button>`).join('') || '<small class="mut">sem local no mapa</small>'}</div></div>`).join('')}</div>`;
+    let ultima = [];
+    qi.addEventListener('input', () => {
+      foco = null; ultima = resultadosBusca();
+      const um = ultima.length === 1 ? ultima[0] : ultima.find(e => e.exato);       // nome completo (ou único resultado): vai direto, sem lista
+      if (um) return escolher(um);
+      res.innerHTML = listaBusca(ultima); draw();
+    });
+    qi.addEventListener('keydown', e => { if (e.key === 'Enter') { ultima = resultadosBusca(); if (ultima[0]) escolher(ultima[0]); else if (qi.value.trim()) res.innerHTML = listaBusca(ultima); } });
+    res.addEventListener('click', e => {
+      const t = e.target.closest('button,.mp-it'); if (!t) return;
+      if ('x' in t.dataset) { foco = null; qi.value = ''; res.innerHTML = ''; return draw(); }
+      if (t.dataset.nav) { const n = vivos().length; foco.i = (foco.i + +t.dataset.nav + n) % n; res.innerHTML = statusBusca(); return ir(); }
+      const en = ultima[+t.dataset.e]; if (en) escolher(en, +t.dataset.k || 0);
+    });
     $('#ml-img').onclick = () => png();
     const gear = $('#ml-gear'); if (gear) gear.onclick = () => { editando = !editando; if (!editando) { tool = 'nav'; } else if (!['nav','sel'].includes(tool)) tool = D.areas.length ? 'palete' : 'area'; barra(); painel(); draw(); };
 
@@ -281,6 +317,7 @@
       if (ghost) { if (tool === 'area') { const r = ghost.r; ctx.fillStyle = 'rgba(34,211,238,.25)'; ctx.fillRect(r.x * cs, r.y * cs, r.w * cs, r.h * cs); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 3; ctx.strokeRect(r.x * cs, r.y * cs, r.w * cs, r.h * cs); rotulo(`${r.w} × ${r.h}`, (r.x + r.w / 2) * cs, (r.y + r.h / 2) * cs, 15); }
         else if (ghost.r.t === 'z') zonaPlano(ghost.r, ghost.ok); else if (ghost.r.t !== 'w') objPlano(ghost.r, ghost.ok, true); else if (!ghost.ok) { const r = ghost.r; ctx.fillStyle = 'rgba(220,38,38,.4)'; ctx.fillRect(r.x * cs, r.y * cs, r.w * cs, r.h * cs); } }
       const s = achar(selId); if (s) { const o = s.it; ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]); ctx.strokeRect(o.x * cs - 2, o.y * cs - 2, o.w * cs + 4, o.h * cs + 4); ctx.setLineDash([]); }
+      vivos().forEach(id => { const f = achar(id); if (!f) return; const o = f.it; ctx.fillStyle = 'rgba(250,190,40,.35)'; ctx.fillRect(o.x * cs, o.y * cs, o.w * cs, o.h * cs); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.strokeRect(o.x * cs - 2, o.y * cs - 2, o.w * cs + 4, o.h * cs + 4); });
       const nav = tool === 'nav'; cv.style.touchAction = 'none'; cv.style.cursor = nav ? (pan2d ? 'grabbing' : 'grab') : 'crosshair';
     };
 
@@ -303,14 +340,16 @@
     const poly = (pts, fill, alpha = 1, stroke) => { ctx.globalAlpha = alpha; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); } ctx.globalAlpha = 1; };
     const FACES = [[[0, 0, -1], [0, 1, 3, 2]], [[0, 0, 1], [4, 5, 7, 6]], [[-1, 0, 0], [0, 2, 6, 4]], [[1, 0, 0], [1, 3, 7, 5]], [[0, 1, 0], [2, 3, 7, 6]]];
     // caixa (x,altura,z): faces voltadas para a câmera entram na lista L para pintar de trás para frente
+    let hitNow = false, dimNow = false; const HIT = [250, 190, 40];       // busca: objeto achado (amarelo) / os outros ficam apagados
     const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, stroke = 'rgba(0,0,0,.35)', skip) => {
+      if (hitNow) { rgb = HIT; stroke = '#fff'; }
       const c = []; for (let i = 0; i < 8; i++) c.push([i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0]);
       FACES.forEach(([n, ix]) => {
         if (skip && skip(n)) return;
         const mid = [(x0 + x1) / 2 + n[0] * (x1 - x0) / 2, (y0 + y1) / 2 + n[1] * (y1 - y0) / 2, (z0 + z1) / 2 + n[2] * (z1 - z0) / 2];
         if (n[0] * (B.c[0] - mid[0]) + n[1] * (B.c[1] - mid[1]) + n[2] * (B.c[2] - mid[2]) <= 0) return;
         const pts = projPoly(ix.map(i => c[i])); if (!pts || pts.every(q => q.x < -40) || pts.every(q => q.x > W + 40) || pts.every(q => q.y < -40) || pts.every(q => q.y > Hh + 40)) return;
-        L.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke });
+        L.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke, a: dimNow ? .28 : 1 });
       });
     };
     const textoChao = (t, cx, cz, compr, altMax, cor2) => {                // texto pintado no chão (gira junto com o mapa; tamanho travado na tela p/ não "esticar" perto da câmera)
@@ -371,7 +410,9 @@
         });
         if (best) L.push({ d: Math.min(...L.slice(start).map(f => f.d)) - .001, fn: () => escreve(lines, best) });         // desenhada logo depois das faces do próprio objeto
       };
+      const hit = new Set(vivos());
       D.objs.forEach(o => {
+        hitNow = hit.has(o.id); dimNow = hit.size > 0 && !hitNow;
         const start = L.length; let cands = [];
         const cx = o.x + o.w / 2, cz = o.y + o.h / 2, hz = o.w >= o.h;
         const topo = (y) => ({ c: [cx, y, cz], n: [0, 1, 0], U: hz ? [1, 0, 0] : [0, 0, -1], V: hz ? [0, 0, 1] : [1, 0, 0], w: (hz ? o.w : o.h) * .9, h: (hz ? o.h : o.w) * .9 });
@@ -398,8 +439,12 @@
           cands = [topo(Ht + .005), ...lados(b0 + (an - .5) * h1, h1 * .7, -.01).filter(g => hz ? g.n[2] : g.n[0])];
         }
         if (o.t !== 'w') texto3d([o.nome || '', o.conteudo || ''], cands, start);
+        hitNow = dimNow = false;
       });
-      L.sort((p, q) => q.d - p.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, 1, f.stroke));
+      // alfinete em cima do que a busca achou (fica por cima de tudo)
+      hit.forEach(id => { const f = achar(id); if (!f) return; const it = f.it, y = f.k === 'o' ? altC(it) + .9 : 1.2, pt = proj([it.x + it.w / 2, y, it.y + it.h / 2]); if (!pt) return;
+        L.push({ d: -1, fn: () => { ctx.save(); ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(pt.x - 9, pt.y - 20); ctx.arc(pt.x, pt.y - 28, 11, Math.PI * .85, Math.PI * .15, false); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pt.x, pt.y - 28, 4, 0, 7); ctx.fill(); ctx.restore(); } }); });
+      L.sort((p, q) => q.d - p.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, f.a ?? 1, f.stroke));
       cv.style.cursor = 'grab'; cv.style.touchAction = 'none';
     };
     const draw = () => { if (vista === 'plano') drawPlano(); else draw3d(); };

@@ -44,7 +44,7 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? nD(d) : nC(d)}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
 function montarNav() {
-  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030i</div>`;
+  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030j</div>`;
   tabbar.innerHTML = navHTML(false);
   document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
   document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
