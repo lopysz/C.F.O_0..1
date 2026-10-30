@@ -3,19 +3,43 @@
    - ⬚ Área: arraste sobre os quadradinhos. Dá para criar VÁRIAS áreas (separadas ou coladas); só se coloca coisa dentro de área.
    - ▨ Demarcar: pinta um pedaço do chão com cor e nome (ex.: Entrada, Expedição). Pode ficar embaixo de paletes e prateleiras.
    - ▮ Parede: retas de 1 quadradinho. Paredes que se encontram (cantos, T, lado a lado) se ligam, sem divisória.
-   - 📦 Palete: quadrado ou retângulo; camadas (1 a 10) e caixas por camada (1 a 10) digitadas à mão.
+   - 📦 Palete (modelo do arquivo 'palete-componentes'): base de madeira 15 cm + caixas de papelão CÚBICAS; camadas (1 a 10) e caixas por lado (1 a 10).
    - ▬ / ▰ Prateleira: 1 ou 2 quadradinhos de grossura, do comprimento que quiser.
    - 👆 Selecionar: mover (arrastando), girar, mudar tamanho, nome, cor, etc.
    Vista "Plano" (de cima, onde se edita) e "3D" (gira com o dedo/mouse, zoom por pinça/roda, 2 dedos ou Shift move).
    Zoom no Plano: pinça (2 dedos) ou roda do mouse. 👆 Selecionar liga/desliga (desligado = navegar). Objeto ▾ = palete e prateleira tipo 1/2; Ambiente ▾ = área, demarcar e parede.
    No 3D o nome/conteúdo é escrito no próprio palete ou prateleira (na face mais voltada para a câmera).
-   Dados 'mapalivre' = { m, areas:[{id,x,y,w,h,nome}], zonas:[{id,x,y,w,h,nome,cor}], objs:[{id,t:'p'|'s'|'w',x,y,w,h,nome,conteudo,camadas,cpc,andares,alt}] }
+   Dados 'mapalivre' = { m, areas:[{id,x,y,w,h,nome}], zonas:[{id,x,y,w,h,nome,cor}], objs:[{id,t:'p'|'s'|'w',x,y,w,h,nome,conteudo,camadas,cpl,andares,alt}] }
    Busca (🔎 no topo): nome/código de item da planilha do setor, ou nome/conteúdo de palete, prateleira e demarcação. Destaca em amarelo no Plano e no 3D (resto apagado, alfinete em cima),
    leva a câmera até lá e, se o item estiver em mais de um lugar, ◀ ▶ alternam entre os locais. Um item "está" num palete/prateleira quando o campo Conteúdo dele cita o nome do item.
    Permissão: só perfis de "Outros setores" e o perfil principal (veja CFO.pode em login.js). */
 (() => {
   const K = 'mapalivre', FW = 100, FH = 70, esc = CFO.esc;
-  const HA = .9, BASE = .16;                                   // altura de cada andar da prateleira (m) e do estrado do palete (quadradinhos)
+  const HA = .9, PALH = .15;                                   // altura de cada andar da prateleira (m) e do palete (m): 15 cm, como no modelo
+  // Texturas do papelão (idênticas às do modelo 'palete-componentes'): liso, com fita no topo e com etiqueta + símbolo "este lado para cima"
+  const TEX = (() => {
+    let sd = 20261030; const rnd = () => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
+    const cnv = () => { const c = document.createElement('canvas'); c.width = c.height = 256; return c; };
+    const base = g => {
+      g.fillStyle = '#d2a06a'; g.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 60; i++) { g.strokeStyle = 'rgba(120,80,40,' + (0.04 + rnd() * 0.05) + ')'; g.beginPath(); const y = rnd() * 256; g.moveTo(0, y); g.lineTo(256, y + (rnd() * 6 - 3)); g.stroke(); }
+      g.strokeStyle = 'rgba(90,55,25,0.35)'; g.lineWidth = 4; g.strokeRect(2, 2, 252, 252);
+    };
+    const plain = cnv(); base(plain.getContext('2d'));
+    const top = cnv(); { const g = top.getContext('2d'); base(g);
+      g.fillStyle = '#ecca9b'; g.fillRect(0, 100, 256, 56); g.strokeStyle = 'rgba(120,80,40,0.35)'; g.lineWidth = 2; g.strokeRect(0, 100, 256, 56);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, 106, 256, 10); }
+    const label = cnv(); { const g = label.getContext('2d'); base(g);
+      g.fillStyle = '#f4f4f1'; g.fillRect(150, 34, 84, 52);
+      g.fillStyle = '#9aa0a6'; [48, 58, 68, 78].forEach((y, i) => g.fillRect(156, y, i % 2 ? 50 : 68, 4));
+      g.strokeStyle = '#2a2a2a'; g.lineWidth = 5; const x = 34, y = 150;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + 40, y); g.lineTo(x + 20, y + 30); g.closePath(); g.stroke();
+      g.beginPath(); g.moveTo(x + 20, y + 30); g.lineTo(x + 20, y + 54); g.moveTo(x + 6, y + 54); g.lineTo(x + 34, y + 54); g.stroke();
+      g.beginPath(); g.moveTo(x + 84, y + 54); g.lineTo(x + 84, y + 6); g.stroke();
+      g.beginPath(); g.moveTo(x + 68, y + 22); g.lineTo(x + 84, y + 4); g.lineTo(x + 100, y + 22); g.stroke(); }
+    return { plain, top, label };
+  })();
+  const MADEIRA = [[228, 181, 62], [217, 166, 47], [234, 189, 74]], PAPELAO = [210, 160, 106];     // madeira (3 tons) e cor do papelão (#d2a06a)
   const CORES = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#ec4899', '#eab308'];
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
@@ -56,7 +80,7 @@
     if (!D || !Array.isArray(D.objs)) D = { m: 1, areas: [], zonas: [], objs: [] };
     if (!Array.isArray(D.areas)) D.areas = D.area ? [{ id: uid(), ...D.area, nome: '' }] : [];   // migra o formato antigo (uma área só)
     delete D.area; if (!Array.isArray(D.zonas)) D.zonas = [];
-    D.objs.forEach(o => { if (o.t === 'p' && !o.cpc) o.cpc = [1, 2, 4, 6][(o.cx || 3) - 1] || 4; });
+    D.objs.forEach(o => { if (o.t === 'p' && !o.cpl) o.cpl = clamp(Math.round(Math.sqrt(o.cpc || [1, 2, 4, 6][(o.cx || 3) - 1] || 4)), 1, 10); });   // palete antigo: caixas por camada -> por lado
     const podeE = () => CFO.pode('editar', 'mapalivre'), podeA = () => CFO.pode('apagar', 'mapalivre');
     const hist = [];
     const salvar = () => CFO.store.set(K, D);
@@ -146,14 +170,12 @@
       const z = [...D.zonas].reverse().find(z => cx >= z.x && cx < z.x + z.w && cy >= z.y && cy < z.y + z.h); if (z) return { k: 'z', it: z };
       const a = D.areas.filter(a => cx >= a.x && cy >= a.y && cx < a.x + a.w && cy < a.y + a.h).sort((p, q) => p.w * p.h - q.w * q.h)[0]; return a ? { k: 'a', it: a } : null;
     };
-    const nCx = o => int(o.cpc || 4, 1, 10);
-    // Caixas do palete: grade mais "quadrada" possível dentro do retângulo; cada caixa é quase um cubo
+    // Palete no modelo do arquivo 'palete-componentes': base 15 cm + caixas CÚBICAS de lado = (menor lado do palete) / (caixas por lado)
+    const nCam = o => int(o.camadas, 1, 10, 3), nLado = o => int(o.cpl, 1, 10, 2);
     const pal = o => {
-      const n = nCx(o), g = .05; let b = null;
-      for (let c = 1; c <= n; c++) { const r = Math.ceil(n / c), s = Math.abs(Math.log(((o.w - g * 2) / c) / ((o.h - g * 2) / r))) + (c * r - n) * .12; if (!b || s < b.s) b = { c, r, s }; }
-      const MINC = .22;                                                        // tamanho mínimo de uma "caixa" (m): evita caixa fina tipo folha
-      const bw = Math.max((o.w - g * 2) / b.c, MINC), bd = Math.max((o.h - g * 2) / b.r, MINC), bh = clamp(Math.min(bw, bd) * .85, .35, 1.1);
-      return { n, c: b.c, r: b.r, bw, bd, bh, g, H: BASE + bh * int(o.camadas, 1, 10) };
+      const m = D.m || 1, P = nLado(o), s = Math.min(o.w, o.h) / P, L = nCam(o), ph = PALH / m;     // medidas em quadradinhos
+      const nx = Math.max(1, Math.floor(o.w / s + .001)), nz = Math.max(1, Math.floor(o.h / s + .001));
+      return { P, s, L, ph, nx, nz, n: nx * nz, ox: (o.w - nx * s) / 2, oz: (o.h - nz * s) / 2, H: ph + s * L, m };
     };
     const altC = o => o.t === 'w' ? (o.alt || 3) / (D.m || 1) : o.t === 'p' ? pal(o).H : HA * int(o.andares, 1, 6) / (D.m || 1);   // altura em quadradinhos
 
@@ -200,7 +222,7 @@
     /* ---------- informações e painel ---------- */
     const info = () => {
       const m = D.m || 1, ps = D.objs.filter(o => o.t === 'p'), ss = D.objs.filter(o => o.t === 's'), ws = D.objs.filter(o => o.t === 'w');
-      const caixas = ps.reduce((n, o) => n + int(o.camadas, 1, 10) * nCx(o), 0);
+      const caixas = ps.reduce((n, o) => { const P = pal(o); return n + P.L * P.n; }, 0);
       $('#ml-info').innerHTML = !D.areas.length ? 'Comece pela ferramenta <b>⬚ Área</b>: arraste sobre os quadradinhos para escolher o tamanho do espaço. Pode criar mais de uma.'
         : `<b>${D.areas.length}</b> área(s) · <b>${ps.length}</b> palete(s) com ${caixas} caixas · <b>${ss.length}</b> prateleira(s)${ws.length ? ` · <b>${ws.length}</b> parede(s)` : ''}${D.zonas.length ? ` · <b>${D.zonas.length}</b> demarcação(ões)` : ''} · cada quadradinho = ${String(m).replace('.', ',')} m` +
           (vista === 'iso' ? ' · 3D: arraste para girar, pinça/roda para aproximar, 2 dedos ou Shift para mover' : tool === 'nav' ? ' · arraste para andar pelo mapa · pinça (2 dedos) ou roda do mouse = zoom' : ' · pinça (2 dedos) ou roda do mouse = zoom');
@@ -226,7 +248,7 @@
       el.innerHTML = `<div class="ml-pn"><h4>${tit} selecionado(a)</h4>${campo('p-n', 'Nome', o.nome || '', `placeholder="${ph}"`, dis)}
         ${k === 'a' ? campo('p-x', 'Posição X', o.x, 'type="number" min="0"', dis) + campo('p-y', 'Posição Y', o.y, 'type="number" min="0"', dis) : ''}
         ${campo('p-w', 'Largura (quadradinhos)', o.w, `type="number" min="1" max="${FW}"`, dis)}${campo('p-h', 'Comprimento (quadradinhos)', o.h, `type="number" min="1" max="${FH}"`, dis)}
-        ${k === 'o' && o.t === 'p' ? campo('p-c', 'Camadas (1 a 10)', int(o.camadas, 1, 10), 'type="number" min="1" max="10"', dis) + campo('p-q', 'Caixas por camada (1 a 10)', nCx(o), 'type="number" min="1" max="10"', dis) : ''}
+        ${k === 'o' && o.t === 'p' ? campo('p-c', 'Camadas (1 a 10)', nCam(o), 'type="number" min="1" max="10"', dis) + campo('p-q', 'Caixas por lado (1 a 10)', nLado(o), 'type="number" min="1" max="10"', dis) : ''}
         ${k === 'o' && o.t === 's' ? campo('p-a', 'Andares (1 a 6)', int(o.andares, 1, 6, 4), 'type="number" min="1" max="6"', dis) : ''}
         ${k === 'o' && o.t === 'w' ? campo('p-alt', 'Altura (metros)', o.alt || 3, 'type="number" min="1" max="12" step="0.5"', dis) : ''}
         ${k === 'z' ? `<div class="cores">${CORES.map(c => `<button data-c="${c}" style="background:${c}" class="${c === o.cor ? 'on' : ''}"${dis} aria-label="Cor ${c}"></button>`).join('')}<input type="color" id="p-cor" value="${o.cor}"${dis} aria-label="Outra cor"></div>` : ''}
@@ -237,7 +259,7 @@
       const num = (id, fn) => { const i = el.querySelector(id); if (i) i.onchange = e => fn(+e.target.value); };
       num('#p-w', v => tenta({ x: o.x, y: o.y, w: int(v, 1, FW, o.w), h: o.h })); num('#p-h', v => tenta({ x: o.x, y: o.y, w: o.w, h: int(v, 1, FH, o.h) }));
       num('#p-x', v => tenta({ x: int(v, 0, FW - o.w, o.x), y: o.y, w: o.w, h: o.h })); num('#p-y', v => tenta({ x: o.x, y: int(v, 0, FH - o.h, o.y), w: o.w, h: o.h }));
-      num('#p-c', v => ap(() => { o.camadas = int(v, 1, 10, 1); }, true)); num('#p-q', v => ap(() => { o.cpc = int(v, 1, 10, 4); }, true));
+      num('#p-c', v => ap(() => { o.camadas = int(v, 1, 10, 1); }, true)); num('#p-q', v => ap(() => { o.cpl = int(v, 1, 10, 2); }, true));
       num('#p-a', v => ap(() => { o.andares = int(v, 1, 6, 4); }, true)); num('#p-alt', v => ap(() => { o.alt = clamp(v || 3, 1, 12); }, true));
       const po = el.querySelector('#p-o'); if (po) po.onchange = e => ap(() => { o.conteudo = e.target.value.trim(); });
       el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => ap(() => { o.cor = b.dataset.c; }, true)); const pc = el.querySelector('#p-cor'); if (pc) pc.onchange = e => ap(() => { o.cor = e.target.value; }, true);
@@ -273,9 +295,13 @@
     const objPlano = (o, ok = true, fant = false) => {
       const x = o.x * cs, y = o.y * cs, w = o.w * cs, h = o.h * cs; ctx.globalAlpha = fant ? .75 : 1;
       if (o.t === 'p') {
-        const P = pal(o); ctx.fillStyle = sh(MAD, .9); ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-        const cw = (w - 6) / P.c, ch = (h - 6) / P.r;
-        for (let i = 0; i < P.n; i++) { const bx = x + 3 + (i % P.c) * cw, by = y + 3 + Math.floor(i / P.c) * ch; ctx.fillStyle = sh(CAIXA[i % 3], 1); ctx.fillRect(bx + 1, by + 1, cw - 2, ch - 2); ctx.fillStyle = 'rgba(236,202,155,.85)'; ctx.fillRect(bx + 1, by + ch / 2 - 2, cw - 2, 4); ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.strokeRect(bx + 1.5, by + 1.5, cw - 3, ch - 3); }
+        const P = pal(o); ctx.fillStyle = sh(MADEIRA[1], 1); ctx.fillRect(x + 1, y + 1, w - 2, h - 2);              // base de madeira
+        const sz = P.s * cs;
+        for (let iz = 0; iz < P.nz; iz++) for (let ix = 0; ix < P.nx; ix++) {                                           // topo das caixas: papelão + fita no meio
+          const bx = x + (P.ox + ix * P.s) * cs + .5, by = y + (P.oz + iz * P.s) * cs + .5, q = sz - 1;
+          ctx.fillStyle = sh(PAPELAO, 1); ctx.fillRect(bx, by, q, q); ctx.fillStyle = '#ecca9b'; ctx.fillRect(bx, by + q * .39, q, q * .22);
+          ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(bx, by + q * .42, q, q * .04); ctx.strokeStyle = 'rgba(90,55,25,.55)'; ctx.strokeRect(bx + .5, by + .5, q - 1, q - 1);
+        }
         ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
       } else if (o.t === 's') {
         const hz = o.w >= o.h; ctx.fillStyle = sh(DECK, .95); ctx.fillRect(x + 1, y + 1, w - 2, h - 2); ctx.fillStyle = sh(LARANJA, 1);
@@ -285,7 +311,7 @@
         ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
       } else { ctx.fillStyle = '#555b63'; ctx.fillRect(x, y, w, h); }
       ctx.globalAlpha = 1;
-      if (o.t !== 'w') { const nome = o.nome || (o.t === 'p' ? 'Palete' : 'Prateleira'), tag = o.t === 'p' ? `${nome} · ${int(o.camadas, 1, 10)}×` : `${nome} · ${int(o.andares, 1, 6, 4)}↕`; ctx.save(); ctx.translate(x + w / 2, y + h / 2); if (o.h > o.w * 1.6) ctx.rotate(-Math.PI / 2); rotulo(tag, 0, 0, clamp(Math.max(w, h) / (tag.length * .62), 8, 15)); ctx.restore(); }
+      if (o.t !== 'w') { const nome = o.nome || (o.t === 'p' ? 'Palete' : 'Prateleira'), tag = o.t === 'p' ? `${nome} · ${nCam(o)}×` : `${nome} · ${int(o.andares, 1, 6, 4)}↕`; ctx.save(); ctx.translate(x + w / 2, y + h / 2); if (o.h > o.w * 1.6) ctx.rotate(-Math.PI / 2); rotulo(tag, 0, 0, clamp(Math.max(w, h) / (tag.length * .62), 8, 15)); ctx.restore(); }
       if (!ok) { ctx.fillStyle = 'rgba(220,38,38,.35)'; ctx.fillRect(x, y, w, h); }
     };
     const paredesPlano = (extra) => {                      // paredes juntas: preenche as células e só contorna as bordas de fora (sem divisória)
@@ -341,7 +367,7 @@
     const FACES = [[[0, 0, -1], [0, 1, 3, 2]], [[0, 0, 1], [4, 5, 7, 6]], [[-1, 0, 0], [0, 2, 6, 4]], [[1, 0, 0], [1, 3, 7, 5]], [[0, 1, 0], [2, 3, 7, 6]]];
     // caixa (x,altura,z): faces voltadas para a câmera entram na lista L para pintar de trás para frente
     let hitNow = false, dimNow = false; const HIT = [250, 190, 40];       // busca: objeto achado (amarelo) / os outros ficam apagados
-    const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, stroke = 'rgba(0,0,0,.35)', skip) => {
+    const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, stroke = 'rgba(0,0,0,.35)', skip, tx) => {
       if (hitNow) { rgb = HIT; stroke = '#fff'; }
       const c = []; for (let i = 0; i < 8; i++) c.push([i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0]);
       FACES.forEach(([n, ix]) => {
@@ -349,8 +375,25 @@
         const mid = [(x0 + x1) / 2 + n[0] * (x1 - x0) / 2, (y0 + y1) / 2 + n[1] * (y1 - y0) / 2, (z0 + z1) / 2 + n[2] * (z1 - z0) / 2];
         if (n[0] * (B.c[0] - mid[0]) + n[1] * (B.c[1] - mid[1]) + n[2] * (B.c[2] - mid[2]) <= 0) return;
         const pts = projPoly(ix.map(i => c[i])); if (!pts || pts.every(q => q.x < -40) || pts.every(q => q.x > W + 40) || pts.every(q => q.y < -40) || pts.every(q => q.y > Hh + 40)) return;
-        L.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke, a: dimNow ? .28 : 1 });
+        let t = null;                                                         // textura do papelão (só nas caixas do palete; busca/apagado ficam em cor lisa)
+        if (tx !== undefined && !hitNow && !dimNow) {
+          const side = tx % 2 ? TEX.label : TEX.plain;                       // como no modelo: +x e -z "lado" (com etiqueta nas caixas ímpares), +z sempre com etiqueta, -x liso, topo com fita
+          t = n[1] > 0 ? { img: TEX.top, tl: [x0, y1, z0], tr: [x1, y1, z0], bl: [x0, y1, z1], k: 1 }
+            : n[2] > 0 ? { img: TEX.label, tl: [x0, y1, z1], tr: [x1, y1, z1], bl: [x0, y0, z1], k: .82 }
+            : n[2] < 0 ? { img: side, tl: [x1, y1, z0], tr: [x0, y1, z0], bl: [x1, y0, z0], k: .82 }
+            : n[0] > 0 ? { img: side, tl: [x1, y1, z1], tr: [x1, y1, z0], bl: [x1, y0, z1], k: .6 }
+            : { img: TEX.plain, tl: [x0, y1, z0], tr: [x0, y1, z1], bl: [x0, y0, z0], k: .6 };
+        }
+        L.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke, a: dimNow ? .28 : 1, t });
       });
+    };
+    // Estica a textura (256×256) sobre a face da caixa em perspectiva e aplica o sombreado da face; caixa pequena na tela fica só na cor
+    const texFace = f => {
+      const t = f.t, A = proj(t.tl), Bp = proj(t.tr), C = proj(t.bl); if (!A || !Bp || !C) return;
+      if (Math.hypot(Bp.x - A.x, Bp.y - A.y) < 10 && Math.hypot(C.x - A.x, C.y - A.y) < 10) return;
+      ctx.save(); ctx.beginPath(); f.pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.clip();
+      ctx.transform((Bp.x - A.x) / 256, (Bp.y - A.y) / 256, (C.x - A.x) / 256, (C.y - A.y) / 256, A.x, A.y);
+      ctx.drawImage(t.img, 0, 0); if (t.k < 1) { ctx.fillStyle = `rgba(0,0,0,${1 - t.k})`; ctx.fillRect(0, 0, 256, 256); } ctx.restore();
     };
     const textoChao = (t, cx, cz, compr, altMax, cor2) => {                // texto pintado no chão (gira junto com o mapa; tamanho travado na tela p/ não "esticar" perto da câmera)
       const o = proj([cx, .03, cz]), a = proj([cx + 1, .03, cz]), b = proj([cx, .03, cz + 1]); if (!o || !a || !b) return;
@@ -419,10 +462,18 @@
         const lados = (y, hh, ins) => [{ c: [cx, y, o.y + o.h - ins], n: [0, 0, 1], U: [1, 0, 0], V: DN, w: o.w * .9, h: hh }, { c: [cx, y, o.y + ins], n: [0, 0, -1], U: [-1, 0, 0], V: DN, w: o.w * .9, h: hh },
           { c: [o.x + o.w - ins, y, cz], n: [1, 0, 0], U: [0, 0, -1], V: DN, w: o.h * .9, h: hh }, { c: [o.x + ins, y, cz], n: [-1, 0, 0], U: [0, 0, 1], V: DN, w: o.h * .9, h: hh }];
         if (o.t === 'p') {
-          const P = pal(o), x0 = o.x + P.g, z0 = o.y + P.g;
-          addBox(L, o.x + .03, 0, o.y + .03, o.x + o.w - .03, BASE, o.y + o.h - .03, MAD);
-          for (let l = 0; l < int(o.camadas, 1, 10); l++) for (let i = 0; i < P.n; i++) { const cx2 = i % P.c, cz2 = Math.floor(i / P.c); addBox(L, x0 + cx2 * P.bw + .02, BASE + l * P.bh, z0 + cz2 * P.bd + .02, x0 + (cx2 + 1) * P.bw - .02, BASE + (l + 1) * P.bh - .01, z0 + (cz2 + 1) * P.bd - .02, CAIXA[(i + l) % 3]); }
-          cands = [topo(P.H + .005), ...lados((BASE + P.H) / 2, (P.H - BASE) * .85, .07)];
+          const P = pal(o), m2 = P.m, W = o.w, Dp = o.h, X = o.x + W / 2, Z = o.y + Dp / 2, ph = P.ph, E = .022 / m2, W5 = 'rgba(0,0,0,.18)';
+          // Base (medidas do modelo, em fração do palete de 1,00 × 1,00 × 0,15 m): 5 tábuas em cima, 9 blocos, 3 tábuas embaixo
+          for (let i = 0; i < 5; i++) { const cx3 = X + (-.4 + i * .2) * W; addBox(L, cx3 - .085 * W, ph - E, o.y, cx3 + .085 * W, ph, o.y + Dp, MADEIRA[i % 3], W5); }
+          for (let ix = 0; ix < 3; ix++) for (let iz = 0; iz < 3; iz++) { const cx3 = X + (-.45 + ix * .45) * W, cz3 = Z + (-.45 + iz * .45) * Dp; addBox(L, cx3 - .05 * W, .022 / m2, cz3 - .05 * Dp, cx3 + .05 * W, .108 / m2, cz3 + .05 * Dp, MADEIRA[(ix + iz) % 3], W5); }
+          [-.45, 0, .45].forEach((fx, i) => { const cx3 = X + fx * W; addBox(L, cx3 - .05 * W, 0, o.y, cx3 + .05 * W, E, o.y + Dp, MADEIRA[(i + 1) % 3], W5); });
+          // Caixas cúbicas (papelão com fita e etiqueta): lado = s, com folga de 1 cm entre elas, como no modelo
+          const gx = .01 / m2, gy = .004 / m2; let k = 0;
+          for (let l = 0; l < P.L; l++) for (let ix = 0; ix < P.nx; ix++) for (let iz = 0; iz < P.nz; iz++) {
+            const bx0 = o.x + P.ox + ix * P.s, bz0 = o.y + P.oz + iz * P.s, by0 = ph + l * P.s;
+            addBox(L, bx0 + gx / 2, by0 + gy / 2, bz0 + gx / 2, bx0 + P.s - gx / 2, by0 + P.s - gy / 2, bz0 + P.s - gx / 2, PAPELAO, 'rgba(60,35,15,.3)', undefined, k++);
+          }
+          cands = [topo(P.H + .005), ...lados((ph + P.H) / 2, (P.H - ph) * .85, .07)];
         } else if (o.t === 's') {
           // Prateleira de aço simples (como a "robusta"): divisórias em chapa, prateleiras lisas com aba na frente, tampo e rodapé
           const an = int(o.andares, 1, 6, 4), h1 = HA / m, e = .05 / m, fl = .09 / m, pt = .07, b0 = .1 / m, x1 = o.x + o.w, z1 = o.y + o.h, Ht = b0 + an * h1 + e, n = hz ? o.w : o.h, step = Math.max(1, Math.round(2.4 / m));
@@ -444,7 +495,7 @@
       // alfinete em cima do que a busca achou (fica por cima de tudo)
       hit.forEach(id => { const f = achar(id); if (!f) return; const it = f.it, y = f.k === 'o' ? altC(it) + .9 : 1.2, pt = proj([it.x + it.w / 2, y, it.y + it.h / 2]); if (!pt) return;
         L.push({ d: -1, fn: () => { ctx.save(); ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(pt.x - 9, pt.y - 20); ctx.arc(pt.x, pt.y - 28, 11, Math.PI * .85, Math.PI * .15, false); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pt.x, pt.y - 28, 4, 0, 7); ctx.fill(); ctx.restore(); } }); });
-      L.sort((p, q) => q.d - p.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, f.a ?? 1, f.stroke));
+      L.sort((p, q) => q.d - p.d).forEach(f => { if (f.fn) f.fn(); else { poly(f.pts, f.fill, f.a ?? 1, f.stroke); if (f.t) texFace(f); } });
       cv.style.cursor = 'grab'; cv.style.touchAction = 'none';
     };
     const draw = () => { if (vista === 'plano') drawPlano(); else draw3d(); };
@@ -464,7 +515,7 @@
       if (drag.mode === 'move') { const f = achar(drag.id), o = f.it, r = { x: drag.nx ?? o.x, y: drag.ny ?? o.y, w: o.w, h: o.h }; ghost = drag.moveu ? { r: { ...o, ...r }, ok: f.k === 'z' ? cobre(r) : livre(r, o.id, o.t) } : null; return; }
       let r = rectDe(drag); r = { x: r.x, y: r.y, w: Math.min(r.w, FW - r.x), h: Math.min(r.h, FH - r.y) };
       if (tool === 'area') ghost = { r, ok: true }; else if (tool === 'zona') ghost = { r: { t: 'z', cor: novoZ.cor, nome: novoZ.nome, ...r }, ok: cobre(r) };
-      else { const t = tool === 'palete' ? 'p' : tool === 'parede' ? 'w' : 's'; ghost = { r: { t, camadas: 3, cpc: 4, andares: 4, alt: 3, ...r }, ok: livre(r, null, t) }; }
+      else { const t = tool === 'palete' ? 'p' : tool === 'parede' ? 'w' : 's'; ghost = { r: { t, camadas: 3, cpl: 2, andares: 4, alt: 3, ...r }, ok: livre(r, null, t) }; }
     };
     const ptrs = new Map(); let pin = 0; let pan2d = null, gesto = false, pinM = null, zp = null;
     // Zoom do Plano: o ponto sob os dedos/mouse fica parado (cx, cy = coordenadas da tela). Agrupa os eventos em um quadro só.
@@ -522,7 +573,7 @@
         push(); const r = g.r, id = uid();
         if (tool === 'area') { D.areas.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, nome: '' }); if (D.areas.length === 1) camOk = false; selId = id; }
         else if (tool === 'zona') { D.zonas.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, nome: novoZ.nome.trim(), cor: novoZ.cor }); selId = id; }
-        else { const o = { id, t: r.t, x: r.x, y: r.y, w: r.w, h: r.h, nome: '', conteudo: '' }; if (o.t === 'p') { o.camadas = 3; o.cpc = 4; } else if (o.t === 'w') o.alt = 3; else o.andares = 4; D.objs.push(o); selId = id; }
+        else { const o = { id, t: r.t, x: r.x, y: r.y, w: r.w, h: r.h, nome: '', conteudo: '' }; if (o.t === 'p') { o.camadas = 3; o.cpl = 2; } else if (o.t === 'w') o.alt = 3; else o.andares = 4; D.objs.push(o); selId = id; }
         salvar(); tudo();
       } else { if (g && !g.ok) alert(tool === 'zona' ? 'A demarcação precisa ficar dentro de uma área.' : 'Não cabe aí: precisa ficar dentro de uma área e sem encostar em outro objeto (paredes podem encostar em paredes).'); draw(); }
     };
