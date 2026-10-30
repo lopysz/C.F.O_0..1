@@ -369,6 +369,7 @@
     let hitNow = false, dimNow = false; const HIT = [250, 190, 40];       // busca: objeto achado (amarelo) / os outros ficam apagados
     const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, stroke = 'rgba(0,0,0,.35)', skip, tx) => {
       if (hitNow) { rgb = HIT; stroke = '#fff'; }
+      const bxo = { x0, x1, y0, y1, z0, z1, f: [], lat: tx !== undefined }; L.boxes.push(bxo);      // a ordem de pintura é decidida por caixa (veja ordena)
       const c = []; for (let i = 0; i < 8; i++) c.push([i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0]);
       FACES.forEach(([n, ix]) => {
         if (skip && skip(n)) return;
@@ -384,7 +385,7 @@
             : n[0] > 0 ? { img: side, tl: [x1, y1, z1], tr: [x1, y1, z0], bl: [x1, y0, z1], k: .6 }
             : { img: TEX.plain, tl: [x0, y1, z0], tr: [x0, y1, z1], bl: [x0, y0, z0], k: .6 };
         }
-        L.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke, a: dimNow ? .28 : 1, t });
+        bxo.f.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke, a: dimNow ? .28 : 1, t });
       });
     };
     // Estica a textura (256×256) sobre a face da caixa em perspectiva e aplica o sombreado da face; caixa pequena na tela fica só na cor
@@ -395,6 +396,35 @@
       ctx.transform((Bp.x - A.x) / 256, (Bp.y - A.y) / 256, (C.x - A.x) / 256, (C.y - A.y) / 256, A.x, A.y);
       ctx.drawImage(t.img, 0, 0); if (t.k < 1) { ctx.fillStyle = `rgba(0,0,0,${1 - t.k})`; ctx.fillRect(0, 0, 256, 256); } ctx.restore();
     };
+    /* Ordem de pintura SEM faces sumindo: em vez de ordenar faces pela distância do centro (errado para peças grandes ao lado de pequenas),
+       ordena CAIXAS pelo plano que as separa: se existe um plano entre A e B com a câmera do lado de A, A nunca fica atrás de B.
+       Monta as precedências e pinta do mais longe ao mais perto (ordenação topológica; sem plano decisivo, cai na distância). */
+    const ordena = bs => {
+      const n = bs.length, c = B.c, dist = bs.map(b => ((b.x0 + b.x1) / 2 - c[0]) ** 2 + ((b.y0 + b.y1) / 2 - c[1]) ** 2 + ((b.z0 + b.z1) / 2 - c[2]) ** 2);
+      const prim = [...Array(n).keys()].sort((i, j) => dist[j] - dist[i]);
+      if (n < 2) return prim;
+      const ind = new Int32Array(n), out = Array.from({ length: n }, () => []);
+      const AX = [['x0', 'x1', 0], ['y0', 'y1', 1], ['z0', 'z1', 2]];
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        const a = bs[i], b = bs[j];
+        for (const [lo, hi, k] of AX) {
+          let first = -1;
+          if (a[hi] <= b[lo]) { if (c[k] <= a[hi]) first = j; else if (c[k] >= b[lo]) first = i; }
+          else if (b[hi] <= a[lo]) { if (c[k] <= b[hi]) first = i; else if (c[k] >= a[lo]) first = j; }
+          else continue;
+          if (first >= 0) { const o2 = first === i ? j : i; out[first].push(o2); ind[o2]++; break; }
+        }
+      }
+      const feito = new Uint8Array(n), res = []; let ini = 0;
+      for (let r = 0; r < n; r++) {
+        while (feito[prim[ini]]) ini++;
+        let u = -1; for (let q = ini; q < n; q++) { const v = prim[q]; if (!feito[v] && ind[v] === 0) { u = v; break; } }
+        if (u < 0) u = prim[ini];                                   // ciclo raro: segue pela distância
+        feito[u] = 1; res.push(u); out[u].forEach(v => { ind[v]--; });
+      }
+      return res;
+    };
+    const pintaFace = f => { poly(f.pts, f.fill, f.a ?? 1, f.stroke); if (f.t) texFace(f); };
     const textoChao = (t, cx, cz, compr, altMax, cor2) => {                // texto pintado no chão (gira junto com o mapa; tamanho travado na tela p/ não "esticar" perto da câmera)
       const o = proj([cx, .03, cz]), a = proj([cx + 1, .03, cz]), b = proj([cx, .03, cz + 1]); if (!o || !a || !b) return;
       let ax = a.x - o.x, ay = a.y - o.y, bx = b.x - o.x, by = b.y - o.y; if (Math.abs(ax * by - ay * bx) < .5) return; if (ax < 0) { ax = -ax; ay = -ay; bx = -bx; by = -by; }
@@ -424,9 +454,9 @@
       D.zonas.forEach(z => { if (z.nome) textoChao(z.nome, z.x + z.w / 2, z.y + z.h / 2, Math.max(z.w, z.h) * .85, Math.min(z.w, z.h) * .55 + .2, '#fff'); });
       D.areas.forEach(a => { if (a.nome) textoChao(a.nome, a.x + Math.min(a.w, a.nome.length * .55 + 1) / 2, a.y + .45, Math.min(a.w, a.nome.length * .55 + 1), .6, '#e5e7eb'); });
       // objetos
-      const L = [], m = D.m || 1;
+      const L = [], m = D.m || 1, G = [], pins = []; L.boxes = [];
       const paredes = new Map(); D.objs.filter(o => o.t === 'w').forEach(o => { for (let j = o.y; j < o.y + o.h; j++) for (let i = o.x; i < o.x + o.w; i++) paredes.set(i + ',' + j, Math.max(paredes.get(i + ',' + j) || 0, altC(o))); });
-      paredes.forEach((alt, k) => { const [i, j] = k.split(',').map(Number); addBox(L, i, 0, j, i + 1, alt, j + 1, PAREDE, null, n => (n[0] || n[2]) && paredes.has((i + n[0]) + ',' + (j + n[2]))); });   // paredes ligadas: sem face nem linha entre elas
+      paredes.forEach((alt, k) => { const [i, j] = k.split(',').map(Number); const b0 = L.boxes.length; G.push({ b0, b1: b0 + 1, tx: [] }); addBox(L, i, 0, j, i + 1, alt, j + 1, PAREDE, null, n => (n[0] || n[2]) && paredes.has((i + n[0]) + ',' + (j + n[2]))); });   // paredes ligadas: sem face nem linha entre elas
       // Nome e conteúdo ficam ESCRITOS no próprio palete/prateleira: na face mais voltada para a câmera (topo ou lateral), em perspectiva
       const DN = [0, -1, 0], add = (c, v, k = 1) => [c[0] + v[0] * k, c[1] + v[1] * k, c[2] + v[2] * k];
       const escreve = (lines, g) => {
@@ -442,8 +472,8 @@
           ctx.lineWidth = F * .1; ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.strokeText(tx, 0, 0); ctx.fillStyle = i ? '#e5e7eb' : '#fff'; ctx.fillText(tx, 0, 0); ctx.restore();
         });
       };
-      const texto3d = (lines, cands, start) => {
-        lines = lines.filter(Boolean); if (!lines.length || L.length === start) return;
+      const texto3d = (lines, cands, gr) => {
+        lines = lines.filter(Boolean); if (!lines.length || L.boxes.length === gr.b0) return;
         let best = null;
         cands.forEach(g => {
           if (g.n[0] * (B.c[0] - g.c[0]) + g.n[1] * (B.c[1] - g.c[1]) + g.n[2] * (B.c[2] - g.c[2]) <= .05) return;      // face de trás
@@ -451,12 +481,12 @@
           const det = Math.abs((pa.x - p0.x) * (pb.y - p0.y) - (pa.y - p0.y) * (pb.x - p0.x)); if (det < .5) return;     // visto de lado: não dá para ler
           const area = det * g.w * g.h; if (!best || area > best.area) best = { ...g, area };
         });
-        if (best) L.push({ d: Math.min(...L.slice(start).map(f => f.d)) - .001, fn: () => escreve(lines, best) });         // desenhada logo depois das faces do próprio objeto
+        if (best) gr.tx.push(() => escreve(lines, best));                                                                  // desenhada logo depois das caixas do próprio objeto
       };
       const hit = new Set(vivos());
       D.objs.forEach(o => {
         hitNow = hit.has(o.id); dimNow = hit.size > 0 && !hitNow;
-        const start = L.length; let cands = [];
+        const gr = { b0: L.boxes.length, b1: 0, tx: [] }; let cands = [];
         const cx = o.x + o.w / 2, cz = o.y + o.h / 2, hz = o.w >= o.h;
         const topo = (y) => ({ c: [cx, y, cz], n: [0, 1, 0], U: hz ? [1, 0, 0] : [0, 0, -1], V: hz ? [0, 0, 1] : [1, 0, 0], w: (hz ? o.w : o.h) * .9, h: (hz ? o.h : o.w) * .9 });
         const lados = (y, hh, ins) => [{ c: [cx, y, o.y + o.h - ins], n: [0, 0, 1], U: [1, 0, 0], V: DN, w: o.w * .9, h: hh }, { c: [cx, y, o.y + ins], n: [0, 0, -1], U: [-1, 0, 0], V: DN, w: o.w * .9, h: hh },
@@ -489,13 +519,21 @@
           pos.forEach(i => { if (hz) { const qx = clamp(o.x + i, o.x, x1 - pt); addBox(L, qx, 0, o.y, qx + pt, Ht, z1, AZUL, 'rgba(0,0,0,.3)'); } else { const qz = clamp(o.y + i, o.y, z1 - pt); addBox(L, o.x, 0, qz, x1, Ht, qz + pt, AZUL, 'rgba(0,0,0,.3)'); } });   // divisórias em chapa
           cands = [topo(Ht + .005), ...lados(b0 + (an - .5) * h1, h1 * .7, -.01).filter(g => hz ? g.n[2] : g.n[0])];
         }
-        if (o.t !== 'w') texto3d([o.nome || '', o.conteudo || ''], cands, start);
+        if (o.t !== 'w') texto3d([o.nome || '', o.conteudo || ''], cands, gr);
+        gr.b1 = L.boxes.length; if (gr.b1 > gr.b0) G.push(gr);
         hitNow = dimNow = false;
       });
       // alfinete em cima do que a busca achou (fica por cima de tudo)
       hit.forEach(id => { const f = achar(id); if (!f) return; const it = f.it, y = f.k === 'o' ? altC(it) + .9 : 1.2, pt = proj([it.x + it.w / 2, y, it.y + it.h / 2]); if (!pt) return;
-        L.push({ d: -1, fn: () => { ctx.save(); ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(pt.x - 9, pt.y - 20); ctx.arc(pt.x, pt.y - 28, 11, Math.PI * .85, Math.PI * .15, false); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pt.x, pt.y - 28, 4, 0, 7); ctx.fill(); ctx.restore(); } }); });
-      L.sort((p, q) => q.d - p.d).forEach(f => { if (f.fn) f.fn(); else { poly(f.pts, f.fill, f.a ?? 1, f.stroke); if (f.t) texFace(f); } });
+        pins.push(() => { ctx.save(); ctx.fillStyle = '#f59e0b'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(pt.x - 9, pt.y - 20); ctx.arc(pt.x, pt.y - 28, 11, Math.PI * .85, Math.PI * .15, false); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pt.x, pt.y - 28, 4, 0, 7); ctx.fill(); ctx.restore(); }); });
+      // objetos do mais longe ao mais perto; dentro de cada um: base/estrutura (pelo plano separador) e depois as caixas do palete (grade igual: pela distância é exato)
+      ordena(G.map(g => { const bs = L.boxes.slice(g.b0, g.b1); return { x0: Math.min(...bs.map(b => b.x0)), x1: Math.max(...bs.map(b => b.x1)), y0: Math.min(...bs.map(b => b.y0)), y1: Math.max(...bs.map(b => b.y1)), z0: Math.min(...bs.map(b => b.z0)), z1: Math.max(...bs.map(b => b.z1)) }; })).forEach(gi => {
+        const g = G[gi], bs = L.boxes.slice(g.b0, g.b1), rig = bs.filter(b => !b.lat), cx = bs.filter(b => b.lat);
+        ordena(rig).forEach(i => rig[i].f.forEach(pintaFace));
+        cx.map(b => ({ b, d: ((b.x0 + b.x1) / 2 - B.c[0]) ** 2 + ((b.y0 + b.y1) / 2 - B.c[1]) ** 2 + ((b.z0 + b.z1) / 2 - B.c[2]) ** 2 })).sort((p, q) => q.d - p.d).forEach(e => e.b.f.forEach(pintaFace));
+        g.tx.forEach(fn => fn());
+      });
+      pins.forEach(fn => fn());
       cv.style.cursor = 'grab'; cv.style.touchAction = 'none';
     };
     const draw = () => { if (vista === 'plano') drawPlano(); else draw3d(); };
