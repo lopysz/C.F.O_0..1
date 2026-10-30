@@ -44,7 +44,7 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? nD(d) : nC(d)}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
 function montarNav() {
-  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030e</div>`;
+  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030i</div>`;
   tabbar.innerHTML = navHTML(false);
   document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
   document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
@@ -56,7 +56,6 @@ back.innerHTML = svg('back'); $('#more').innerHTML = svg('more'); $('#cfg').inne
 function renderInicio() {
   const eu = CFO.usuario();
   inicio.innerHTML = `<div class="wrap"><p class="sub" style="margin-top:0">Caixa de Ferramentas Operacional</p>
-  ${CFO.espaco ? `<p class="log setor-nota">🔒 Setor <b>${CFO.esc(eu?.setorNome || '')}</b>: dados próprios, separados do almoxarifado de EPIs. Use ☁️ Nuvem (no topo) para sincronizar entre aparelhos do setor, e ⚙ Configurações para exportar/backup.</p>` : ''}
   <div class="sec">Painel gerencial</div><div id="painel"></div>
   <div class="sec" style="margin-top:2rem">Escolha uma função</div>
   <div class="cols" style="margin-top:0">${DRAWERS.map(d => `<div class="card"><h3>${svg(d.icon)}${CFO.esc(nD(d))}${d.subs.every(s => !CFO.pode('abrir', s.m)) ? '<span class="tag" style="margin-left:auto">Sem acesso</span>' : ''}</h3><div class="short">${d.subs.map((s, i) => `<button data-d="${d.id}" data-i="${i}"${CFO.pode('abrir', s.m) ? '' : ' disabled'}>${CFO.esc(nS(s))}${svg(CFO.pode('abrir', s.m) ? 'chev' : 'lock')}</button>`).join('')}</div></div>`).join('')}</div></div>`;

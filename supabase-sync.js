@@ -121,7 +121,7 @@
         meta.synced = true; salvaMeta();
         mostra('ok', 'Sincronizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (mudou ? ' (dados novos recebidos)' : ''));
         if (mudou) { avisoMudou = true; document.dispatchEvent(new Event('cfo-sync')); }
-        if (mudou && (manual || forcar)) alert('Dados baixados da nuvem. Se alguma tela estiver aberta, feche e abra de novo para ver as mudanças.');
+        /* sem aviso: os dados novos já aparecem sozinhos */
         else if (mudou && !CFO.screens.length) { /* nenhuma tela aberta: já aparece atualizado ao abrir */ }
         else if (mudou) mostra('ok', 'Dados novos recebidos — feche e abra a tela para ver');
       } catch (e) {

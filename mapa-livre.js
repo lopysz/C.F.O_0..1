@@ -7,6 +7,8 @@
    - ▬ / ▰ Prateleira: 1 ou 2 quadradinhos de grossura, do comprimento que quiser.
    - 👆 Selecionar: mover (arrastando), girar, mudar tamanho, nome, cor, etc.
    Vista "Plano" (de cima, onde se edita) e "3D" (gira com o dedo/mouse, zoom por pinça/roda, 2 dedos ou Shift move).
+   Zoom no Plano: pinça (2 dedos) ou roda do mouse. 👆 Selecionar liga/desliga (desligado = navegar). Objeto ▾ = palete e prateleira tipo 1/2; Ambiente ▾ = área, demarcar e parede.
+   No 3D o nome/conteúdo é escrito no próprio palete ou prateleira (na face mais voltada para a câmera).
    Dados 'mapalivre' = { m, areas:[{id,x,y,w,h,nome}], zonas:[{id,x,y,w,h,nome,cor}], objs:[{id,t:'p'|'s'|'w',x,y,w,h,nome,conteudo,camadas,cpc,andares,alt}] }
    Permissão: só perfis de "Outros setores" e o perfil principal (veja CFO.pode em login.js). */
 (() => {
@@ -40,7 +42,10 @@
       .ml-pn .cores button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid var(--line)}
       .ml-pn .cores button.on{border-color:var(--text)}
       .ml-pn .cores input[type=color]{width:40px;height:32px;padding:0;border-radius:8px}
-      .ml-pn button.danger{background:transparent;color:#dc2626;border-color:#dc2626}`;
+      .ml-pn button.danger{background:transparent;color:#dc2626;border-color:#dc2626}
+      .ml-dd{position:relative;display:inline-block}
+      .ml-ddl{position:absolute;top:calc(100% + 4px);left:0;z-index:30;min-width:210px;padding:.3rem;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:.2rem}
+      .ml-tb .ml-ddl button{width:100%;text-align:left}`;
     document.head.append(st);
   }
 
@@ -60,7 +65,7 @@
     const novoZ = { nome: '', cor: CORES[0] };
     const cam = { yaw: -.55, pitch: .75, dist: 40, tx: 0, ty: 0, tz: 0 }; let camOk = false, pend = 0;
 
-    body.innerHTML = `<div class="ml"><div class="ml-tb ml-busca"><input id="ml-q" type="search" list="ml-bl" placeholder="🔎 Pesquisar e ir até o item/local" autocomplete="off"><datalist id="ml-bl"></datalist>${podeE() ? '<button id="ml-gear" class="ghost" aria-label="Editar layout">⚙ Editar layout</button>' : ''}</div>
+    body.innerHTML = `<div class="ml"><div class="ml-tb ml-busca"><input id="ml-q" type="search" list="ml-bl" placeholder="🔎 Pesquisar e ir até o item/local" autocomplete="off"><datalist id="ml-bl"></datalist>${podeE() ? '<button id="ml-gear" class="ghost" aria-label="Editar layout">⚙ Editar layout</button>' : ''}<button id="ml-img" class="ghost" aria-label="Salvar imagem do mapa">⬇ Imagem</button></div>
       <div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p>
       <div class="ml-cv" id="ml-cv"><canvas id="ml-c"></canvas></div><div id="ml-pn"></div><datalist id="ml-itens"></datalist></div>`;
     const $ = s => body.querySelector(s), cv = $('#ml-c'), ctx = cv.getContext('2d'), wrap = $('#ml-cv');
@@ -89,6 +94,7 @@
     qi.addEventListener('input', () => { dlBusca.innerHTML = buscaveis().filter(it => !qi.value.trim() || CFO.norm(it.busca).includes(CFO.norm(qi.value.trim()))).slice(0, 25).map(it => `<option value="${esc(it.label)}">`).join(''); });
     qi.addEventListener('change', buscar);
     qi.addEventListener('keydown', e => { if (e.key === 'Enter') buscar(); });
+    $('#ml-img').onclick = () => png();
     const gear = $('#ml-gear'); if (gear) gear.onclick = () => { editando = !editando; if (!editando) { tool = 'nav'; } else if (!['nav','sel'].includes(tool)) tool = D.areas.length ? 'palete' : 'area'; barra(); painel(); draw(); };
 
     /* ---------- regras ---------- */
@@ -116,30 +122,42 @@
     const altC = o => o.t === 'w' ? (o.alt || 3) / (D.m || 1) : o.t === 'p' ? pal(o).H : HA * int(o.andares, 1, 6) / (D.m || 1);   // altura em quadradinhos
 
     /* ---------- barra de ferramentas ---------- */
-    const FERR_VER = [['nav', '✋ Navegar'], ['sel', '👆 Selecionar']];
-    const FERR_CRIAR = [['area', '⬚ Área'], ['zona', '▨ Demarcar'], ['parede', '▮ Parede'], ['palete', '📦 Palete'], ['p1', '▬ Prateleira fina (1)'], ['p2', '▰ Prateleira grossa (2)']];
-    const FERR = [...FERR_VER, ...FERR_CRIAR];
+    const GRUPOS = { obj: ['📦 Objeto', [['palete', '📦 Palete'], ['p1', '▬ Prateleira tipo 1'], ['p2', '▰ Prateleira tipo 2']]], amb: ['🏗 Ambiente', [['area', '⬚ Área'], ['zona', '▨ Demarcar'], ['parede', '▮ Parede']]] };
+    let menu = null;                                              // listinha aberta (obj | amb)
     const barra = () => {
       const edit = podeE() && editando, t = $('#ml-tools'), gear = $('#ml-gear');
       if (gear) { gear.classList.toggle('on', editando); gear.textContent = editando ? '⚙ Editando layout (toque p/ sair)' : '⚙ Editar layout'; }
       if (!editando && tool !== 'nav' && tool !== 'sel') tool = 'nav';
-      const lista = podeE() ? (editando ? FERR : FERR_VER) : [];
-      t.innerHTML = (lista.length ? lista.map(([k, n]) => `<button data-t="${k}" class="${tool === k && vista === 'plano' ? 'on' : ''}">${n}</button>`).join('') +
-        (edit && podeA() ? `<button data-t="del" class="${tool === 'del' && vista === 'plano' ? 'on' : ''}">🗑 Apagar</button>` : '') + (edit ? '<span class="sep"></span><button data-a="undo">↶ Desfazer</button>' : '') : '') +
+      if (!edit) menu = null;
+      const ativo = k => tool === k && vista === 'plano', bt = (k, n) => `<button data-t="${k}" class="${ativo(k) ? 'on' : ''}">${n}</button>`;
+      const dd = g => { const [rot, its] = GRUPOS[g], cur = its.find(([k]) => ativo(k));
+        return `<span class="ml-dd"><button data-m="${g}" class="${cur ? 'on' : ''}" aria-haspopup="menu" aria-expanded="${menu === g}">${cur ? cur[1] : rot} ▾</button>${menu === g ? `<div class="ml-ddl" role="menu">${its.map(([k, n]) => `<button role="menuitem" data-t="${k}" class="${ativo(k) ? 'on' : ''}">${n}</button>`).join('')}</div>` : ''}</span>`; };
+      t.innerHTML = (podeE() ? bt('sel', '👆 Selecionar') : '') + (edit ? dd('obj') + dd('amb') + (podeA() ? bt('del', '🗑 Apagar') : '') + '<button data-a="undo">↶ Desfazer</button>' : '') +
         `<span class="sep"></span><button data-v="plano" class="${vista === 'plano' ? 'on' : ''}">Plano</button><button data-v="iso" class="${vista === 'iso' ? 'on' : ''}">3D</button>` +
-        (vista === 'iso' ? '<button data-a="rot">⟳ Girar</button><button data-a="reset">⌖ Centralizar</button>' : '<button data-a="mais">＋</button><button data-a="menos">－</button>') +
-        '<button data-a="png">⬇ Imagem</button>' + (edit && podeA() ? '<button data-a="limpar" style="color:#dc2626;border-color:#dc2626">Limpar mapa</button>' : '');
-      t.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tool = b.dataset.t; vista = 'plano'; if (tool !== 'sel') selId = null; tudo(); });
-      t.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { vista = b.dataset.v; selId = vista === 'iso' ? null : selId; tudo(); });
+        (vista === 'iso' ? '<button data-a="rot">⟳ Girar</button><button data-a="reset">⌖ Centralizar</button>' : '') +
+        (edit && podeA() ? '<button data-a="limpar" style="color:#dc2626;border-color:#dc2626">Limpar mapa</button>' : '');
+      // apertar a ferramenta que já está ligada desliga (volta a navegar)
+      t.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { const k = b.dataset.t; if (ativo(k)) { tool = 'nav'; selId = null; } else { tool = k; vista = 'plano'; if (k !== 'sel') selId = null; } menu = null; tudo(); });
+      t.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { menu = menu === b.dataset.m ? null : b.dataset.m; barra(); });
+      t.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { vista = b.dataset.v; selId = vista === 'iso' ? null : selId; menu = null; tudo(); });
       t.querySelectorAll('[data-a]').forEach(b => b.onclick = () => acao(b.dataset.a));
+    };
+    document.addEventListener('click', function ev(e) { if (!body.isConnected) return document.removeEventListener('click', ev); if (menu && !e.target.closest('.ml-dd')) { menu = null; barra(); } });
+    // Imagem do mapa: no Plano recorta só a parte com as áreas (com uma folga); no 3D salva a vista atual
+    const png = () => {
+      let sx = 0, sy = 0, sw = cv.width, sh2 = cv.height;
+      if (vista === 'plano' && D.areas.length) {
+        const k = cv.width / (FW * cs), x0 = Math.max(0, Math.min(...D.areas.map(a => a.x)) - 1), y0 = Math.max(0, Math.min(...D.areas.map(a => a.y)) - 1), x1 = Math.min(FW, Math.max(...D.areas.map(a => a.x + a.w)) + 1), y1 = Math.min(FH, Math.max(...D.areas.map(a => a.y + a.h)) + 1);
+        sx = x0 * cs * k; sy = y0 * cs * k; sw = (x1 - x0) * cs * k; sh2 = (y1 - y0) * cs * k;
+      }
+      const c2 = document.createElement('canvas'); c2.width = Math.max(1, Math.round(sw)); c2.height = Math.max(1, Math.round(sh2));
+      c2.getContext('2d').drawImage(cv, sx, sy, sw, sh2, 0, 0, c2.width, c2.height);
+      c2.toBlob(b => b && CFO.baixar(b, 'mapa-livre.png'));
     };
     const acao = a => {
       if (a === 'undo') { const atual = JSON.stringify(D); while (hist.length && hist[hist.length - 1] === atual) hist.pop(); const s = hist.pop(); if (!s) return; D = JSON.parse(s); if (selId && !achar(selId)) selId = null; salvar(); tudo(); }
       else if (a === 'rot') { cam.yaw += Math.PI / 2; draw(); }
       else if (a === 'reset') { camOk = false; draw(); }
-      else if (a === 'mais') { cs = Math.min(cs + 4, 40); draw(); }
-      else if (a === 'menos') { cs = Math.max(cs - 4, 8); draw(); }
-      else if (a === 'png') cv.toBlob(b => b && CFO.baixar(b, 'mapa-livre.png'));
       else if (a === 'limpar') { if (!confirm('Apagar TODO o mapa livre (áreas, demarcações, paletes, prateleiras e paredes)?')) return; push(); D = { m: D.m || 1, areas: [], zonas: [], objs: [] }; selId = null; tool = 'area'; camOk = false; salvar(); tudo(); }
     };
 
@@ -149,7 +167,7 @@
       const caixas = ps.reduce((n, o) => n + int(o.camadas, 1, 10) * nCx(o), 0);
       $('#ml-info').innerHTML = !D.areas.length ? 'Comece pela ferramenta <b>⬚ Área</b>: arraste sobre os quadradinhos para escolher o tamanho do espaço. Pode criar mais de uma.'
         : `<b>${D.areas.length}</b> área(s) · <b>${ps.length}</b> palete(s) com ${caixas} caixas · <b>${ss.length}</b> prateleira(s)${ws.length ? ` · <b>${ws.length}</b> parede(s)` : ''}${D.zonas.length ? ` · <b>${D.zonas.length}</b> demarcação(ões)` : ''} · cada quadradinho = ${String(m).replace('.', ',')} m` +
-          (vista === 'iso' ? ' · 3D: arraste para girar, pinça/roda para aproximar, 2 dedos ou Shift para mover' : tool === 'nav' ? ' · navegar: role/arraste para andar pelo mapa' : '');
+          (vista === 'iso' ? ' · 3D: arraste para girar, pinça/roda para aproximar, 2 dedos ou Shift para mover' : tool === 'nav' ? ' · arraste para andar pelo mapa · pinça (2 dedos) ou roda do mouse = zoom' : ' · pinça (2 dedos) ou roda do mouse = zoom');
     };
     const campo = (id, rot, val, ex = '', dis = '') => `<label>${rot}<input id="${id}" ${ex} value="${esc(val)}"${dis}></label>`;
     const painel = () => {
@@ -205,7 +223,7 @@
     const cor = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
     const fit = (w, h) => { let d = Math.min(devicePixelRatio || 1, 2); while (d > 1 && w * h * d * d > 12e6) d = Math.max(1, d - .25); cv.width = Math.round(w * d); cv.height = Math.round(h * d); cv.style.width = w + 'px'; cv.style.height = h + 'px'; ctx.setTransform(d, 0, 0, d, 0, 0); };
     const sh = (rgb, k) => `rgb(${rgb.map(v => Math.round(v * k)).join(',')})`;
-    const MAD = [226, 176, 62], CAIXA = [[190, 146, 96], [205, 161, 110], [176, 134, 86]], AZUL = [31, 78, 140], LARANJA = [232, 115, 26], DECK = [180, 188, 195], PAREDE = [158, 164, 172];
+    const MAD = [226, 176, 62], CAIXA = [[190, 146, 96], [205, 161, 110], [176, 134, 86]], AZUL = [128, 137, 146], LARANJA = [98, 107, 115], DECK = [185, 193, 200], PAREDE = [158, 164, 172];
     const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0);
     const rotulo = (t, x, y, F, cor2 = '#fff') => { ctx.font = `700 ${F}px system-ui,Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(t, x, y); ctx.fillStyle = cor2; ctx.fillText(t, x, y); };
 
@@ -327,21 +345,61 @@
       const L = [], m = D.m || 1;
       const paredes = new Map(); D.objs.filter(o => o.t === 'w').forEach(o => { for (let j = o.y; j < o.y + o.h; j++) for (let i = o.x; i < o.x + o.w; i++) paredes.set(i + ',' + j, Math.max(paredes.get(i + ',' + j) || 0, altC(o))); });
       paredes.forEach((alt, k) => { const [i, j] = k.split(',').map(Number); addBox(L, i, 0, j, i + 1, alt, j + 1, PAREDE, null, n => (n[0] || n[2]) && paredes.has((i + n[0]) + ',' + (j + n[2]))); });   // paredes ligadas: sem face nem linha entre elas
+      // Nome e conteúdo ficam ESCRITOS no próprio palete/prateleira: na face mais voltada para a câmera (topo ou lateral), em perspectiva
+      const DN = [0, -1, 0], add = (c, v, k = 1) => [c[0] + v[0] * k, c[1] + v[1] * k, c[2] + v[2] * k];
+      const escreve = (lines, g) => {
+        const p0 = proj(g.c), pa = proj(add(g.c, g.U)), pb = proj(add(g.c, g.V)); if (!p0 || !pa || !pb) return;
+        let ax = pa.x - p0.x, ay = pa.y - p0.y, bx = pb.x - p0.x, by = pb.y - p0.y; const inv = ax < 0; if (inv) { ax = -ax; ay = -ay; bx = -bx; by = -by; }
+        const F = 100, nl = lines.length, lh = g.h / nl, cap = Math.min(W, Hh) * .2;
+        lines.forEach((tx, i) => {
+          ctx.font = `700 ${F}px system-ui,Arial,sans-serif`;
+          let size = Math.min(lh * .85, g.w / Math.max(ctx.measureText(tx).width / F, .01)); if (i) size *= .8;
+          let k = size / F; const pxH = size * Math.max(Math.hypot(ax, ay), Math.hypot(bx, by)); if (pxH > cap) k *= cap / pxH;      // não cresce demais na tela
+          const q = proj(add(g.c, g.V, ((i + .5) / nl - .5) * g.h * (inv ? -1 : 1))); if (!q) return;
+          ctx.save(); ctx.transform(ax * k, ay * k, bx * k, by * k, q.x, q.y); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+          ctx.lineWidth = F * .1; ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.strokeText(tx, 0, 0); ctx.fillStyle = i ? '#e5e7eb' : '#fff'; ctx.fillText(tx, 0, 0); ctx.restore();
+        });
+      };
+      const texto3d = (lines, cands, start) => {
+        lines = lines.filter(Boolean); if (!lines.length || L.length === start) return;
+        let best = null;
+        cands.forEach(g => {
+          if (g.n[0] * (B.c[0] - g.c[0]) + g.n[1] * (B.c[1] - g.c[1]) + g.n[2] * (B.c[2] - g.c[2]) <= .05) return;      // face de trás
+          const p0 = proj(g.c), pa = proj(add(g.c, g.U)), pb = proj(add(g.c, g.V)); if (!p0 || !pa || !pb) return;
+          const det = Math.abs((pa.x - p0.x) * (pb.y - p0.y) - (pa.y - p0.y) * (pb.x - p0.x)); if (det < .5) return;     // visto de lado: não dá para ler
+          const area = det * g.w * g.h; if (!best || area > best.area) best = { ...g, area };
+        });
+        if (best) L.push({ d: Math.min(...L.slice(start).map(f => f.d)) - .001, fn: () => escreve(lines, best) });         // desenhada logo depois das faces do próprio objeto
+      };
       D.objs.forEach(o => {
+        const start = L.length; let cands = [];
+        const cx = o.x + o.w / 2, cz = o.y + o.h / 2, hz = o.w >= o.h;
+        const topo = (y) => ({ c: [cx, y, cz], n: [0, 1, 0], U: hz ? [1, 0, 0] : [0, 0, -1], V: hz ? [0, 0, 1] : [1, 0, 0], w: (hz ? o.w : o.h) * .9, h: (hz ? o.h : o.w) * .9 });
+        const lados = (y, hh, ins) => [{ c: [cx, y, o.y + o.h - ins], n: [0, 0, 1], U: [1, 0, 0], V: DN, w: o.w * .9, h: hh }, { c: [cx, y, o.y + ins], n: [0, 0, -1], U: [-1, 0, 0], V: DN, w: o.w * .9, h: hh },
+          { c: [o.x + o.w - ins, y, cz], n: [1, 0, 0], U: [0, 0, -1], V: DN, w: o.h * .9, h: hh }, { c: [o.x + ins, y, cz], n: [-1, 0, 0], U: [0, 0, 1], V: DN, w: o.h * .9, h: hh }];
         if (o.t === 'p') {
           const P = pal(o), x0 = o.x + P.g, z0 = o.y + P.g;
           addBox(L, o.x + .03, 0, o.y + .03, o.x + o.w - .03, BASE, o.y + o.h - .03, MAD);
-          for (let l = 0; l < int(o.camadas, 1, 10); l++) for (let i = 0; i < P.n; i++) { const cx = i % P.c, cz = Math.floor(i / P.c); addBox(L, x0 + cx * P.bw + .02, BASE + l * P.bh, z0 + cz * P.bd + .02, x0 + (cx + 1) * P.bw - .02, BASE + (l + 1) * P.bh - .01, z0 + (cz + 1) * P.bd - .02, CAIXA[(i + l) % 3]); }
+          for (let l = 0; l < int(o.camadas, 1, 10); l++) for (let i = 0; i < P.n; i++) { const cx2 = i % P.c, cz2 = Math.floor(i / P.c); addBox(L, x0 + cx2 * P.bw + .02, BASE + l * P.bh, z0 + cz2 * P.bd + .02, x0 + (cx2 + 1) * P.bw - .02, BASE + (l + 1) * P.bh - .01, z0 + (cz2 + 1) * P.bd - .02, CAIXA[(i + l) % 3]); }
+          cands = [topo(P.H + .005), ...lados((BASE + P.H) / 2, (P.H - BASE) * .85, .07)];
         } else if (o.t === 's') {
-          const an = int(o.andares, 1, 6, 4), hz = o.w >= o.h, h1 = HA / m, tk = .1, pt = .1;
-          const cel = (fn) => { for (let j = 0; j < o.h; j++) for (let i = 0; i < o.w; i++) fn(o.x + i, o.y + j); };
-          for (let l = 0; l < an; l++) { const z = l * h1 + .06 / m; cel((x, y) => { addBox(L, x, z, y, x + 1, z + .05 / m, y + 1, DECK, 'rgba(0,0,0,.2)'); if (hz) { addBox(L, x, z + .05 / m, y, x + 1, z + .11 / m, y + tk, LARANJA, null); addBox(L, x, z + .05 / m, y + o.h - tk, x + 1, z + .11 / m, y + o.h, LARANJA, null); } else { addBox(L, x, z + .05 / m, y, x + tk, z + .11 / m, y + 1, LARANJA, null); addBox(L, x + o.w - tk, z + .05 / m, y, x + o.w, z + .11 / m, y + 1, LARANJA, null); } }); }
-          const n = hz ? o.w : o.h;
-          for (let i = 0; i <= n; i++) [0, 1].forEach(s => { const px = hz ? o.x + i : s ? o.x + o.w - pt : o.x, pz = hz ? (s ? o.y + o.h - pt : o.y) : o.y + i, qx = clamp(px, o.x, o.x + o.w - pt), qz = clamp(pz, o.y, o.y + o.h - pt); addBox(L, qx, 0, qz, qx + pt, an * h1, qz + pt, AZUL, 'rgba(0,0,0,.3)'); });
+          // Prateleira de aço simples (como a "robusta"): divisórias em chapa, prateleiras lisas com aba na frente, tampo e rodapé
+          const an = int(o.andares, 1, 6, 4), h1 = HA / m, e = .05 / m, fl = .09 / m, pt = .07, b0 = .1 / m, x1 = o.x + o.w, z1 = o.y + o.h, Ht = b0 + an * h1 + e, n = hz ? o.w : o.h, step = Math.max(1, Math.round(2.4 / m));
+          addBox(L, o.x, 0, o.y, x1, b0, z1, LARANJA, 'rgba(0,0,0,.3)');                                                    // rodapé
+          for (let l = 0; l < an; l++) {
+            const y = b0 + l * h1;
+            addBox(L, o.x + .02, y, o.y + .02, x1 - .02, y + e, z1 - .02, DECK, 'rgba(0,0,0,.25)');                           // prateleira
+            if (hz) { addBox(L, o.x, y, o.y, x1, y + fl, o.y + .05, LARANJA, null); addBox(L, o.x, y, z1 - .05, x1, y + fl, z1, LARANJA, null); }   // abas
+            else { addBox(L, o.x, y, o.y, o.x + .05, y + fl, z1, LARANJA, null); addBox(L, x1 - .05, y, o.y, x1, y + fl, z1, LARANJA, null); }
+          }
+          addBox(L, o.x, b0 + an * h1, o.y, x1, Ht, z1, DECK, 'rgba(0,0,0,.25)');                                           // tampo
+          const pos = []; for (let i = 0; i < n; i += step) pos.push(i); pos.push(n);
+          pos.forEach(i => { if (hz) { const qx = clamp(o.x + i, o.x, x1 - pt); addBox(L, qx, 0, o.y, qx + pt, Ht, z1, AZUL, 'rgba(0,0,0,.3)'); } else { const qz = clamp(o.y + i, o.y, z1 - pt); addBox(L, o.x, 0, qz, x1, Ht, qz + pt, AZUL, 'rgba(0,0,0,.3)'); } });   // divisórias em chapa
+          cands = [topo(Ht + .005), ...lados(b0 + (an - .5) * h1, h1 * .7, -.01).filter(g => hz ? g.n[2] : g.n[0])];
         }
+        if (o.t !== 'w') texto3d([o.nome || '', o.conteudo || ''], cands, start);
       });
-      L.sort((p, q) => q.d - p.d).forEach(f => poly(f.pts, f.fill, 1, f.stroke));
-      D.objs.filter(o => o.nome && o.t !== 'w').forEach(o => { const p = proj([o.x + o.w / 2, altC(o) + .4, o.y + o.h / 2]); if (p) rotulo(o.nome, p.x, p.y, 12); });
+      L.sort((p, q) => q.d - p.d).forEach(f => f.fn ? f.fn() : poly(f.pts, f.fill, 1, f.stroke));
       cv.style.cursor = 'grab'; cv.style.touchAction = 'none';
     };
     const draw = () => { if (vista === 'plano') drawPlano(); else draw3d(); };
@@ -363,9 +421,19 @@
       if (tool === 'area') ghost = { r, ok: true }; else if (tool === 'zona') ghost = { r: { t: 'z', cor: novoZ.cor, nome: novoZ.nome, ...r }, ok: cobre(r) };
       else { const t = tool === 'palete' ? 'p' : tool === 'parede' ? 'w' : 's'; ghost = { r: { t, camadas: 3, cpc: 4, andares: 4, alt: 3, ...r }, ok: livre(r, null, t) }; }
     };
-    const ptrs = new Map(); let pin = 0; let pan2d = null;
+    const ptrs = new Map(); let pin = 0; let pan2d = null, gesto = false, pinM = null, zp = null;
+    // Zoom do Plano: o ponto sob os dedos/mouse fica parado (cx, cy = coordenadas da tela). Agrupa os eventos em um quadro só.
+    const zoom = (f, cx, cy) => {
+      const nc = clamp(cs * f, 6, 48); if (Math.abs(nc - cs) < .01) return;
+      const wr = wrap.getBoundingClientRect(), px = cx - wr.left, py = cy - wr.top, gx = (wrap.scrollLeft + px) / cs, gy = (wrap.scrollTop + py) / cs;
+      cs = nc; drawPlano(); wrap.scrollLeft = gx * cs - px; wrap.scrollTop = gy * cs - py;
+    };
+    const zoomQ = (f, cx, cy) => { if (zp) { zp.f *= f; zp.cx = cx; zp.cy = cy; return; } zp = { f, cx, cy }; requestAnimationFrame(() => { const z = zp; zp = null; if (vista === 'plano') zoom(z.f, z.cx, z.cy); }); };
     cv.onpointerdown = e => {
-      if (vista === 'iso') { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); pin = 0; return; }
+      ptrs.set(e.pointerId, [e.clientX, e.clientY]); cv.setPointerCapture(e.pointerId);
+      if (vista === 'iso') { pin = 0; return; }
+      if (ptrs.size >= 2) { gesto = true; drag = null; ghost = null; pan2d = null; pin = 0; pinM = null; draw(); return; }   // 2 dedos = pinça (cancela o que estava sendo desenhado)
+      gesto = false;
       if (tool === 'nav') { cv.setPointerCapture(e.pointerId); pan2d = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop, moveu: false }; cv.style.cursor = 'grabbing'; return; }
       const [cx, cy] = cel(e); if (cx < 0 || cy < 0 || cx >= FW || cy >= FH) return; cv.setPointerCapture(e.pointerId);
       if (tool === 'sel') {
@@ -379,6 +447,13 @@
       drag = { mode: 'draw', sx: cx, sy: cy, ex: cx, ey: cy }; ghost = null; moveGhost(); draw();
     };
     cv.onpointermove = e => {
+      if (vista === 'plano' && ptrs.has(e.pointerId) && ptrs.size >= 2) {                 // pinça: aproxima/afasta e acompanha o movimento dos dedos
+        ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+        const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if (pin) { if (pinM) { wrap.scrollLeft -= m[0] - pinM[0]; wrap.scrollTop -= m[1] - pinM[1]; } zoomQ(d / pin, m[0], m[1]); }
+        pin = d; pinM = m; return;
+      }
+      if (gesto) return;                                                                  // dedo que sobrou depois da pinça: ignora até soltar tudo
       if (pan2d) { const dx = e.clientX - pan2d.x, dy = e.clientY - pan2d.y; if (Math.abs(dx) > 2 || Math.abs(dy) > 2) pan2d.moveu = true; wrap.scrollLeft = pan2d.sl - dx; wrap.scrollTop = pan2d.st - dy; return; }
       if (vista === 'iso') {
         const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p[0], dy = e.clientY - p[1]; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
@@ -393,8 +468,9 @@
       moveGhost(); draw();
     };
     const solta = e => {
+      ptrs.delete(e.pointerId); if (ptrs.size < 2) { pin = 0; pinM = null; } const fimGesto = gesto; if (!ptrs.size) gesto = false;
+      if (vista === 'iso' || fimGesto) return;
       if (pan2d) { pan2d = null; cv.style.cursor = 'grab'; return; }
-      if (vista === 'iso') { ptrs.delete(e.pointerId); pin = 0; return; }
       if (!drag) return; const d = drag, g = ghost; drag = null; ghost = null;
       if (d.mode === 'move') { const f = achar(d.id); if (d.moveu && podeE() && f) { const o = f.it, r = { x: d.nx, y: d.ny, w: o.w, h: o.h }; if (f.k === 'z' ? cobre(r) : livre(r, o.id, o.t)) { push(); o.x = r.x; o.y = r.y; salvar(); } } painel(); info(); draw(); return; }
       if (g && g.ok) {
@@ -405,12 +481,17 @@
         salvar(); tudo();
       } else { if (g && !g.ok) alert(tool === 'zona' ? 'A demarcação precisa ficar dentro de uma área.' : 'Não cabe aí: precisa ficar dentro de uma área e sem encostar em outro objeto (paredes podem encostar em paredes).'); draw(); }
     };
-    cv.onpointerup = solta; cv.onpointercancel = e => { ptrs.delete(e.pointerId); pan2d = null; drag = null; ghost = null; draw(); };
+    cv.onpointerup = solta; cv.onpointercancel = e => { ptrs.delete(e.pointerId); if (!ptrs.size) gesto = false; pin = 0; pinM = null; pan2d = null; drag = null; ghost = null; draw(); };
     cv.oncontextmenu = e => { if (vista === 'iso') e.preventDefault(); };
-    cv.addEventListener('wheel', e => { if (vista !== 'iso') return; e.preventDefault(); cam.dist = clamp(cam.dist * (1 + e.deltaY * .001), 3, 400); B = basis(); pedir(); }, { passive: false });
+    wrap.addEventListener('wheel', e => {                                                 // roda do mouse = zoom (Plano e 3D)
+      e.preventDefault();
+      if (vista === 'iso') { cam.dist = clamp(cam.dist * (1 + e.deltaY * .001), 3, 400); B = basis(); pedir(); }
+      else zoomQ(clamp(Math.exp(-e.deltaY * .0015), .8, 1.25), e.clientX, e.clientY);
+    }, { passive: false });
     new ResizeObserver(() => { if (body.isConnected && vista === 'iso') pedir(); }).observe(wrap);
     document.addEventListener('keydown', function ev(e) {
       if (!body.isConnected) return document.removeEventListener('keydown', ev);
+      if (e.key === 'Escape' && menu) { menu = null; barra(); }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selId && vista === 'plano' && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) apagar(selId);
     });
 

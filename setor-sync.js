@@ -77,7 +77,7 @@
         }
         meta.synced = true; salvaMeta();
         mostra('ok', 'Sincronizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (mudou ? ' (dados novos recebidos)' : ''));
-        if (mudou && (manual || forcar)) alert('Dados do setor baixados da nuvem. Feche e abra a tela para ver.');
+        /* sem aviso: os dados novos já aparecem sozinhos */
       } catch (e) {
         mostra('err', 'Sem sincronizar: ' + e.message + (navigator.onLine ? '' : ' (sem internet)'));
         if (manual) alert('Não consegui sincronizar o setor.\n' + e.message);
