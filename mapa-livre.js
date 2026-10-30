@@ -92,7 +92,7 @@
     const cam = { yaw: -.55, pitch: .75, dist: 40, tx: 0, ty: 0, tz: 0 }; let camOk = false, pend = 0;
 
     body.innerHTML = `<div class="ml"><div class="ml-tb ml-busca"><input id="ml-q" type="search" placeholder="🔎 Pesquisar item, código ou local" autocomplete="off">${podeE() ? '<button id="ml-gear" class="ghost" aria-label="Editar layout">⚙ Editar layout</button>' : ''}<button id="ml-img" class="ghost" aria-label="Salvar imagem do mapa">⬇ Imagem</button></div>
-      <div id="ml-res"></div><div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p>
+      <div id="ml-res"></div><div class="ml-tb" id="ml-tools"></div><p class="ml-info" id="ml-info"></p><p class="ml-info mp-leg" id="ml-leg" hidden></p>
       <div class="ml-cv" id="ml-cv"><canvas id="ml-c"></canvas></div><div id="ml-pn"></div><datalist id="ml-itens"></datalist></div>`;
     const $ = s => body.querySelector(s), cv = $('#ml-c'), ctx = cv.getContext('2d'), wrap = $('#ml-cv');
 
@@ -191,7 +191,7 @@
       const dd = g => { const [rot, its] = GRUPOS[g], cur = its.find(([k]) => ativo(k));
         return `<span class="ml-dd"><button data-m="${g}" class="${cur ? 'on' : ''}" aria-haspopup="menu" aria-expanded="${menu === g}">${cur ? cur[1] : rot} ▾</button>${menu === g ? `<div class="ml-ddl" role="menu">${its.map(([k, n]) => `<button role="menuitem" data-t="${k}" class="${ativo(k) ? 'on' : ''}">${n}</button>`).join('')}</div>` : ''}</span>`; };
       t.innerHTML = (podeE() ? bt('sel', '👆 Selecionar') : '') + (edit ? dd('obj') + dd('amb') + (podeA() ? bt('del', '🗑 Apagar') : '') + '<button data-a="undo">↶ Desfazer</button>' : '') +
-        `<span class="sep"></span><button data-v="plano" class="${vista === 'plano' ? 'on' : ''}">Plano</button><button data-v="iso" class="${vista === 'iso' ? 'on' : ''}">3D</button>` +
+        `<span class="sep"></span><button data-v="plano" class="${vista === 'plano' ? 'on' : ''}">Plano</button><button data-v="iso" class="${vista === 'iso' ? 'on' : ''}">3D</button><button data-a="cam" class="${filtro ? 'on' : ''}" title="Pintar o mapa por estoque ou rotatividade">▤ Camadas</button>` +
         (vista === 'iso' ? '<button data-a="rot">⟳ Girar</button><button data-a="reset">⌖ Centralizar</button>' : '') +
         (edit && podeA() ? '<button data-a="limpar" style="color:#dc2626;border-color:#dc2626">Limpar mapa</button>' : '');
       // apertar a ferramenta que já está ligada desliga (volta a navegar)
@@ -214,13 +214,58 @@
     };
     const acao = a => {
       if (a === 'undo') { const atual = JSON.stringify(D); while (hist.length && hist[hist.length - 1] === atual) hist.pop(); const s = hist.pop(); if (!s) return; D = JSON.parse(s); if (selId && !achar(selId)) selId = null; salvar(); tudo(); }
+      else if (a === 'cam') telaFiltro();
       else if (a === 'rot') { cam.yaw += Math.PI / 2; draw(); }
       else if (a === 'reset') { camOk = false; draw(); }
       else if (a === 'limpar') { if (!confirm('Apagar TODO o mapa livre (áreas, demarcações, paletes, prateleiras e paredes)?')) return; push(); D = { m: D.m || 1, areas: [], zonas: [], objs: [] }; selId = null; tool = 'area'; camOk = false; salvar(); tudo(); }
     };
 
+    /* ---------- Camadas: pinta cada palete/prateleira pelos itens citados no campo Conteúdo (mesma regra do Mapa almoxarifado) ----------
+       Estoque: vermelho = zerado · amarelo = baixo (≤ estoque mínimo) · verde = bom. Rotatividade: saídas aprovadas do mês atual (azul = baixa ... vermelho = muito alta).
+       Quando o objeto cita vários itens, vale o mais crítico. Objeto sem item reconhecido fica apagado enquanto o filtro está ligado. */
+    let filtro = '', cores = null;
+    const legendaFiltro = () => {
+      const sw = (c, t) => `<span class="lg" style="background:rgb(${c})"></span> ${t} `;
+      if (filtro === 'estoque') return sw('225,60,60', 'zerado') + sw('245,190,30', 'baixo') + sw('40,168,80', 'bom');
+      if (filtro === 'rot') return `<b>Rotatividade de ${CFO.periodo.NOMES[new Date().getMonth()]}:</b> ` + sw('96,110,130', 'sem saída') + sw('70,150,230', 'baixa') + sw('245,200,40', 'média') + sw('240,130,40', 'alta') + sw('225,60,60', 'muito alta');
+      return '';
+    };
+    const calcFiltro = () => {
+      cores = null; const lg = $('#ml-leg'); lg.hidden = !filtro; lg.innerHTML = legendaFiltro(); if (!filtro) return;
+      const rs = CFO.store.get('epi', []).filter(r => r && r.item), info = new Map();
+      if (filtro === 'estoque') {
+        const mins = CFO.estoqueMin ? CFO.estoqueMin(rs) : new Map();
+        rs.forEach(r => { const q = +r.qtd || 0, mn = (mins.get(r.id) || {}).min || 0;
+          info.set(r.id, q <= 0 ? { v: 3, rgb: [225, 60, 60], t: 'zerado' } : mn && q <= mn ? { v: 2, rgb: [245, 190, 30], t: 'baixo' } : { v: 1, rgb: [40, 168, 80], t: 'bom' }); });
+      } else {
+        const h = new Date(), mes = h.getMonth() + 1, ano = h.getFullYear(), achar = CFO.casarEpi(rs), neg = CFO.store.get('req_negadas', {}), saiu = new Map();
+        CFO.store.get('requisicoes', []).filter(r => r && r.itens && !neg[r.id] && (pp => pp && pp.m === mes && pp.y === ano)(CFO.periodo.parse(r.mes)))
+          .forEach(qq => qq.itens.forEach(i => { if (!(i.qa > 0)) return; const r = achar(i.item); if (r) saiu.set(r.id, (saiu.get(r.id) || 0) + i.qa); }));
+        const mx = Math.max(0, ...saiu.values());
+        rs.forEach(r => { const n = saiu.get(r.id) || 0, k = mx ? n / mx : 0;
+          info.set(r.id, !n ? { v: 0, rgb: [96, 110, 130], t: 'sem saída' } : k > .75 ? { v: 4, rgb: [225, 60, 60], t: 'saída muito alta' } : k > .5 ? { v: 3, rgb: [240, 130, 40], t: 'saída alta' } : k > .25 ? { v: 2, rgb: [245, 200, 40], t: 'saída média' } : { v: 1, rgb: [70, 150, 230], t: 'saída baixa' }); });
+      }
+      const itens = rs.map(r => ({ id: r.id, n: nrm(r.item) })).filter(x => x.n); cores = new Map();
+      D.objs.forEach(o => {
+        if (o.t === 'w') return; const c = nrm(o.conteudo); if (!c) return; let melhor = null;
+        itens.forEach(x => { if (!(c.includes(x.n) || (c.length >= 4 && x.n.includes(c)))) return; const i = info.get(x.id); if (i && (!melhor || i.v > melhor.v)) melhor = i; });
+        if (melhor) cores.set(o.id, melhor);
+      });
+    };
+    function telaFiltro() {
+      const d = document.createElement('dialog'); d.className = 'mp-dlg';
+      const op = [['', 'Sem filtro', 'Visual normal.'], ['estoque', 'Situação do estoque', 'Verde = bom · amarelo = acabando (no estoque mínimo ou abaixo) · vermelho = zerado.'],
+        ['rot', 'Rotatividade do mês', 'Pinta pelo quanto o item saiu nas requisições aprovadas do mês atual. Zera sozinho a cada mês.']];
+      d.innerHTML = `<form method="dialog"><h3>Camadas</h3><p class="log" style="margin-top:0">Escolha como pintar paletes e prateleiras. O filtro usa os itens escritos no campo <b>Conteúdo</b> de cada um.</p>
+        <div class="mp-fops">${op.map(([v, n, t]) => `<button value="f:${v}" class="mp-fop${filtro === v ? ' on' : ''}"><b>${n}</b><small>${t}</small></button>`).join('')}</div>
+        <div class="row"><button value="cancel" class="ghost" formnovalidate>Fechar</button></div></form>`;
+      d.onclose = () => { if (/^f:/.test(d.returnValue)) { filtro = d.returnValue.slice(2); tudo(); } d.remove(); };
+      document.body.append(d); d.showModal();
+    }
+
     /* ---------- informações e painel ---------- */
     const info = () => {
+      calcFiltro();
       const m = D.m || 1, ps = D.objs.filter(o => o.t === 'p'), ss = D.objs.filter(o => o.t === 's'), ws = D.objs.filter(o => o.t === 'w');
       const caixas = ps.reduce((n, o) => { const P = pal(o); return n + P.L * P.n; }, 0);
       $('#ml-info').innerHTML = !D.areas.length ? 'Comece pela ferramenta <b>⬚ Área</b>: arraste sobre os quadradinhos para escolher o tamanho do espaço. Pode criar mais de uma.'
@@ -249,6 +294,7 @@
         ${k === 'a' ? campo('p-x', 'Posição X', o.x, 'type="number" min="0"', dis) + campo('p-y', 'Posição Y', o.y, 'type="number" min="0"', dis) : ''}
         ${campo('p-w', 'Largura (quadradinhos)', o.w, `type="number" min="1" max="${FW}"`, dis)}${campo('p-h', 'Comprimento (quadradinhos)', o.h, `type="number" min="1" max="${FH}"`, dis)}
         ${k === 'o' && o.t === 'p' ? campo('p-c', 'Camadas (1 a 10)', nCam(o), 'type="number" min="1" max="10"', dis) + campo('p-q', 'Caixas por lado (1 a 10)', nLado(o), 'type="number" min="1" max="10"', dis) : ''}
+        ${k === 'o' && o.t === 'p' ? `<div class="cores" title="Cor das caixas do palete">${CORES.map(c => `<button data-c="${c}" style="background:${c}" class="${c === o.cor ? 'on' : ''}"${dis} aria-label="Cor ${c}"></button>`).join('')}<button data-c="" class="${o.cor ? '' : 'on'}"${dis} aria-label="Sem cor (papelão)" title="Sem cor (papelão)" style="background:#d2a06a">∅</button><input type="color" id="p-cor" value="${o.cor || '#d2a06a'}"${dis} aria-label="Outra cor"></div>` : ''}
         ${k === 'o' && o.t === 's' ? campo('p-a', 'Andares (1 a 6)', int(o.andares, 1, 6, 4), 'type="number" min="1" max="6"', dis) : ''}
         ${k === 'o' && o.t === 'w' ? campo('p-alt', 'Altura (metros)', o.alt || 3, 'type="number" min="1" max="12" step="0.5"', dis) : ''}
         ${k === 'z' ? `<div class="cores">${CORES.map(c => `<button data-c="${c}" style="background:${c}" class="${c === o.cor ? 'on' : ''}"${dis} aria-label="Cor ${c}"></button>`).join('')}<input type="color" id="p-cor" value="${o.cor}"${dis} aria-label="Outra cor"></div>` : ''}
@@ -293,18 +339,19 @@
       if (!ok) { ctx.fillStyle = 'rgba(220,38,38,.35)'; ctx.fillRect(x, y, w, h); }
     };
     const objPlano = (o, ok = true, fant = false) => {
-      const x = o.x * cs, y = o.y * cs, w = o.w * cs, h = o.h * cs; ctx.globalAlpha = fant ? .75 : 1;
+      const x = o.x * cs, y = o.y * cs, w = o.w * cs, h = o.h * cs, st = cores && cores.get(o.id), tint = st ? st.rgb : (o.t === 'p' && o.cor ? hexRgb(o.cor) : null);
+      ctx.globalAlpha = fant ? .75 : (filtro && o.t !== 'w' && !st ? .3 : 1);
       if (o.t === 'p') {
         const P = pal(o); ctx.fillStyle = sh(MADEIRA[1], 1); ctx.fillRect(x + 1, y + 1, w - 2, h - 2);              // base de madeira
         const sz = P.s * cs;
         for (let iz = 0; iz < P.nz; iz++) for (let ix = 0; ix < P.nx; ix++) {                                           // topo das caixas: papelão + fita no meio
           const bx = x + (P.ox + ix * P.s) * cs + .5, by = y + (P.oz + iz * P.s) * cs + .5, q = sz - 1;
-          ctx.fillStyle = sh(PAPELAO, 1); ctx.fillRect(bx, by, q, q); ctx.fillStyle = '#ecca9b'; ctx.fillRect(bx, by + q * .39, q, q * .22);
+          ctx.fillStyle = tint ? sh(tint, .95) : sh(PAPELAO, 1); ctx.fillRect(bx, by, q, q); ctx.fillStyle = '#ecca9b'; ctx.fillRect(bx, by + q * .39, q, q * .22);
           ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(bx, by + q * .42, q, q * .04); ctx.strokeStyle = 'rgba(90,55,25,.55)'; ctx.strokeRect(bx + .5, by + .5, q - 1, q - 1);
         }
         ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
       } else if (o.t === 's') {
-        const hz = o.w >= o.h; ctx.fillStyle = sh(DECK, .95); ctx.fillRect(x + 1, y + 1, w - 2, h - 2); ctx.fillStyle = sh(LARANJA, 1);
+        const hz = o.w >= o.h; ctx.fillStyle = sh(st ? st.rgb : DECK, .95); ctx.fillRect(x + 1, y + 1, w - 2, h - 2); ctx.fillStyle = sh(st ? st.rgb : LARANJA, 1);
         if (hz) { ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); } else { ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h); }
         ctx.fillStyle = sh(AZUL, 1); const n = hz ? o.w : o.h;
         for (let i = 0; i <= n; i++) { const px = hz ? clamp(x + i * cs - 3, x, x + w - 6) : x, py = hz ? y : clamp(y + i * cs - 3, y, y + h - 6); ctx.fillRect(px, py, 6, 6); if (hz) ctx.fillRect(px, y + h - 6, 6, 6); else ctx.fillRect(x + w - 6, py, 6, 6); }
@@ -367,8 +414,8 @@
     const FACES = [[[0, 0, -1], [0, 1, 3, 2]], [[0, 0, 1], [4, 5, 7, 6]], [[-1, 0, 0], [0, 2, 6, 4]], [[1, 0, 0], [1, 3, 7, 5]], [[0, 1, 0], [2, 3, 7, 6]]];
     // caixa (x,altura,z): faces voltadas para a câmera entram na lista L para pintar de trás para frente
     let hitNow = false, dimNow = false; const HIT = [250, 190, 40];       // busca: objeto achado (amarelo) / os outros ficam apagados
-    const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, stroke = 'rgba(0,0,0,.35)', skip, tx) => {
-      if (hitNow) { rgb = HIT; stroke = '#fff'; }
+    const addBox = (L, x0, y0, z0, x1, y1, z1, rgb, stroke = 'rgba(0,0,0,.35)', skip, tx, tint) => {
+      if (hitNow) { rgb = HIT; stroke = '#fff'; } else if (tint) rgb = tint.map(v => Math.round(v * .9));      // tint: cor do palete / do filtro
       const bxo = { x0, x1, y0, y1, z0, z1, f: [], lat: tx !== undefined }; L.boxes.push(bxo);      // a ordem de pintura é decidida por caixa (veja ordena)
       const c = []; for (let i = 0; i < 8; i++) c.push([i & 1 ? x1 : x0, i & 2 ? y1 : y0, i & 4 ? z1 : z0]);
       FACES.forEach(([n, ix]) => {
@@ -384,6 +431,7 @@
             : n[2] < 0 ? { img: side, tl: [x1, y1, z0], tr: [x0, y1, z0], bl: [x1, y0, z0], k: .82 }
             : n[0] > 0 ? { img: side, tl: [x1, y1, z1], tr: [x1, y1, z0], bl: [x1, y0, z1], k: .6 }
             : { img: TEX.plain, tl: [x0, y1, z0], tr: [x0, y1, z1], bl: [x0, y0, z0], k: .6 };
+          if (tint) t.tint = tint;
         }
         bxo.f.push({ pts, d: (mid[0] - B.c[0]) ** 2 + (mid[1] - B.c[1]) ** 2 + (mid[2] - B.c[2]) ** 2, fill: sh(rgb, n[1] > 0 ? 1 : n[2] ? .82 : .6), stroke, a: dimNow ? .28 : 1, t });
       });
@@ -394,7 +442,9 @@
       if (Math.hypot(Bp.x - A.x, Bp.y - A.y) < 10 && Math.hypot(C.x - A.x, C.y - A.y) < 10) return;
       ctx.save(); ctx.beginPath(); f.pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.clip();
       ctx.transform((Bp.x - A.x) / 256, (Bp.y - A.y) / 256, (C.x - A.x) / 256, (C.y - A.y) / 256, A.x, A.y);
-      ctx.drawImage(t.img, 0, 0); if (t.k < 1) { ctx.fillStyle = `rgba(0,0,0,${1 - t.k})`; ctx.fillRect(0, 0, 256, 256); } ctx.restore();
+      ctx.drawImage(t.img, 0, 0);
+      if (t.tint) { ctx.globalCompositeOperation = 'color'; ctx.fillStyle = `rgb(${t.tint})`; ctx.fillRect(0, 0, 256, 256); ctx.globalCompositeOperation = 'source-over'; }     // pinta mantendo o relevo, fita e etiqueta
+      if (t.k < 1) { ctx.fillStyle = `rgba(0,0,0,${1 - t.k})`; ctx.fillRect(0, 0, 256, 256); } ctx.restore();
     };
     /* Ordem de pintura SEM faces sumindo: em vez de ordenar faces pela distância do centro (errado para peças grandes ao lado de pequenas),
        ordena CAIXAS pelo plano que as separa: se existe um plano entre A e B com a câmera do lado de A, A nunca fica atrás de B.
@@ -485,7 +535,8 @@
       };
       const hit = new Set(vivos());
       D.objs.forEach(o => {
-        hitNow = hit.has(o.id); dimNow = hit.size > 0 && !hitNow;
+        const st = cores && cores.get(o.id), tint = st ? st.rgb : (o.t === 'p' && o.cor ? hexRgb(o.cor) : null);
+        hitNow = hit.has(o.id); dimNow = (hit.size > 0 || !!filtro && o.t !== 'w' && !st) && !hitNow;
         const gr = { b0: L.boxes.length, b1: 0, tx: [] }; let cands = [];
         const cx = o.x + o.w / 2, cz = o.y + o.h / 2, hz = o.w >= o.h;
         const topo = (y) => ({ c: [cx, y, cz], n: [0, 1, 0], U: hz ? [1, 0, 0] : [0, 0, -1], V: hz ? [0, 0, 1] : [1, 0, 0], w: (hz ? o.w : o.h) * .9, h: (hz ? o.h : o.w) * .9 });
@@ -501,7 +552,7 @@
           const gx = .01 / m2, gy = .004 / m2; let k = 0;
           for (let l = 0; l < P.L; l++) for (let ix = 0; ix < P.nx; ix++) for (let iz = 0; iz < P.nz; iz++) {
             const bx0 = o.x + P.ox + ix * P.s, bz0 = o.y + P.oz + iz * P.s, by0 = ph + l * P.s;
-            addBox(L, bx0 + gx / 2, by0 + gy / 2, bz0 + gx / 2, bx0 + P.s - gx / 2, by0 + P.s - gy / 2, bz0 + P.s - gx / 2, PAPELAO, 'rgba(60,35,15,.3)', undefined, k++);
+            addBox(L, bx0 + gx / 2, by0 + gy / 2, bz0 + gx / 2, bx0 + P.s - gx / 2, by0 + P.s - gy / 2, bz0 + P.s - gx / 2, PAPELAO, 'rgba(60,35,15,.3)', undefined, k++, tint);
           }
           cands = [topo(P.H + .005), ...lados((ph + P.H) / 2, (P.H - ph) * .85, .07)];
         } else if (o.t === 's') {
@@ -515,13 +566,14 @@
           dv.forEach(q => pc(q, 0, q + pt, Ht, C0, C1, AZUL, 'rgba(0,0,0,.3)'));                                          // divisórias em chapa
           for (let k = 0; k + 1 < dv.length; k++) {
             const a0 = dv[k] + pt, a1 = dv[k + 1]; if (a1 - a0 < .01) continue;
+            const CD = st ? st.rgb : DECK, CL = st ? st.rgb : LARANJA;                                                      // filtro ligado: prateleiras e abas na cor da situação
             pc(a0, 0, a1, b0, C0, C1, LARANJA, 'rgba(0,0,0,.3)');                                                           // rodapé
             for (let l = 0; l < an; l++) {
               const y = b0 + l * h1;
-              pc(a0, y, a1, y + e, C0 + .05, C1 - .05, DECK, 'rgba(0,0,0,.25)');                                            // prateleira
-              pc(a0, y, a1, y + fl, C0, C0 + .05, LARANJA, null); pc(a0, y, a1, y + fl, C1 - .05, C1, LARANJA, null);        // abas (frente e fundo)
+              pc(a0, y, a1, y + e, C0 + .05, C1 - .05, CD, 'rgba(0,0,0,.25)');                                            // prateleira
+              pc(a0, y, a1, y + fl, C0, C0 + .05, CL, null); pc(a0, y, a1, y + fl, C1 - .05, C1, CL, null);        // abas (frente e fundo)
             }
-            pc(a0, b0 + an * h1, a1, Ht, C0, C1, DECK, 'rgba(0,0,0,.25)');                                                  // tampo
+            pc(a0, b0 + an * h1, a1, Ht, C0, C1, CD, 'rgba(0,0,0,.25)');                                                  // tampo
           }
           cands = [topo(Ht + .005), ...lados(b0 + (an - .5) * h1, h1 * .7, -.01).filter(g => hz ? g.n[2] : g.n[0])];
         }
