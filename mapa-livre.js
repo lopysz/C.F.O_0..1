@@ -507,16 +507,22 @@
         } else if (o.t === 's') {
           // Prateleira de aço simples (como a "robusta"): divisórias em chapa, prateleiras lisas com aba na frente, tampo e rodapé
           const an = int(o.andares, 1, 6, 4), h1 = HA / m, e = .05 / m, fl = .09 / m, pt = .07, b0 = .1 / m, x1 = o.x + o.w, z1 = o.y + o.h, Ht = b0 + an * h1 + e, n = hz ? o.w : o.h, step = Math.max(1, Math.round(2.4 / m));
-          addBox(L, o.x, 0, o.y, x1, b0, z1, LARANJA, 'rgba(0,0,0,.3)');                                                    // rodapé
-          for (let l = 0; l < an; l++) {
-            const y = b0 + l * h1;
-            addBox(L, o.x + .02, y, o.y + .02, x1 - .02, y + e, z1 - .02, DECK, 'rgba(0,0,0,.25)');                           // prateleira
-            if (hz) { addBox(L, o.x, y, o.y, x1, y + fl, o.y + .05, LARANJA, null); addBox(L, o.x, y, z1 - .05, x1, y + fl, z1, LARANJA, null); }   // abas
-            else { addBox(L, o.x, y, o.y, o.x + .05, y + fl, z1, LARANJA, null); addBox(L, x1 - .05, y, o.y, x1, y + fl, z1, LARANJA, null); }
-          }
-          addBox(L, o.x, b0 + an * h1, o.y, x1, Ht, z1, DECK, 'rgba(0,0,0,.25)');                                           // tampo
+          // Peças que NÃO se atravessam (cada trecho entre duas divisórias é montado à parte): assim a ordem de pintura é exata e nada some ao girar
+          const A0 = hz ? o.x : o.y, A1 = hz ? x1 : z1, C0 = hz ? o.y : o.x, C1 = hz ? z1 : x1;                              // A = ao longo da prateleira, C = profundidade
+          const pc = (a0, y0, a1, y1, c0, c1, rgb, st) => hz ? addBox(L, a0, y0, c0, a1, y1, c1, rgb, st) : addBox(L, c0, y0, a0, c1, y1, a1, rgb, st);
           const pos = []; for (let i = 0; i < n; i += step) pos.push(i); pos.push(n);
-          pos.forEach(i => { if (hz) { const qx = clamp(o.x + i, o.x, x1 - pt); addBox(L, qx, 0, o.y, qx + pt, Ht, z1, AZUL, 'rgba(0,0,0,.3)'); } else { const qz = clamp(o.y + i, o.y, z1 - pt); addBox(L, o.x, 0, qz, x1, Ht, qz + pt, AZUL, 'rgba(0,0,0,.3)'); } });   // divisórias em chapa
+          const dv = pos.map(i => clamp(A0 + i, A0, A1 - pt));                                                              // início de cada divisória
+          dv.forEach(q => pc(q, 0, q + pt, Ht, C0, C1, AZUL, 'rgba(0,0,0,.3)'));                                          // divisórias em chapa
+          for (let k = 0; k + 1 < dv.length; k++) {
+            const a0 = dv[k] + pt, a1 = dv[k + 1]; if (a1 - a0 < .01) continue;
+            pc(a0, 0, a1, b0, C0, C1, LARANJA, 'rgba(0,0,0,.3)');                                                           // rodapé
+            for (let l = 0; l < an; l++) {
+              const y = b0 + l * h1;
+              pc(a0, y, a1, y + e, C0 + .05, C1 - .05, DECK, 'rgba(0,0,0,.25)');                                            // prateleira
+              pc(a0, y, a1, y + fl, C0, C0 + .05, LARANJA, null); pc(a0, y, a1, y + fl, C1 - .05, C1, LARANJA, null);        // abas (frente e fundo)
+            }
+            pc(a0, b0 + an * h1, a1, Ht, C0, C1, DECK, 'rgba(0,0,0,.25)');                                                  // tampo
+          }
           cands = [topo(Ht + .005), ...lados(b0 + (an - .5) * h1, h1 * .7, -.01).filter(g => hz ? g.n[2] : g.n[0])];
         }
         if (o.t !== 'w') texto3d([o.nome || '', o.conteudo || ''], cands, gr);
