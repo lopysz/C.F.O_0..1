@@ -52,6 +52,29 @@
           ${apagadas.map(([t, id, nome]) => `<div class="cf-row"><span><b>${esc(nome)}</b></span><button type="button" class="ghost" data-show="${t}:${esc(id)}">Restaurar</button></div>`).join('')}</div>` : ''}</section>`;
     }
 
+    // Perfil principal (Rafael): apagar/restaurar funções e gavetas do menu. Some para todos os perfis do almoxarifado de EPIs; os dados ficam guardados.
+    function secFuncoes() {
+      const oc = CFO.ocultos(), btn = (tipo, id, rot) => `<button type="button" class="ghost danger" data-hide="${tipo}:${esc(id)}" title="Apagar ${esc(rot)}" aria-label="Apagar ${esc(rot)}">${ico('trash', 16)} Apagar</button>`;
+      const apagadas = [...DRAWERS_TODAS.filter(d => oc.g.includes(d.id)).map(d => ['g', d.id, d.name + ' (gaveta inteira)']),
+        ...DRAWERS_TODAS.filter(d => !oc.g.includes(d.id)).flatMap(d => d.subs.filter(x => oc.f.includes(x.m)).map(x => ['f', x.m, x.name + ' (' + d.name + ')']))];
+      return `<section class="cf-sec"><h3>Funções do menu</h3>
+        <p class="log" style="margin-top:0">Apague o que o almoxarifado não usa: some do menu e do início de todos os perfis do almoxarifado. Os dados ficam guardados e você restaura quando quiser.</p>
+        ${DRAWERS_TODAS.filter(d => !oc.g.includes(d.id)).map(d => `<div class="cf-g"><h4>${esc(d.name)}</h4>
+          <div class="bar" style="padding:0;min-height:0;margin:.3rem 0">${btn('g', d.id, 'gaveta ' + d.name)}</div>
+          ${d.subs.filter(x => !oc.f.includes(x.m)).map(x => `<div class="cf-row"><span><b>${esc(x.name)}</b></span>${btn('f', x.m, 'função ' + x.name)}</div>`).join('')}</div>`).join('')}
+        ${apagadas.length ? `<div class="cf-g"><h4>Apagadas</h4>${apagadas.map(([t, id, nome]) => `<div class="cf-row"><span><b>${esc(nome)}</b></span><button type="button" class="ghost" data-show="${t}:${esc(id)}">Restaurar</button></div>`).join('')}</div>` : ''}</section>`;
+    }
+    // Liga os botões Apagar / Restaurar (usado pelo perfil principal e pelo administrador júnior do setor)
+    function ligaApagar(root) {
+      const muda = (tipo, id, add) => { const o = CFO.ocultos(), k = tipo === 'g' ? 'g' : 'f'; o[k] = add ? [...o[k], id] : o[k].filter(x => x !== id); CFO.ocultosSalvar(o); };
+      root.querySelectorAll('[data-hide]').forEach(b => b.onclick = () => {
+        const [t, id] = b.dataset.hide.split(':'), d = t === 'g' ? DRAWERS_TODAS.find(x => x.id === id) : null, f = t === 'f' ? DRAWERS_TODAS.flatMap(x => x.subs).find(x => x.m === id) : null;
+        const nome = d ? 'a gaveta "' + d.name + '" inteira (com todas as funções dela)' : 'a função "' + (f || {}).name + '"';
+        if (confirm('Apagar ' + nome + '?\n\nEla some do menu e do início. Os dados ficam guardados e você pode restaurar aqui mesmo depois.')) muda(t, id, true);
+      });
+      root.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { const [t, id] = b.dataset.show.split(':'); muda(t, id, false); });
+    }
+
     function draw() {
       const perfis = CFO.perfis(), eu = CFO.usuario() || {}, adm = CFO.admin();
       const epi = perfis.filter(p => p.perfil !== 'setor'), outros = perfis.filter(p => p.perfil === 'setor');
@@ -67,7 +90,8 @@
           <p class="log" style="margin-top:0">Cada setor trabalha isolado, com dados próprios só no aparelho dele: sem nuvem, sem WL e sem as requisições e planilhas do almoxarifado de EPIs.</p>
           ${setores.map(([id, nome]) => `<div class="cf-setor"><h4><span>${esc(nome || 'Setor')}</span><button class="ghost cf-rn" data-rs="${esc(id)}" aria-label="Renomear setor ${esc(nome)}" title="Renomear setor">✎</button></h4>
             <div class="cf-lista">${outros.filter(p => p.setor === id).map(p => linha(p, eu)).join('')}</div></div>`).join('') || '<p class="empty">Nenhum perfil de outro setor ainda.</p>'}</section>
-          <div class="bar" style="padding:0;margin-bottom:1rem;min-height:0"><button id="cf-novo">${ico('plus', 16)} Novo perfil</button></div>`
+          <div class="bar" style="padding:0;margin-bottom:1rem;min-height:0"><button id="cf-novo">${ico('plus', 16)} Novo perfil</button></div>
+          ${secFuncoes()}`
         : (eu.isolado ? secSetor(eu) + (eu.jr ? secNomes() : '') : `<section class="cf-sec"><h3>Perfis</h3><p class="log" style="margin-top:0">Só o perfil principal cria, exclui e limita perfis.</p></section>`)}</div>`;
       body.querySelector('#cf-tema').onclick = () => { CFO.tema.alternar(); draw(); };
       if (!adm) {
@@ -81,17 +105,12 @@
           const n = {}; body.querySelectorAll('[data-n]').forEach(i => { const v = i.value.trim(); if (v) n[i.dataset.n] = v; });
           CFO.rotulosSalvar({ n, termo: body.querySelector('#cf-t1').value.trim(), termos: body.querySelector('#cf-t2').value.trim() });
         };
-        const muda = (lista, tipo, id, add) => { const o = CFO.ocultos(), k = tipo === 'g' ? 'g' : 'f'; o[k] = add ? [...o[k], id] : o[k].filter(x => x !== id); CFO.ocultosSalvar(o); };
-        body.querySelectorAll('[data-hide]').forEach(b => b.onclick = () => {
-          const [t, id] = b.dataset.hide.split(':'), d = t === 'g' ? DRAWERS_TODAS.find(x => x.id === id) : null, f = t === 'f' ? DRAWERS_TODAS.flatMap(x => x.subs).find(x => x.m === id) : null;
-          const nome = d ? 'a gaveta "' + d.name + '" inteira (com todas as funções dela)' : 'a função "' + (f || {}).name + '"';
-          if (confirm('Apagar ' + nome + '?\n\nEla some do menu e do início deste setor. Os dados ficam guardados e você pode restaurar aqui mesmo depois.')) muda(null, t, id, true);
-        });
-        body.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { const [t, id] = b.dataset.show.split(':'); muda(null, t, id, false); });
+        ligaApagar(body);
         body.querySelector('#cf-npadrao').onclick = () => { if (confirm('Voltar todos os nomes ao padrão do sistema?')) CFO.rotulosLimpar(); };
         return;
       }
       body.querySelector('#cf-novo').onclick = novo;
+      ligaApagar(body);
       body.querySelectorAll('.cf-perfil').forEach(el => el.onclick = e => { if (e.target.closest('.cf-del')) return; const p = CFO.perfis().find(x => x.chave === el.dataset.k); if (p && !p.admin) editar(p); });
       body.querySelectorAll('.cf-del').forEach(b => b.onclick = e => { e.stopPropagation(); excluir(b.dataset.del); });
       body.querySelectorAll('.cf-rn').forEach(b => b.onclick = () => { const nome = (setores.find(x => x[0] === b.dataset.rs) || [])[1] || ''; CFO.dialog('Renomear setor', `<label>Nome do setor<input name="n" required value="${esc(nome)}" autocomplete="off"></label>`, d => { CFO.setorRenomear(b.dataset.rs, d.n); draw(); }); });

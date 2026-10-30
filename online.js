@@ -2,6 +2,7 @@
    - Usa o Realtime do Supabase (Presence) com a mesma URL/chave do supabase-config.js: nada novo para configurar.
    - Mostra na barra do topo uma bolinha verde com o número de pessoas online; ao tocar, abre a lista de perfis conectados.
    - Só os perfis com  ver: true  (no login.js: Rafael e Rafael Demax) enxergam a bolinha, a lista e os avisos; os demais só aparecem para eles.
+   - Perfis de outros setores (ex.: João) também aparecem na lista, com o nome do setor. Eles continuam sem ver ninguém e sem mandar dado nenhum: só presença.
    - Quando alguém entra, aparece um aviso rápido ("Robson entrou"). Quem sai ou fecha a aba some da lista sozinho.
    - Pessoa = nome do perfil (os logins "demax", "rafael demax" e "rafaeldemax" contam como um só: Rafael Demax).
      O mesmo perfil em 2 aparelhos conta 1 pessoa, mas a lista mostra "2 aparelhos".
@@ -36,13 +37,16 @@
     const g = new Map();
     Object.values(estado).flat().forEach(m => {
       if (!m || !m.nome) return;
-      const x = g.get(m.nome) || { nome: m.nome, perfil: m.perfil, desde: m.desde, ap: m.ap, cidade: m.cidade, n: 0 };
-      x.n++; if (m.desde && m.desde < x.desde) { x.desde = m.desde; x.ap = m.ap; x.cidade = m.cidade; } g.set(m.nome, x);
+      const k = m.nome + '|' + (m.setor || '');                // mesmo nome em setores diferentes são pessoas diferentes
+      const x = g.get(k) || { nome: m.nome, setor: m.setor || '', perfil: m.perfil, desde: m.desde, ap: m.ap, cidade: m.cidade, n: 0 };
+      x.n++; if (m.desde && m.desde < x.desde) { x.desde = m.desde; x.ap = m.ap; x.cidade = m.cidade; } g.set(k, x);
     });
-    return [...g.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    // almoxarifado de EPIs primeiro, depois cada setor
+    return [...g.values()].sort((a, b) => (a.setor || '').localeCompare(b.setor || '', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'));
   };
   const hora = iso => { try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
-  const PERFIL = { total: 'Acesso total', leve: 'Modo leve', aprendiz: 'Aprendiz' };
+  const PERFIL = { total: 'Acesso total', leve: 'Modo leve', aprendiz: 'Aprendiz', custom: 'Perfil criado', setor: 'Outro setor' };
+  const rotulo = p => p.setor ? 'Setor: ' + p.setor : (PERFIL[p.perfil] || p.perfil || '');
 
   // Aparelho/navegador (sem pedir nada: só olha o user-agent)
   const aparelhoInfo = () => {
@@ -75,11 +79,11 @@
     const eu = CFO.usuario?.();
     pill.hidden = !(eu && eu.ver);
     if (!eu || !eu.ver) return;
-    const lista = pessoas(), nomes = new Set(lista.map(p => p.nome));
+    const lista = pessoas(), nomes = new Set(lista.map(p => p.nome + (p.setor ? ' (' + p.setor + ')' : '')));
     pill.querySelector('span').textContent = ligado ? lista.length : '–';
     pill.classList.toggle('off', !ligado);
-    pill.title = ligado ? (lista.length ? 'Online: ' + lista.map(p => p.nome).join(', ') : 'Ninguém online') : 'Sem conexão com o servidor';
-    if (!primeiro) nomes.forEach(n => { if (!antes.has(n) && n !== eu.nome) aviso(n + ' entrou'); });
+    pill.title = ligado ? (lista.length ? 'Online: ' + lista.map(p => p.nome + (p.setor ? ' (' + p.setor + ')' : '')).join(', ') : 'Ninguém online') : 'Sem conexão com o servidor';
+    if (!primeiro) nomes.forEach(n => { if (!antes.has(n) && n !== eu.nome) aviso(n.replace(/ \(.*\)$/, '') + ' entrou'); });
     if (ligado && Object.keys(estado).length) primeiro = false;
     antes = nomes;
     const dlg = document.getElementById('onl-dlg'); if (dlg?.open) dlg.querySelector('.onl-lista').innerHTML = html(lista, eu);
@@ -87,7 +91,7 @@
 
   const html = (lista, eu) => !ligado ? '<p class="onl-vazio">Sem conexão com o servidor. Tentando reconectar...</p>'
     : lista.length ? lista.map(p => `<div class="onl-p"><i class="onl-dot"></i><div><b>${esc(p.nome)}${eu && p.nome === eu.nome ? ' (você)' : ''}</b>
-        <small>${esc(PERFIL[p.perfil] || p.perfil || '')}${p.n > 1 ? ' · ' + p.n + ' aparelhos' : ''}${p.desde ? ' · desde ' + hora(p.desde) : ''}</small>
+        <small>${esc(rotulo(p))}${p.n > 1 ? ' · ' + p.n + ' aparelhos' : ''}${p.desde ? ' · desde ' + hora(p.desde) : ''}</small>
         <small>${esc([p.ap, p.cidade].filter(Boolean).join(' · ')) || '-'}</small></div></div>`).join('')
       : '<p class="onl-vazio">Ninguém online.</p>';
 
@@ -107,8 +111,8 @@
 
   function conectar() {
     const eu = CFO.usuario?.();
-    if (!eu || ws || eu.isolado) return;                      // perfil de outro setor não aparece online (sem conexão com o servidor)
-    euMeta = { nome: eu.nome, perfil: eu.perfil, desde: new Date().toISOString(), ap: aparelhoInfo(), cidade: '' };
+    if (!eu || ws) return;                                    // perfis de outros setores também se anunciam: só a presença (nome, setor, aparelho); nenhum dado do setor sai do aparelho
+    euMeta = { nome: eu.nome, perfil: eu.perfil, setor: eu.isolado ? (eu.setorNome || 'Outro setor') : '', desde: new Date().toISOString(), ap: aparelhoInfo(), cidade: '' };
     buscaCidade().then(cidade => { euMeta.cidade = cidade; if (ligado) envia(TOPICO, 'presence', { type: 'presence', event: 'track', payload: euMeta }); });
     try { ws = new WebSocket(WS); } catch { agendar(); return; }
     const w = ws;

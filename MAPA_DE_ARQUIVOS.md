@@ -34,7 +34,7 @@ Pedaços "só de setor" que ficam dentro de arquivos comuns:
 |---|---|
 | `supabase-sync.js`, `supabase-enviar.js`, `supabase-import.js`, `supabase-config.js` | nuvem principal: `if (CFO.espaco) return`. Obs.: `supabase-config.js` (URL/chave) é lido também pelo `setor-sync.js` |
 | `wl-config.js`, `wl-sync.js` | Sincronizar WL: desligado (`CFO.espaco`), botão escondido |
-| `online.js` | "Quem está online": perfil `isolado` não aparece |
+| `online.js` | "Quem está online": só quem tem `ver: true` (Rafael) enxerga a lista; os perfis de setor também se anunciam (só nome, setor e aparelho) e aparecem para ele com o nome do setor |
 | `registros.js` | botão **Registros** escondido para setor |
 | `painel.js` | painel do Início (aguardando retirada etc.): usa requisições/fotos do EPI; no setor aparece vazio |
 
@@ -42,6 +42,14 @@ Pedaços "só de setor" que ficam dentro de arquivos comuns:
 - Núcleo: `core.js`, `login.js`, `app.js`, `config-perfis.js`, `index.html`, `style.css`
 - Planilhas e importar/exportar: `planilhas.js`, `exportar.js`, `importar-pasta.js`, `importar-drive.js`
 - Funções do menu: `epi.js` (Planilha EPI), `contratos.js`, `requisicoes.js`, `historico-movimentacao.js`, `epis-por-contrato.js`, `controle-gastos.js`, `controle-mensal.js`, `foto-separacao.js`, `gerador-identificacao.js`, `contagem-estoque.js`, `mapa-almoxarifado.js`
+
+## Importar planilhas (qualquer nome de coluna)
+- `planilhas.js`: `CFO.SINONIMOS` guarda os nomes que valem para o mesmo campo (código = identificador, id, sku...; item = produto, descrição, material, peça...; quantidade = saldo, estoque, qtde...). Acrescente palavras ali.
+- Quando sobra coluna que o sistema não entendeu, abre **Conferir colunas**; a escolha fica lembrada (`mapeamentos`) para toda planilha com o mesmo cabeçalho.
+- `importar-pasta.js`: planilha que o sistema não reconhece pergunta de qual função é, em vez de ser ignorada.
+
+## Funções apagadas do menu
+- `CFO.ocultos()` (setores.js) vale no almoxarifado de EPIs (Rafael apaga/restaura em ⚙ > Funções do menu; sincroniza pela nuvem) e nos setores (administrador júnior).
 
 ## Como criar uma função nova
 - **Só para setores:** arquivo novo + entrada em `DRAWERS` (`app.js`) + regra em `CFO.pode` (como `mapalivre`) + `<script>` no `index.html`.

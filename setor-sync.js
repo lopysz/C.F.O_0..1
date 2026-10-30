@@ -71,13 +71,19 @@
           const localNovo = meta.dirty[d.key] && meta.synced && (meta.mod[d.key] || 0) > (d.updatedAt || 0);
           if (forcar || !localNovo) { aplica(d, nome, upd); mudou = true; }
         }
+        const enviados = [];
         for (const k of chavesLocais()) {
           const nome = nomeObj(k);
-          if (meta.dirty[k] || reenviar || !remoto.has(nome)) { if (!meta.mod[k]) meta.mod[k] = Date.now(); await enviar(k); delete meta.dirty[k]; }
+          if (meta.dirty[k] || reenviar || !remoto.has(nome)) {
+            if (!meta.mod[k]) meta.mod[k] = Date.now();
+            const antes = meta.mod[k];
+            await enviar(k); if (meta.mod[k] === antes) delete meta.dirty[k]; enviados.push(nome);   // mudou durante o envio? continua marcado para o próximo ciclo
+          }
         }
+        if (enviados.length) { const novo = await listar(); enviados.forEach(n => { if (novo.has(n)) meta.seen[n] = novo.get(n); }); }   // o que este aparelho enviou não precisa ser baixado de volta
         meta.synced = true; salvaMeta();
         mostra('ok', 'Sincronizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (mudou ? ' (dados novos recebidos)' : ''));
-        /* sem aviso: os dados novos já aparecem sozinhos */
+        if (mudou) document.dispatchEvent(new Event('cfo-sync'));   // as telas abertas se atualizam sozinhas (antes ficavam com dados velhos e podiam sobrescrever a nuvem)
       } catch (e) {
         mostra('err', 'Sem sincronizar: ' + e.message + (navigator.onLine ? '' : ' (sem internet)'));
         if (manual) alert('Não consegui sincronizar o setor.\n' + e.message);

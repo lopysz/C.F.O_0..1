@@ -40,7 +40,7 @@ CFO.estoqueMin = rows => {
 
 // Planilha de EPIs (modelo: CÓDIGO | ITEM / DESCRIÇÃO | QUANTIDADE EM ESTOQUE)
 CFO.modules.epi = CFO.sheet({
-  key: 'epi', title: 'Planilha EPI', hints: ['epi', 'inventario'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
+  key: 'epi', title: 'Planilha EPI', hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
   columns: [
     { k: 'codigo', label: 'Código', alias: ['cod', 'codigo item'] },
     { k: 'item', label: 'Item / Descrição', alias: ['item', 'descricao', 'produto', 'epi'] },

@@ -67,7 +67,7 @@
     return r;
   };
 
-  let rodando = null, pendente = false, avisoMudou = false;
+  let rodando = null, pendente = false;
   async function sync({ forcar = false, manual = false, reenviar = false } = {}) {
     if (!ativo || CFO.espaco) return;                    // perfil de outro setor: nenhuma sincronia
     if (rodando) { pendente = true; return rodando; }
@@ -89,7 +89,8 @@
           const nome = nomeObj(k);
           if (meta.dirty[k] || reenviar || !remoto.has(nome)) {
             if (!meta.mod[k]) meta.mod[k] = Date.now();
-            await enviar(k); delete meta.dirty[k]; nomesEnv.push(nome);
+            const antes = meta.mod[k];
+            await enviar(k); if (meta.mod[k] === antes) delete meta.dirty[k]; nomesEnv.push(nome);   // mudou durante o envio? continua marcado e vai no próximo ciclo
           }
         }
         if (nomesEnv.length) { const novo = await listar(); nomesEnv.forEach(n => { if (novo.has(n)) meta.seen[n] = novo.get(n); }); }
@@ -111,7 +112,7 @@
           const i = dk.indexOf('/'), st = dk.slice(0, i), id = dk.slice(i + 1), nome = nomeDb(st, id);
           const rec = op.op === 'put' ? await raw.get(st, id) : null;
           await envObj(nome, rec ? { store: st, id: rec.id, updatedAt: op.ts, value: rec } : { store: st, id, deleted: true, updatedAt: op.ts });
-          delete meta.dbDirty[dk]; nomesDb.push(nome);
+          if (meta.dbDirty[dk] === op) delete meta.dbDirty[dk]; nomesDb.push(nome);
         }
         for (const st of STORES) for (const id of await raw.keys(st)) {   // fotos antigas ainda não enviadas (só as chaves: não carrega as fotos na memória a cada ciclo)
           const nome = nomeDb(st, id);
@@ -120,10 +121,7 @@
         if (nomesDb.length) for (const st of STORES) (await listar(`${dbRaiz}/${st}`)).forEach((u, n) => { if (nomesDb.includes(n)) meta.seen[n] = u; });
         meta.synced = true; salvaMeta();
         mostra('ok', 'Sincronizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (mudou ? ' (dados novos recebidos)' : ''));
-        if (mudou) { avisoMudou = true; document.dispatchEvent(new Event('cfo-sync')); }
-        /* sem aviso: os dados novos já aparecem sozinhos */
-        else if (mudou && !CFO.screens.length) { /* nenhuma tela aberta: já aparece atualizado ao abrir */ }
-        else if (mudou) mostra('ok', 'Dados novos recebidos — feche e abra a tela para ver');
+        if (mudou) document.dispatchEvent(new Event('cfo-sync'));   // as telas abertas se atualizam sozinhas
       } catch (e) {
         mostra('err', 'Sem sincronizar: ' + e.message + (navigator.onLine ? '' : ' (sem internet)'));
         if (manual) alert('Não consegui sincronizar.\n' + e.message + '\n\nConfira as políticas do Storage (SELECT, INSERT e UPDATE) e a chave no supabase-config.js.');

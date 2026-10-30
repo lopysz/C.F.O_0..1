@@ -26,6 +26,7 @@
 
   CFO.termo = {
     ativo: () => !!T(),
+    palavras: () => { const t = T(); return t ? [t.s, t.p] : []; },
     t: txt => { const t = T(); return t && typeof txt === 'string' ? troca(txt, t) : txt; },
     // HTML de relatório: troca só o texto (fora de tags e fora das células de dados <td>)
     html: h => {
@@ -57,8 +58,9 @@
 
   /* ----- Funções e gavetas apagadas (só o administrador júnior do setor) -----
      'rotulos'.ocultos = { g: [id da gaveta], f: [módulo da função] }. Some do menu, do início e do painel; os dados continuam guardados e dá para restaurar. */
-  CFO.ocultos = () => { const o = (E() && rotulos().ocultos) || {}; return { g: o.g || [], f: o.f || [] }; };
-  CFO.ocultosSalvar = o => { CFO.store.set('rotulos', { ...rotulos(), ocultos: { g: [...new Set(o.g)], f: [...new Set(o.f)] } }); location.reload(); };
+  // Setor: guardado no espaço do setor. Almoxarifado de EPIs: só o perfil principal (Rafael) apaga/restaura; vale para todos os perfis do almoxarifado (sincroniza pela nuvem)
+  CFO.ocultos = () => { const o = ((CFO.store.get('rotulos', null) || {}).ocultos) || {}; return { g: o.g || [], f: o.f || [] }; };
+  CFO.ocultosSalvar = o => { CFO.store.set('rotulos', { ...(CFO.store.get('rotulos', null) || { n: {} }), ocultos: { g: [...new Set(o.g)], f: [...new Set(o.f)] } }); location.reload(); };
 
   /* ----- Dados do setor neste aparelho ----- */
   const prefixo = id => 'cfs:' + id + ':';

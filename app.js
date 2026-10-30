@@ -12,6 +12,16 @@ const DRAWERS = [
 const DRAWERS_TODAS = DRAWERS.map(d => ({ ...d, subs: [...d.subs] }));
 { const o = CFO.ocultos ? CFO.ocultos() : { g: [], f: [] }; for (let i = DRAWERS.length - 1; i >= 0; i--) { if (o.g.includes(DRAWERS[i].id)) DRAWERS.splice(i, 1); else DRAWERS[i].subs = DRAWERS[i].subs.filter(s => !o.f.includes(s.m)); } }
 
+// Menu/nomes mudaram em outro aparelho (chegou pela nuvem): recarrega quando não houver tela nem janela aberta, para não atrapalhar ninguém
+const ROT0 = JSON.stringify(CFO.store.get('rotulos', null));
+let recarregarMenu = false;
+const talvezRecarregar = () => {
+  if (!recarregarMenu) return;
+  if (CFO.screens.length || document.querySelector('dialog[open]')) { setTimeout(talvezRecarregar, 4000); return; }
+  location.reload();
+};
+document.addEventListener('cfo-sync', () => { if (JSON.stringify(CFO.store.get('rotulos', null)) !== ROT0) { if (!recarregarMenu) { recarregarMenu = true; talvezRecarregar(); } } });
+
 const IC = {
   home: '<path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1z"/>',
   box: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>',
@@ -44,7 +54,7 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? nD(d) : nC(d)}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
 function montarNav() {
-  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030j</div>`;
+  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030p</div>`;
   tabbar.innerHTML = navHTML(false);
   document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
   document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);

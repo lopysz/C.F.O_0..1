@@ -18,7 +18,7 @@
     return m < 1 ? 'agora' : m < 60 ? `há ${Math.floor(m)} min` : m < 1440 ? `há ${Math.floor(m / 60)} h` : `há ${Math.floor(m / 1440)} d`;
   };
   const dias = iso => (Date.now() - new Date(iso)) / 864e5;
-  const acao = (m, txt) => CFO.pode('abrir', m) ? `<button class="pg-a" data-go="${m}">${txt}</button>` : '';
+  const acao = (m, txt) => CFO.pode('abrir', m) && DRAWERS.some(d => d.subs.some(x => x.m === m)) ? `<button class="pg-a" data-go="${m}">${txt}</button>` : '';
   const tile = (cls, titulo, extra, corpo) => `<section class="pg-t ${cls}"><header><h3>${titulo}</h3>${extra || ''}</header>${corpo}</section>`;
 
   /* 1) Aguardando retirada */
