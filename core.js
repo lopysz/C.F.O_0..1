@@ -1,6 +1,9 @@
 /* ===== Núcleo: utilitários, armazenamento, telas e diálogos ===== */
 const CFO = { modules: {}, screens: [] };
 
+// Logo do C.F.O: duas imagens (tema claro e escuro); o CSS (.lg-claro / .lg-escuro) mostra só a do tema atual. tipo = 'completo' (símbolo + C.F.O) ou 'icone' (só o símbolo)
+CFO.logo = (tipo, cls = '') => `<img class="lg-claro ${cls}" src="img/logo-${tipo}.png" alt="C.F.O" decoding="async"><img class="lg-escuro ${cls}" src="img/logo-${tipo}-escuro.png" alt="" aria-hidden="true" decoding="async">`;
+
 CFO.norm = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 // Converte texto em número (aceita 1.234,50 e 12.9)
 CFO.toNum = v => { v = String(v ?? '').replace(/[^\d,.-]/g, ''); if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.'); return parseFloat(v) || 0; };

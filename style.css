@@ -19,7 +19,6 @@ svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:
 .app{height:100%;display:grid;grid-template-columns:var(--rail-w) 1fr;grid-template-rows:auto 1fr}
 .rail{grid-row:1/3;display:flex;flex-direction:column;gap:4px;padding:20px 14px;border-right:1px solid var(--line);background:var(--panel)}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 10px 22px;font-weight:650;letter-spacing:.02em}
-.brand i{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:700}
 .brand small{display:block;font-weight:400;font-size:11px;color:var(--muted);letter-spacing:0;line-height:1.2}
 .nav{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--muted);text-align:left;transition:background .15s,color .15s}
 .nav:hover{background:var(--bg);color:var(--text)}
@@ -269,13 +268,13 @@ dialog.imp button.ghost{text-align:center}
 }
 
 /* ===== 15. Login ===== */
-#login{position:fixed;inset:0;z-index:1000;background:var(--bg);overflow:auto}
+#login{position:fixed;inset:0;z-index:1000;background:var(--bg);overflow:auto;display:flex;flex-direction:column;align-items:center;gap:clamp(1rem,4vh,2rem);padding:1.5rem 0}
 #login[hidden]{display:none}
 body.locked{overflow:hidden}
-.lg-top{position:absolute;top:max(7vh,2rem);left:0;right:0;text-align:center;padding:0 1rem}
-.lg-top h1{font-size:clamp(1.8rem,7vw,2.6rem);font-weight:700}
-.lg-top h2{font-size:clamp(1.3rem,5vw,1.8rem);font-weight:600;color:var(--accent);letter-spacing:.2em;margin-top:.3rem}
-.lg-card{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(88vw,340px);display:flex;flex-direction:column;gap:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1.4rem}
+.lg-top{text-align:center;padding:0 1rem;margin-top:auto}
+.lg-img{display:block;margin:0 auto;height:clamp(120px,22vh,190px);width:auto}
+.lg-tag{margin:.6rem 0 0;font-size:clamp(.95rem,3.6vw,1.15rem);font-weight:500;color:var(--muted);letter-spacing:.02em}
+.lg-card{margin-bottom:auto;width:min(88vw,340px);display:flex;flex-direction:column;gap:.8rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:1.4rem}
 .lg-card input{padding:.75rem .9rem;font-size:1rem}
 .lg-card button{padding:.75rem;font-weight:600}
 .lg-card button:disabled{opacity:.6;cursor:wait}
@@ -589,3 +588,14 @@ body.locked .onl{display:none}
 .cf-nm{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
 @media (max-width:560px){.cf-nm{grid-template-columns:1fr}}
 .setor-nota{margin:.2rem 0 .8rem;padding:.55rem .8rem;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+
+/* ===== Logo C.F.O: mostra a versão do tema atual (claro = azul-marinho; escuro = azul-marinho com contorno branco) ===== */
+.lg-escuro{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .lg-claro{display:none}:root:not([data-theme="light"]) .lg-escuro{display:block}}
+:root[data-theme="dark"] .lg-claro{display:none}
+:root[data-theme="dark"] .lg-escuro{display:block}
+.brand-img{width:34px;height:34px;object-fit:contain;flex:none}
+.crumb-logo{display:inline-flex;align-items:center;gap:8px}
+.crumb-img{height:44px;width:auto;flex:none}
+.crumb-logo b{font-size:1.15rem;letter-spacing:.14em;color:var(--text)}
+@media (max-width:900px){.crumb-img{height:40px}}

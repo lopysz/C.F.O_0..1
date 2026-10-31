@@ -54,7 +54,7 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? nD(d) : nC(d)}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
 function montarNav() {
-  rail.innerHTML = `<div class="brand"><i>C</i><span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261030p</div>`;
+  rail.innerHTML = `<div class="brand">${CFO.logo('icone', 'brand-img')}<span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261031a</div>`;
   tabbar.innerHTML = navHTML(false);
   document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
   document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
@@ -86,7 +86,8 @@ function atualizar() {
   const n = CFO.screens.length;
   back.hidden = n === 0;
   const partes = n ? [ctx?.name, ...CFO.screens.map(s => s.dataset.title)].filter(Boolean) : ['C.F.O'];
-  crumb.innerHTML = partes.map((p, i) => i === partes.length - 1 ? `<b>${CFO.esc(p)}</b>` : `<span class="p">${CFO.esc(p)} / </span>`).join('');
+  if (!n) { crumb.innerHTML = `<span class="crumb-logo">${CFO.logo('icone', 'crumb-img')}<b>C.F.O</b></span>`; }   // início: a logo no canto esquerdo
+  else crumb.innerHTML = partes.map((p, i) => i === partes.length - 1 ? `<b>${CFO.esc(p)}</b>` : `<span class="p">${CFO.esc(p)} / </span>`).join('');
   document.querySelectorAll('.nav').forEach(b => b.classList.toggle('on', n ? b.dataset.d === ctx?.id : b.hasAttribute('data-home')));
   barra.classList.remove('more');
   CFO.painel?.aoMudarTela();

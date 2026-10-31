@@ -125,7 +125,7 @@
   CFO.espaco = (() => { const u = atual(); return u ? espacoDe(US()[u]) : ''; })();
 
   const ov = document.createElement('div'); ov.id = 'login';
-  ov.innerHTML = `<div class="lg-top"><h1>Bem vindo</h1><h2>C.F.O</h2></div>
+  ov.innerHTML = `<div class="lg-top">${CFO.logo('completo', 'lg-img')}<p class="lg-tag">Caixa de Ferramentas Operacional</p></div>
     <form class="lg-card" autocomplete="on">
       <input id="lg-u" name="username" type="text" placeholder="Login" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
       <input id="lg-p" name="password" type="password" placeholder="Senha" autocomplete="current-password" required>
