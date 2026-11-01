@@ -37,22 +37,24 @@
     if (!await garante()) return;
     const q = montar(r);
     if (!q.itens.length) { alert('Esta requisição não tem itens aprovados.'); return; }
-    if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.`)) return;
+    if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.\nPara pausar/continuar: leve o mouse ao canto superior direito.`)) return;
     try { await chamar(simular ? '/testar' : '/executar', { requisicao: q }); aoIniciar ? aoIniciar() : tela(r); }
     catch (e) { alert(e.message); }
   }
 
   // Acompanha o andamento (log do agente)
-  function acompanhar(el, parar) {
+  function acompanhar(el, parar, pausa) {
     const t = setInterval(async () => {
       if (!el.isConnected) return clearInterval(t);
-      try { const s = await chamar('/estado'); el.textContent = s.log.join('\n'); el.scrollTop = el.scrollHeight; if (parar) parar.hidden = !s.rodando; } catch { clearInterval(t); }
+      try { const s = await chamar('/estado'); el.textContent = s.log.join('\n'); el.scrollTop = el.scrollHeight; if (parar) parar.hidden = !s.rodando; if (pausa) { pausa.hidden = !s.rodando || s.pausado === undefined; pausa.dataset.p = s.pausado ? '1' : '0'; pausa.textContent = s.pausado ? '▶ Continuar' : '⏸ Pausar'; } } catch { clearInterval(t); }
     }, 700);
   }
   function tela(r) {
     CFO.open('Preenchendo ' + r.id, b => {
-      b.innerHTML = '<div class="nf"><div class="nf-row" style="margin:0 0 .8rem"><button id="p" class="ghost danger">⏹ Parar</button></div><pre class="nf-log" id="l"></pre></div>';
-      const p = b.querySelector('#p'); p.onclick = () => chamar('/parar', {}).catch(() => {}); acompanhar(b.querySelector('#l'), p);
+      b.innerHTML = '<div class="nf"><div class="nf-row" style="margin:0 0 .8rem"><button id="ps" class="ghost" hidden>⏸ Pausar</button><button id="p" class="ghost danger">⏹ Parar</button></div><pre class="nf-log" id="l"></pre></div>';
+      const p = b.querySelector('#p'); p.onclick = () => chamar('/parar', {}).catch(() => {});
+      const ps = b.querySelector('#ps'); ps.onclick = () => chamar(ps.dataset.p === '1' ? '/continuar' : '/pausar', {}).catch(() => {});
+      acompanhar(b.querySelector('#l'), p, ps);
     });
   }
 
@@ -398,7 +400,7 @@ dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
   function baixarAgente() {
     const ir = () => CFO.baixarAgenteNF();
     if (CFO.baixarAgenteNF) return ir();
-    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261031c'; sc.onload = ir;
+    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261101b'; sc.onload = ir;
     sc.onerror = () => alert('Não achei o arquivo automacao-nf-pacote.js. Confira se ele foi enviado ao GitHub junto com os outros.');
     document.head.append(sc);
   }
