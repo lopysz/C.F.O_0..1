@@ -109,12 +109,32 @@
   const num = (x, d = '0') => String(x == null ? '' : x).replace(/[^\d.,-]/g, '') || d;
   const R = (re, fn) => c => { const m = re.exec(c); return m ? fn(m) : null; };
   const SIS = [['data', 'data de hoje'], ['hora', 'hora de agora'], ['contrato', 'número do contrato'], ['contrato_nome', 'nome do contrato'], ['nome', 'solicitante'], ['requisicao', 'número da requisição'], ['mes', 'mês'], ['motivo', 'motivo'], ['produto', 'produto (dentro de "para cada produto")'], ['codigo', 'código do produto (idem)'], ['quantidade', 'quantidade (idem)'], ['tamanho', 'tamanho (idem)'], ['preco', 'preço (idem)']];
+  // Dados da requisição (simples, funcionam em qualquer lugar do roteiro). Dados de produto ficam nos blocos "Itens da requisição".
+  const SIS_REQ = [['data', 'Data de hoje'], ['hora', 'Hora de agora'], ['requisicao', 'Número da requisição'], ['contrato', 'Número do contrato'], ['contrato_nome', 'Nome do contrato'], ['nome', 'Nome do solicitante'], ['mes', 'Mês'], ['motivo', 'Motivo']];
   const TECLAS = ['enter', 'tab', 'esc', 'baixo', 'cima', 'esquerda', 'direita', 'espaco', 'delete', 'apagar', 'home', 'end', 'f2', 'f5'];
   const PRONTOS = ['fechar janela', 'fechar aba', 'nova aba', 'voltar', 'avancar', 'atualizar', 'selecionar tudo', 'copiar', 'colar', 'recortar', 'desfazer', 'salvar', 'imprimir'];
-  const COR = { 'Mouse': '#3b82f6', 'Escrever': '#22c55e', 'Teclas': '#f59e0b', 'Programas e esperas': '#a855f7', 'Produtos e decisões': '#ef4444', 'Mais': '#64748b' };
-  const ICO = { 'Mouse': '🖱️', 'Escrever': '✍️', 'Teclas': '⌨️', 'Programas e esperas': '🪟', 'Produtos e decisões': '🔀', 'Mais': '⚙️' };
+  const COR = { 'Mouse': '#3b82f6', 'Escrever': '#22c55e', 'Itens da requisição': '#14b8a6', 'Teclas': '#f59e0b', 'Programas e esperas': '#a855f7', 'Produtos e decisões': '#ef4444', 'Mais': '#64748b' };
+  const ICO = { 'Mouse': '🖱️', 'Escrever': '✍️', 'Itens da requisição': '📦', 'Teclas': '⌨️', 'Programas e esperas': '🪟', 'Produtos e decisões': '🔀', 'Mais': '⚙️' };
   const XY = [{ k: 'x', lab: 'X', tipo: 'num', def: '0' }, { k: 'y', lab: 'Y', tipo: 'num', def: '0' }];
   const OPS = [['vazio', 'está vazio'], ['nao vazio', 'não está vazio'], ['for', 'for igual a'], ['nao for', 'for diferente de'], ['contem', 'contém']];
+  // Blocos "Lançar os itens": viram um "para cada produto" pronto (digita código ou nome, Enter, quantidade, Enter, e vai para o próximo item)
+  const ITENS_F = (oq) => [
+    { k: 'e1', lab: `Quantos Enter depois do ${oq} (até chegar na quantidade)`, tipo: 'num', def: '2', larg: 1 },
+    { k: 'e2', lab: 'Quantos Enter depois da quantidade (até cadastrar o item)', tipo: 'num', def: '2', larg: 1 },
+    { k: 'seg', lab: 'Esperar quantos segundos depois do 1º Enter (para o sistema da NF achar o item)', tipo: 'num', def: '1', larg: 1 }];
+  const itensTexto = (modo, v) => {
+    const cod = modo === 'cod', n = (x, d) => Math.max(0, Math.floor(Number(String(num(x, d)).replace(',', '.'))) || 0), e1 = n(v.e1, '2'), e2 = n(v.e2, '2'), seg = String(num(v.seg, '1')).replace(',', '.');
+    const L = [`# [itens ${modo} ${e1} ${e2} ${seg}] lanca cada item da requisicao: ${cod ? 'codigo' : 'nome'} + quantidade`, 'para cada produto'], i = cod ? '    ' : '  ';
+    const enter = q => q > 0 ? [i + (q === 1 ? 'tecla enter' : `tecla enter ${q} vezes`)] : [];
+    if (cod) L.push('  se {codigo} nao vazio');
+    L.push(i + `digitar ${cod ? '{codigo}' : '{produto}'}`);
+    if (e1 > 0) { L.push(...enter(1)); if (Number(seg) > 0) L.push(i + `esperar ${seg}`); L.push(...enter(e1 - 1)); }
+    L.push(i + 'digitar {quantidade}', ...enter(e2));
+    if (cod) L.push('  senao', '    avisar "Item sem codigo: {produto} (quantidade {quantidade}). Lance este item na mao e clique OK."', '  fim se');
+    L.push('fim');
+    return L.join('\n');
+  };
+  const itensLer = (c, modo) => { const m = /^@@itens\s+(cod|nome)\s+(\d+)\s+(\d+)\s+([\d.,]+)$/.exec(c); return m && m[1] === modo ? { e1: m[2], e2: m[3], seg: m[4] } : null; };
   const B = [
     { id: 'clicar', g: 'Mouse', nome: 'Clicar', f: XY, out: v => `clicar em ${num(v.x)},${num(v.y)}`, ler: R(/^clicar\s+(?:em|na|no)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
     { id: 'duplo', g: 'Mouse', nome: 'Duplo clique', f: XY, out: v => `duplo clique em ${num(v.x)},${num(v.y)}`, ler: R(/^(?:duplo clique|clique duplo)\s+(?:em|na|no)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
@@ -122,7 +142,7 @@
     { id: 'mover', g: 'Mouse', nome: 'Mover o mouse (sem clicar)', f: XY, out: v => `mover mouse para ${num(v.x)},${num(v.y)}`, ler: R(/^mover(?:\s+(?:o\s+)?mouse)?\s+(?:para|em)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
     { id: 'rolar', g: 'Mouse', nome: 'Rolar a tela', f: [{ k: 'n', lab: 'Quantas vezes', tipo: 'num', def: '3' }, { k: 'dir', lab: 'Para', tipo: 'sel', op: ['baixo', 'cima'], def: 'baixo' }], out: v => `rolar ${num(v.n, '1')} para ${v.dir || 'baixo'}`, ler: R(/^rolar\s+(\d+)(?:\s+vezes)?\s+(?:para\s+)?(baixo|cima)$/i, m => ({ n: m[1], dir: m[2].toLowerCase() })) },
 
-    { id: 'campo', g: 'Escrever', nome: 'Escrever um dado do sistema (data, contrato...)', prio: 1, f: [{ k: 'campo', lab: 'Qual dado', tipo: 'sel', op: SIS, def: 'data', larg: 1 }], out: v => `digitar {${v.campo || 'data'}}`, ler: R(/^digitar\s+\{([^{}]+)\}$/i, m => SIS.some(s => s[0] === m[1].trim().toLowerCase()) ? { campo: m[1].trim().toLowerCase() } : null) },
+    { id: 'campo', g: 'Escrever', nome: 'Escrever um dado da requisição (data, contrato, solicitante...)', prio: 1, f: [{ k: 'campo', lab: 'Qual dado', tipo: 'sel', op: SIS_REQ, def: 'data', larg: 1 }], out: v => `digitar {${v.campo || 'data'}}`, ler: R(/^digitar\s+\{([^{}]+)\}$/i, m => SIS.some(s => s[0] === m[1].trim().toLowerCase()) ? { campo: m[1].trim().toLowerCase() } : null) },
     { id: 'texto', g: 'Escrever', nome: 'Escrever um texto', f: [{ k: 'texto', lab: 'Texto (pode misturar {campos})', tipo: 'txt', larg: 1, ph: 'o que digitar' }], out: v => v.texto ? `digitar ${v.texto}` : 'digitar ""', ler: R(/^(?:digitar|escrever|colar)\s+(.*)$/i, m => ({ texto: m[1] === '""' ? '' : m[1] })) },
     { id: 'teclar', g: 'Escrever', nome: 'Escrever letra por letra', prio: 1, f: [{ k: 'texto', lab: 'Texto (campo que não aceita colar)', tipo: 'txt', larg: 1 }], out: v => `teclar ${v.texto || ''}`.trim(), ler: R(/^(?:teclar|digitar devagar|escrever devagar)\s+(.*)$/i, m => ({ texto: m[1] })) },
 
@@ -136,10 +156,13 @@
     { id: 'esperarJan', g: 'Programas e esperas', nome: 'Esperar uma janela aparecer', f: [{ k: 'titulo', lab: 'Título da janela (ou parte dele)', tipo: 'txt', larg: 1 }], out: v => `esperar janela "${v.titulo || ''}"`, ler: R(/^(?:esperar|aguardar)\s+janela\s+"(.+)"$/i, m => ({ titulo: m[1] })) },
     { id: 'esperar', g: 'Programas e esperas', nome: 'Esperar', f: [{ k: 'seg', lab: 'Segundos', tipo: 'num', def: '1' }], out: v => `esperar ${num(v.seg, '1')}`, ler: R(/^(?:esperar|aguardar)\s+([\d.,]+)(?:\s+segundos?)?$/i, m => ({ seg: m[1] })) },
 
+    { id: 'itensCod', g: 'Itens da requisição', nome: 'Lançar os itens: CÓDIGO + quantidade (um item por vez)', prio: 1, multi: 1, f: ITENS_F('código'), out: v => itensTexto('cod', v), ler: c => itensLer(c, 'cod') },
+    { id: 'itensNome', g: 'Itens da requisição', nome: 'Lançar os itens: NOME + quantidade (um item por vez)', prio: 1, multi: 1, f: ITENS_F('nome'), out: v => itensTexto('nome', v), ler: c => itensLer(c, 'nome') },
+
     { id: 'cada', g: 'Produtos e decisões', nome: 'Para cada produto (repete até o Fim)', abre: 1, f: [], out: () => 'para cada produto', ler: R(/^(?:repetir\s+)?para cada\s+(?:produto|item)$/i, () => ({})) },
     { id: 'repetir', g: 'Produtos e decisões', nome: 'Repetir (até o Fim)', abre: 1, f: [{ k: 'n', lab: 'Quantas vezes', tipo: 'num', def: '3' }], out: v => `repetir ${num(v.n, '1')} vezes`, ler: R(/^repetir\s+(\d+)(?:\s+vezes?)?$/i, m => ({ n: m[1] })) },
     { id: 'seCod', g: 'Produtos e decisões', nome: 'Se o produto tem / não tem código', abre: 1, f: [{ k: 'q', lab: 'O produto', tipo: 'sel', op: [['com', 'TEM código'], ['sem', 'NÃO tem código']], def: 'com', larg: 1 }], out: v => `se produto ${v.q || 'com'} codigo`, ler: R(/^se\s+(?:produto|item)\s+(sem|com)\s+c.digo$/i, m => ({ q: m[1].toLowerCase() })) },
-    { id: 'seCampo', g: 'Produtos e decisões', nome: 'Se um dado do sistema...', abre: 1, f: [{ k: 'campo', lab: 'Dado', tipo: 'sel', op: SIS, def: 'codigo', larg: 1 }, { k: 'op', lab: 'Condição', tipo: 'sel', op: OPS, def: 'vazio', larg: 1 }, { k: 'valor', lab: 'Valor (só para igual/diferente/contém)', tipo: 'txt', larg: 1 }], out: v => { const c = v.campo || 'codigo', op = v.op || 'vazio'; return (op === 'vazio' || op === 'nao vazio') ? `se {${c}} ${op}` : `se {${c}} ${op} "${v.valor || ''}"`; }, ler: c => { const m = /^se\s+\{([^{}]+)\}\s+(.+)$/i.exec(c); if (!m) return null; const campo = m[1].trim().toLowerCase(), r = m[2].trim(); let x; if (/^(vazio|em branco)$/i.test(r)) return { campo, op: 'vazio', valor: '' }; if (/^(n[aã]o vazio|preenchido|tem valor)$/i.test(r)) return { campo, op: 'nao vazio', valor: '' }; if ((x = /^(?:n[aã]o for|diferente de)\s+"?(.*?)"?$/i.exec(r))) return { campo, op: 'nao for', valor: x[1] }; if ((x = /^(?:for|e|igual a|igual|=)\s+"?(.*?)"?$/i.exec(r))) return { campo, op: 'for', valor: x[1] }; if ((x = /^(?:cont[eé]m|tem)\s+"?(.*?)"?$/i.exec(r))) return { campo, op: 'contem', valor: x[1] }; return null; } },
+    { id: 'seCampo', g: 'Produtos e decisões', nome: 'Se um dado da requisição...', abre: 1, f: [{ k: 'campo', lab: 'Dado', tipo: 'sel', op: SIS_REQ, def: 'requisicao', larg: 1 }, { k: 'op', lab: 'Condição', tipo: 'sel', op: OPS, def: 'vazio', larg: 1 }, { k: 'valor', lab: 'Valor (só para igual/diferente/contém)', tipo: 'txt', larg: 1 }], out: v => { const c = v.campo || 'requisicao', op = v.op || 'vazio'; return (op === 'vazio' || op === 'nao vazio') ? `se {${c}} ${op}` : `se {${c}} ${op} "${v.valor || ''}"`; }, ler: c => { const m = /^se\s+\{([^{}]+)\}\s+(.+)$/i.exec(c); if (!m) return null; const campo = m[1].trim().toLowerCase(), r = m[2].trim(); let x; if (/^(vazio|em branco)$/i.test(r)) return { campo, op: 'vazio', valor: '' }; if (/^(n[aã]o vazio|preenchido|tem valor)$/i.test(r)) return { campo, op: 'nao vazio', valor: '' }; if ((x = /^(?:n[aã]o for|diferente de)\s+"?(.*?)"?$/i.exec(r))) return { campo, op: 'nao for', valor: x[1] }; if ((x = /^(?:for|e|igual a|igual|=)\s+"?(.*?)"?$/i.exec(r))) return { campo, op: 'for', valor: x[1] }; if ((x = /^(?:cont[eé]m|tem)\s+"?(.*?)"?$/i.exec(r))) return { campo, op: 'contem', valor: x[1] }; return null; } },
     { id: 'senao', g: 'Produtos e decisões', nome: 'Senão (outro caminho do Se)', meio: 1, f: [], out: () => 'senao', ler: R(/^(?:sen.o|caso contr.rio)$/i, () => ({})) },
     { id: 'fim', g: 'Produtos e decisões', nome: 'Fim (fecha o bloco acima)', fecha: 1, f: [], out: () => 'fim', ler: R(/^fim(?:\s+(?:para cada|repetir|se))?$/i, () => ({})) },
 
@@ -160,6 +183,7 @@
     bl.forEach((b, i) => {
       const ind = '  '.repeat(pf[i]);
       if (b.t === 'nota') { if (i > 0 && bl[i - 1].t !== 'nota' && pf[i] === 0) out.push(''); String(b.v.texto || '').split('\n').forEach(l => out.push((ind + '# ' + l).trimEnd())); }
+      else if (DEF[b.t].multi) DEF[b.t].out(b.v).split('\n').forEach(l => out.push(ind + l));
       else out.push(ind + DEF[b.t].out(b.v) + (b.nota ? '   # ' + b.nota : ''));
     });
     return out.join('\n') + '\n';
@@ -167,7 +191,7 @@
   const blocosDeTexto = txt => {
     const r = []; let nota = null;
     const fecha = () => { if (nota) { r.push({ t: 'nota', v: { texto: nota.join('\n') }, nota: '' }); nota = null; } };
-    String(txt || '').split(/\r?\n/).forEach(raw => {
+    String(txt || '').replace(/^[ \t]*#[ \t]*\[itens (cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').split(/\r?\n/).forEach(raw => {
       const s = raw.trim();
       if (!s) { fecha(); return; }
       if (s[0] === '#') { (nota = nota || []).push(s.replace(/^#\s?/, '')); return; }
@@ -261,7 +285,7 @@
         <div class="nf-row"><button id="ver" class="ghost">Verificar de novo</button><button id="tk" class="ghost">Colar token</button><button id="bx" class="ghost">⬇️ Baixar agente</button><button id="zr" class="ghost danger">🗑 Zerar</button></div></div>
       <div class="nf-box"><h3>2) Roteiro</h3>
         <p>Escreva uma instrução por linha. Para repetir por produto, use <b>para cada produto</b> ... <b>fim</b>.</p>
-        <p>Campos: <code>{data}</code> <code>{hora}</code> <code>{contrato}</code> <code>{contrato_nome}</code> <code>{nome}</code> <code>{requisicao}</code> e, dentro do bloco de produtos, <code>{produto}</code> <code>{quantidade}</code> <code>{tamanho}</code> <code>{codigo}</code>.</p>
+        <p>Campos: <code>{data}</code> <code>{hora}</code> <code>{contrato}</code> <code>{contrato_nome}</code> <code>{nome}</code> <code>{requisicao}</code> <code>{mes}</code> <code>{motivo}</code>. Os dados do produto (<code>{produto}</code> <code>{codigo}</code> <code>{quantidade}</code> <code>{tamanho}</code>) só existem dentro de <b>para cada produto</b> — no modo blocos, use <b>📦 Lançar os itens</b>, que já faz isso.</p>
         <details style="margin:.3rem 0 .8rem"><summary style="cursor:pointer;font-weight:600">📖 Comandos que o roteiro entende</summary>
           <p><b>Mouse:</b> <code>clicar em X,Y</code> <code>duplo clique em X,Y</code> <code>clique direito em X,Y</code> <code>mover mouse para X,Y</code> <code>rolar 3 para baixo</code></p>
           <p><b>Escrever:</b> <code>digitar qualquer texto e {campos}</code> (cola o texto) · <code>teclar texto</code> (letra por letra, para campo que não aceita colar)</p>
