@@ -1,5 +1,5 @@
 /* ===== Ferramentas > Automação de NF (autoclick) =====
-   Tela própria em Ferramentas: liga ao agente local (agente-windows/agente.ps1 ou agente/agente_nf.py, em 127.0.0.1:8765), edita o roteiro
+   Tela própria em Ferramentas: liga ao agente local (agente-windows/agente.ps1, em 127.0.0.1:8765), edita o roteiro
    e preenche a nota de uma requisição. Também põe os botões 🤖/🧪 dentro do detalhe da Requisição (atalho).
    Só para o Almoxarifado de EPIs (CFO.espaco vazio). Remover = apagar este arquivo, a linha <script> e a entrada em app.js. */
 (() => {
@@ -14,9 +14,13 @@
     return j;
   };
   const ligado = () => fetch(URL + '/ping').then(r => r.ok).catch(() => false);
+  const VMIN = 3;                                                // versão mínima do agente (a que entende se/senão, perguntar, teclar...)
+  const versao = () => fetch(URL + '/ping').then(r => r.json()).then(x => x.versao || 1).catch(() => 0);
+  const ANTIGO = 'O agente que está aberto neste computador é ANTIGO e não entende os comandos novos.\n\nClique em "⬇️ Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.';
   const pedeToken = () => { const t = prompt('Cole o TOKEN que aparece na janela do agente:'); if (t) localStorage.setItem(TK, t.trim()); return !!token(); };
   const garante = async () => {
     if (!await ligado()) { alert('O agente não está ligado neste computador.\nAbra o "iniciar.bat" (pasta agente-windows) e tente de novo.'); return false; }
+    if (await versao() < VMIN) { alert(ANTIGO); return false; }
     return token() || pedeToken();
   };
 
@@ -52,6 +56,7 @@
     });
   }
 
+  const MODELO_NF = "# ROTEIRO DA NOTA FISCAL (versao simples)\n#\n# Como ler: cada linha e uma acao. O que vem depois de # e so explicacao.\n# Onde estiver 0,0 -> troque pelo X,Y do botao/campo\n# (use o descobrir-posicao-do-mouse.bat). Se esquecer algum 0,0,\n# o teste mostra o aviso e o agente para sozinho.\n#\n# Mais comandos (fechar janela, voltar, perguntar, avisar, abrir site...):\n#   veja a lista \"Comandos que o roteiro entende\" na tela do sistema.\n# Se algum campo nao aceitar colar texto, troque \"digitar\" por \"teclar\".\n#\n# O sistema preenche sozinho estes campos:\n#   {data}  {hora}  {contrato}  {contrato_nome}  {nome} (solicitante)  {requisicao}\n#   e, dentro de \"para cada produto\": {codigo}  {produto}  {quantidade}  {tamanho}\n\nfocar janela \"TROQUE PELO TITULO DA JANELA DO EMISSOR\"\nesperar 1\n\n# ---------- ABA 1: data e destinatario ----------\nclicar em 0,0                 # campo Data\ndigitar {data}\nclicar em 0,0                 # campo Destinatario\ndigitar TROQUE PELO DESTINATARIO\n\n# ---------- ABA 2: precos ----------\nclicar em 0,0                 # aba Precos\nclicar em 0,0                 # campo que precisa preencher\ndigitar TROQUE PELO VALOR\n\n# ---------- ABA 3: produtos ----------\nclicar em 0,0                 # aba Produtos\nclicar em 0,0                 # campo NATOP\ndigitar TROQUE PELO NATOP\n\npara cada produto\n  se produto com codigo\n    # o emissor acha o produto pelo codigo\n    clicar em 0,0             # campo Codigo\n    digitar {codigo}\n    tecla enter\n    esperar 1\n    clicar em 0,0             # campo Quantidade\n    digitar {quantidade}\n    tecla enter\n  senao\n    # produto sem codigo: caminho do botao extra\n    clicar em 0,0             # botao extra\n    esperar 1\n    clicar em 0,0             # opcao que voce seleciona la\n    clicar em 0,0             # campo Nome do produto\n    digitar {produto}\n    clicar em 0,0             # campo Quantidade\n    digitar {quantidade}\n    tecla enter\n  fim se\nfim para cada\n\n# ---------- ABA 4: outras informacoes ----------\nclicar em 0,0                 # aba Outras informacoes\nclicar em 0,0                 # campo que precisa preencher\ndigitar TROQUE PELO TEXTO\n\n# ---------- ABA 5: texto padronizado ----------\nclicar em 0,0                 # aba do Texto\nclicar em 0,0                 # onde vai o numero do contrato\ndigitar {contrato} - {contrato_nome}\nclicar em 0,0                 # onde vai o solicitante\ndigitar {nome}\nclicar em 0,0                 # onde vai o numero da requisicao\ndigitar {requisicao}\n\n# Botao Finalizar: tire o # da linha de baixo SO depois de testar tudo\n# clicar em 0,0               # botao Finalizar NF\n";
   const MODELO = '# Roteiro vazio. Escreva aqui, uma instrução por linha.\n# Exemplo:\n#   focar janela "Nome da janela"\n#   clicar em 300,200\n#   digitar {contrato}\n#   para cada produto\n#     digitar {produto}\n#   fim\n';
 
   // ---------- Estilo próprio (o CSS do sistema deixa <b> grande e <input> largo dentro de .card; por isso não usamos .card aqui) ----------
@@ -87,10 +92,17 @@
         <div class="nf-row"><button id="ver" class="ghost">Verificar de novo</button><button id="tk" class="ghost">Colar token</button><button id="bx" class="ghost">⬇️ Baixar agente</button><button id="zr" class="ghost danger">🗑 Zerar</button></div></div>
       <div class="nf-box"><h3>2) Roteiro (passo a passo)</h3>
         <p>Escreva uma instrução por linha. Para repetir por produto, use <b>para cada produto</b> ... <b>fim</b>.</p>
-        <p>Campos: <code>{contrato}</code> <code>{nome}</code> <code>{requisicao}</code> e, dentro do bloco de produtos, <code>{produto}</code> <code>{quantidade}</code> <code>{tamanho}</code> <code>{codigo}</code>.</p>
-        <p>Passos: <code>focar janela "Título"</code> <code>esperar 2</code> <code>clicar em X,Y</code> <code>duplo clique em X,Y</code> <code>digitar ...</code> <code>tecla tab</code> <code>tecla enter</code> <code>atalho ctrl+s</code></p>
+        <p>Campos: <code>{data}</code> <code>{hora}</code> <code>{contrato}</code> <code>{contrato_nome}</code> <code>{nome}</code> <code>{requisicao}</code> e, dentro do bloco de produtos, <code>{produto}</code> <code>{quantidade}</code> <code>{tamanho}</code> <code>{codigo}</code>.</p>
+        <details style="margin:.3rem 0 .8rem"><summary style="cursor:pointer;font-weight:600">📖 Comandos que o roteiro entende</summary>
+          <p><b>Mouse:</b> <code>clicar em X,Y</code> <code>duplo clique em X,Y</code> <code>clique direito em X,Y</code> <code>mover mouse para X,Y</code> <code>rolar 3 para baixo</code></p>
+          <p><b>Escrever:</b> <code>digitar qualquer texto e {campos}</code> (cola o texto) · <code>teclar texto</code> (letra por letra, para campo que não aceita colar)</p>
+          <p><b>Teclas:</b> <code>tecla enter</code> <code>tecla tab 3 vezes</code> <code>atalho ctrl+s</code> · prontos: <code>fechar janela</code> <code>fechar aba</code> <code>nova aba</code> <code>voltar</code> <code>avancar</code> <code>atualizar</code> <code>selecionar tudo</code> <code>copiar</code> <code>colar</code> <code>salvar</code></p>
+          <p><b>Programas e páginas:</b> <code>abrir "caminho do programa"</code> <code>abrir site "https://..."</code> <code>focar janela "Título"</code> <code>esperar janela "Título"</code> <code>esperar 2</code></p>
+          <p><b>Seus próprios campos:</b> <code>definir numero = 123</code> · <code>perguntar "Qual o número?" em numero</code> (abre uma caixinha, você digita na hora, e depois usa <code>{numero}</code>)</p>
+          <p><b>Decisões e repetições:</b> <code>se produto sem codigo</code> · <code>se {campo} vazio</code> · <code>se {campo} for "x"</code> · <code>se {campo} contem "x"</code> ... <code>senao</code> ... <code>fim se</code> · <code>para cada produto</code> ... <code>fim para cada</code> · <code>repetir 3 vezes</code> ... <code>fim</code></p>
+          <p><b>Outros:</b> <code>avisar "faça tal coisa e clique OK"</code> (pausa até você clicar OK) · <code>ignorar erros</code> · <code>parar</code></p></details>
         <textarea id="rt" spellcheck="false" placeholder="Ligue o agente para carregar o roteiro"></textarea>
-        <div class="nf-row"><button id="sv">💾 Salvar roteiro</button></div></div>
+        <div class="nf-row"><button id="sv">💾 Salvar roteiro</button><button id="md" class="ghost">📄 Modelo da NF</button></div></div>
       <div class="nf-box"><h3>3) Preencher uma nota</h3>
         <input id="q" type="search" placeholder="Buscar nº, contrato ou solicitante...">
         <div id="lst" style="margin-top:.5rem"></div>
@@ -101,6 +113,7 @@
     async function status() {
       const on = await ligado();
       if (!on) return dizer('', 'Agente desligado. No computador da empresa, abra o iniciar.bat (use "Baixar agente" se ainda não tem).');
+      if (await versao() < VMIN) return dizer('av', 'Agente ANTIGO aberto. Clique em "⬇️ Baixar agente", troque a pasta e abra o iniciar.bat de novo.');
       if (!token()) return dizer('av', 'Agente ligado, mas falta o token. Clique em "Colar token".');
       try { $('#rt').value = (await chamar('/roteiro')).texto; dizer('ok', 'Agente ligado e pronto.'); } catch (e) { dizer('av', e.message); }
     }
@@ -115,6 +128,8 @@
       dizer('av', 'Zerado. Cole o token para voltar a usar.'); alert((roteiroApagado ? 'Roteiro apagado. ' : '') + msg);
     };
     $('#sv').onclick = async () => { if (!await garante()) return; try { await chamar('/roteiro', { texto: $('#rt').value }); alert('Roteiro salvo. Vale para todas as requisições.'); } catch (e) { alert('Não salvei: ' + e.message); } };
+    // Modelo simples da NF (abas, produto com/sem código, texto final)
+    $('#md').onclick = () => { if ($('#rt').value.trim() && $('#rt').value.trim() !== MODELO.trim() && !confirm('Trocar o roteiro que está na tela pelo modelo da NF?\n\n(Só vale depois de clicar em Salvar roteiro.)')) return; $('#rt').value = MODELO_NF; $('#rt').focus(); };
     const lista = () => {
       const t = CFO.norm($('#q').value);
       const v = reqs().filter(r => !t || CFO.norm([r.id, r.contrato, r.contratoNome, r.sol].join(' ')).includes(t)).slice(0, 30);
@@ -131,7 +146,7 @@
   function baixarAgente() {
     const ir = () => CFO.baixarAgenteNF();
     if (CFO.baixarAgenteNF) return ir();
-    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261031a'; sc.onload = ir;
+    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261031c'; sc.onload = ir;
     sc.onerror = () => alert('Não achei o arquivo automacao-nf-pacote.js. Confira se ele foi enviado ao GitHub junto com os outros.');
     document.head.append(sc);
   }

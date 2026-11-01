@@ -6,7 +6,6 @@
 - `app.js`           1 linha trocada (entrada em Ferramentas)
 - `index.html`       1 linha nova (<script> do automacao-nf.js)
 - `agente-windows/`  vai para o PC da empresa. SEM instalar nada (usa o PowerShell do Windows).
-- `agente/`          alternativa em Python (não precisa se usar a de cima)
 
 ## No PC da empresa
 1. Copie a pasta `agente-windows` (ex.: C:\CFO\agente-windows). Tem que ser a pasta inteira.
@@ -20,3 +19,13 @@
 
 ## Parar
 Mouse no canto superior esquerdo da tela, ou botão Parar.
+
+
+## Se aparecer "Concluído" mas nada acontecer
+1. **Testar não clica nem digita** (só mostra os passos). Para valer use **Preencher NF**.
+2. O log agora diz quantos passos foram feitos. Roteiro só com `#` (vazio) dá erro em vez de "Concluído".
+3. Programa da NF rodando como **Administrador**: use `iniciar-como-administrador.bat`.
+4. Campo que não aceita colar: troque `digitar` por `teclar`.
+
+## Comandos novos (agente versão 3)
+`teclar`, `abrir site "..."`, `fechar janela`, `fechar aba`, `nova aba`, `voltar`, `avancar`, `atualizar`, `selecionar tudo`, `copiar`, `colar`, `mover mouse para X,Y`, `rolar 3 para baixo`, `esperar janela "..."`, `definir nome = valor`, `perguntar "..." em nome`, `avisar "..."`, `repetir 3 vezes`, `se {campo} vazio/for/contem`, `ignorar erros`, `parar`. Lista completa na tela (📖 Comandos).
