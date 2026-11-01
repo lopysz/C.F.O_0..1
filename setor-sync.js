@@ -97,6 +97,8 @@
   const gravaAntes = CFO.store.set;
   CFO.store.set = (k, v) => { gravaAntes(k, v); if (CFO.espaco === espaco) marcaDirty(k); };
 
+  CFO.nuvemAgora = async () => { await sync({ manual: true }); return estado === 'ok'; };   // gancho para outras telas enviarem na hora
+
   btn.hidden = false;
   btn.onclick = () => {
     const d = document.createElement('dialog'); d.className = 'imp';

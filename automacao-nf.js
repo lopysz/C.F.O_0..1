@@ -277,7 +277,9 @@
 
   // ---------- Tela da gaveta Ferramentas ----------
   CFO.modules.autonf = Object.assign(body => {
-    const reqs = () => CFO.store.get('requisicoes', []).slice().sort((a, b) => String(b.id).localeCompare(String(a.id), 'pt-BR', { numeric: true }));
+    const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const mesKey = s => { const m = CFO.norm(s).match(/^([a-z]+)(\d{4})$/), i = m ? MESES.indexOf(m[1]) : -1; return i >= 0 ? m[2] + String(i + 1).padStart(2, '0') : '000000'; };
+    const reqs = () => CFO.store.get('requisicoes', []).slice().sort((a, b) => mesKey(b.mes).localeCompare(mesKey(a.mes)) || String(b.id).localeCompare(String(a.id), 'pt-BR', { numeric: true }));
     let sel = null;
     body.innerHTML = `<div class="nf">
       <div class="nf-box"><h3>1) Agente no computador</h3>
@@ -296,9 +298,9 @@
           <p><b>Outros:</b> <code>avisar "faça tal coisa e clique OK"</code> (pausa até você clicar OK) · <code>ignorar erros</code> · <code>parar</code></p></details>
         <textarea id="rt" spellcheck="false" placeholder="Ligue o agente para carregar o roteiro"></textarea>
         <div id="blw" hidden></div>
-        <div class="nf-row"><button id="sv">💾 Salvar roteiro</button><button id="md" class="ghost">📄 Modelo da NF</button><button id="pp" class="ghost">🧩 Passo a passo</button></div></div>
+        <div class="nf-row"><button id="sv">💾 Salvar roteiro</button><button id="md" class="ghost">📚 Modelos</button><button id="nv" class="ghost">☁️ Salvar na nuvem</button><button id="pp" class="ghost">🧩 Passo a passo</button></div></div>
       <div class="nf-box"><h3>3) Preencher uma nota</h3>
-        <input id="q" type="search" placeholder="Buscar nº, contrato ou solicitante...">
+        <input id="q" type="search" placeholder="Digite o número da requisição...">
         <div id="lst" style="margin-top:.5rem"></div>
         <div class="nf-row"><button id="go" disabled>🤖 Preencher NF</button><button id="ts" class="ghost" disabled>🧪 Testar (sem clicar)</button></div>
         <p style="margin-top:.8rem">Faça sempre o teste antes: ele mostra todos os passos com os dados da requisição, sem mexer no mouse.</p></div></div>`;
@@ -330,12 +332,44 @@
       dizer('av', 'Zerado. Cole o token para voltar a usar.'); alert((roteiroApagado ? 'Roteiro apagado. ' : '') + msg);
     };
     $('#sv').onclick = async () => { if (!await garante()) return; try { await chamar('/roteiro', { texto: textoAtual() }); alert('Roteiro salvo. Vale para todas as requisições.'); } catch (e) { alert('Não salvei: ' + e.message); } };
-    // Modelo simples da NF (abas, produto com/sem código, texto final)
-    $('#md').onclick = () => { const atual = textoAtual().trim(); if (atual && atual !== MODELO.trim() && !confirm('Trocar o roteiro que está na tela pelo modelo da NF?\n\n(Só vale depois de clicar em Salvar roteiro.)')) return; setTexto(MODELO_NF); if (!modoBl) $('#rt').focus(); };
+    // Modelos: o padrão da NF + os que você salvou (ficam no sistema e vão para a nuvem junto com os outros dados)
+    const MOD = 'modelos_nf', modelos = () => CFO.store.get(MOD, []);
+    const usar = (nome, texto) => { const at = textoAtual().trim(); if (at && at !== texto.trim() && at !== MODELO.trim() && !confirm(`Trocar o roteiro da tela pelo modelo "${nome}"?\n\n(Só vale depois de clicar em Salvar roteiro.)`)) return false; setTexto(texto); if (!modoBl) $('#rt').focus(); return true; };
+    const abreModelos = () => {
+      const d = document.createElement('dialog'); d.className = 'imp';
+      const ls = modelos().slice().sort((x, y) => (y.criado || 0) - (x.criado || 0)), L = 'display:flex;gap:.4rem;align-items:center;padding:.45rem 0;border-bottom:1px solid #8883';
+      d.innerHTML = `<form method="dialog"><h3>📚 Modelos</h3>
+        <div style="${L}"><span style="flex:1"><b>📄 Modelo da NF (padrão)</b><br><small>já vem com o sistema</small></span><button type="button" data-u="padrao">Usar</button></div>
+        ${ls.map(m => `<div style="${L}"><span style="flex:1"><b>${esc(m.nome)}</b><br><small>${m.criado ? new Date(m.criado).toLocaleDateString('pt-BR') : ''}</small></span><button type="button" data-u="${esc(m.id)}">Usar</button><button type="button" class="ghost danger" data-x="${esc(m.id)}" title="Apagar">🗑</button></div>`).join('')}
+        ${ls.length ? '' : '<p>Você ainda não salvou nenhum modelo. Monte o roteiro e toque em <b>☁️ Salvar na nuvem</b>.</p>'}
+        <button value="cancel" class="ghost" formnovalidate>Fechar</button></form>`;
+      d.onclose = () => d.remove();
+      d.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { const m = b.dataset.u === 'padrao' ? { nome: 'Modelo da NF (padrão)', texto: MODELO_NF } : modelos().find(x => x.id === b.dataset.u); if (m && usar(m.nome, m.texto)) d.close(); });
+      d.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const m = modelos().find(x => x.id === b.dataset.x); if (!m || !confirm(`Apagar o modelo "${m.nome}"? Ele some da nuvem também.`)) return; CFO.store.set(MOD, modelos().filter(x => x.id !== m.id)); d.close(); abreModelos(); });
+      document.body.append(d); d.showModal();
+    };
+    $('#md').onclick = abreModelos;
+    // Salvar o roteiro da tela como modelo e mandar para a nuvem na hora
+    $('#nv').onclick = async () => {
+      const texto = textoAtual();
+      if (!texto.trim()) return alert('Não há roteiro na tela para salvar.');
+      const nome = (prompt('Nome do modelo:', '') || '').trim(); if (!nome) return;
+      const ls = modelos(), i = ls.findIndex(m => CFO.norm(m.nome) === CFO.norm(nome));
+      if (i >= 0 && !confirm(`Já existe o modelo "${ls[i].nome}". Substituir?`)) return;
+      const m = { id: i >= 0 ? ls[i].id : 'm' + Date.now().toString(36), nome, texto, criado: Date.now() };
+      if (i >= 0) ls[i] = m; else ls.push(m);
+      CFO.store.set(MOD, ls);
+      const bt = $('#nv'); bt.disabled = true; bt.textContent = '☁️ Enviando...';
+      let ok = false; try { ok = CFO.nuvemAgora ? await CFO.nuvemAgora() : false; } catch (e) { ok = false; }
+      bt.disabled = false; bt.textContent = '☁️ Salvar na nuvem';
+      alert(ok ? `Modelo "${nome}" salvo e enviado para a nuvem.` : `Modelo "${nome}" salvo neste aparelho, mas não consegui confirmar o envio para a nuvem. Ele vai sozinho quando a conexão voltar (veja o botão ☁️ do topo).`);
+    };
     const lista = () => {
-      const t = CFO.norm($('#q').value);
-      const v = reqs().filter(r => !t || CFO.norm([r.id, r.contrato, r.contratoNome, r.sol].join(' ')).includes(t)).slice(0, 30);
+      const t = CFO.norm($('#q').value.trim()), todas = reqs();
+      let v = t ? todas.filter(r => CFO.norm([r.id, r.contrato, r.contratoNome, r.sol].join(' ')).includes(t)).sort((x, y) => (CFO.norm(String(y.id)) === t) - (CFO.norm(String(x.id)) === t)).slice(0, 30) : todas.slice(0, 3);
+      if (!t && sel && !v.some(r => r.id === sel)) { const s0 = todas.find(r => r.id === sel); if (s0) v = [s0, ...v]; }   // a escolhida não some quando você limpa a busca
       $('#lst').innerHTML = v.map(r => `<label class="nf-req${sel === r.id ? ' on' : ''}"><input type="radio" name="rq" value="${esc(r.id)}"${sel === r.id ? ' checked' : ''}><span><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<small>${esc(r.sol)} · ${esc(r.mes)}</small></span></label>`).join('') || '<p>Nenhuma requisição encontrada.</p>';
+      if (!t && todas.length > 3) $('#lst').insertAdjacentHTML('beforeend', '<p style="margin:.4rem 0 0;font-size:.85em;opacity:.7">Mostrando só as 3 últimas. Para outra, digite o número dela na busca.</p>');
       $('#lst').querySelectorAll('input').forEach(i => i.onchange = () => { sel = i.value; $('#go').disabled = $('#ts').disabled = false; lista(); });
     };
     let tm = 0; $('#q').oninput = () => { clearTimeout(tm); tm = setTimeout(lista, 200); };

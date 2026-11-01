@@ -152,6 +152,9 @@
     alert(l.join('\n'));
   }
 
+  // Gancho para outras telas (ex.: Modelos da Automação de NF) enviarem na hora e saberem se deu certo
+  CFO.nuvemAgora = async () => { await sync({ manual: true }); return estado === 'ok'; };
+
   // Botão da nuvem
   if (btn) btn.onclick = () => {
     const d = document.createElement('dialog'); d.className = 'imp';
