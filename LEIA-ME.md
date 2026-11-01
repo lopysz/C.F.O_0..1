@@ -29,3 +29,6 @@ Mouse no canto superior esquerdo da tela, ou botão Parar.
 
 ## Comandos novos (agente versão 3)
 `teclar`, `abrir site "..."`, `fechar janela`, `fechar aba`, `nova aba`, `voltar`, `avancar`, `atualizar`, `selecionar tudo`, `copiar`, `colar`, `mover mouse para X,Y`, `rolar 3 para baixo`, `esperar janela "..."`, `definir nome = valor`, `perguntar "..." em nome`, `avisar "..."`, `repetir 3 vezes`, `se {campo} vazio/for/contem`, `ignorar erros`, `parar`. Lista completa na tela (📖 Comandos).
+
+## Passo a passo (blocos)
+Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de texto por blocos: toque em **＋ Adicionar passo**, escolha o bloco (Clicar, Escrever data, Apertar tecla, Abrir site, Para cada produto, Se tem código...) e só preencha os espaços (X, Y, texto). Os blocos entram em ordem (depois do bloco que você tocou por último), dá para subir/descer, copiar e apagar. **Para cada produto** e **Se** já vêm com o **Fim**. Ao **Salvar roteiro**, os blocos viram o texto normal do roteiro; **Voltar ao texto** mostra esse texto, e dá para ir e voltar entre os dois.
