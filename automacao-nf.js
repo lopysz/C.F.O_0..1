@@ -336,13 +336,29 @@
     const MOD = 'modelos_nf', modelos = () => CFO.store.get(MOD, []);
     const usar = (nome, texto) => { const at = textoAtual().trim(); if (at && at !== texto.trim() && at !== MODELO.trim() && !confirm(`Trocar o roteiro da tela pelo modelo "${nome}"?\n\n(Só vale depois de clicar em Salvar roteiro.)`)) return false; setTexto(texto); if (!modoBl) $('#rt').focus(); return true; };
     const abreModelos = () => {
-      const d = document.createElement('dialog'); d.className = 'imp';
-      const ls = modelos().slice().sort((x, y) => (y.criado || 0) - (x.criado || 0)), L = 'display:flex;gap:.4rem;align-items:center;padding:.45rem 0;border-bottom:1px solid #8883';
+      if (!document.getElementById('nfmod-css')) {
+        const st = document.createElement('style'); st.id = 'nfmod-css';
+        st.textContent = `dialog.nfmod{width:min(94vw,460px);max-height:85vh;overflow:auto}
+dialog.nfmod h3{margin:0 0 .7rem}
+dialog.nfmod .nfm-item{display:flex;flex-direction:column;gap:.5rem;padding:.7rem .8rem;margin-bottom:.55rem;border:1px solid #8885;border-radius:10px}
+dialog.nfmod .nfm-nome{font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+dialog.nfmod .nfm-sub{display:block;margin-top:.2rem;font-size:.8rem;font-weight:400;opacity:.65}
+dialog.nfmod .nfm-btns{display:flex;gap:.5rem}
+dialog.nfmod .nfm-btns button{flex:1;width:auto;margin:0}
+dialog.nfmod .nfm-btns button.nfm-x{flex:0 0 auto;padding-inline:1rem}
+dialog.nfmod .nfm-vazio{margin:.2rem 0 .8rem;opacity:.8;line-height:1.4}
+dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
+        document.head.append(st);
+      }
+      const d = document.createElement('dialog'); d.className = 'nfmod';
+      const ls = modelos().slice().sort((x, y) => (y.criado || 0) - (x.criado || 0));
+      const passos = t => { const n = String(t || '').split(/\r?\n/).filter(l => l.trim() && l.trim()[0] !== '#').length; return n + (n === 1 ? ' linha' : ' linhas'); };
+      const card = (nome, sub, u, x) => `<div class="nfm-item"><div class="nfm-nome">${nome}<span class="nfm-sub">${sub}</span></div><div class="nfm-btns"><button type="button" data-u="${u}">Usar</button>${x ? `<button type="button" class="ghost danger nfm-x" data-x="${x}" title="Apagar">🗑 Apagar</button>` : ''}</div></div>`;
       d.innerHTML = `<form method="dialog"><h3>📚 Modelos</h3>
-        <div style="${L}"><span style="flex:1"><b>📄 Modelo da NF (padrão)</b><br><small>já vem com o sistema</small></span><button type="button" data-u="padrao">Usar</button></div>
-        ${ls.map(m => `<div style="${L}"><span style="flex:1"><b>${esc(m.nome)}</b><br><small>${m.criado ? new Date(m.criado).toLocaleDateString('pt-BR') : ''}</small></span><button type="button" data-u="${esc(m.id)}">Usar</button><button type="button" class="ghost danger" data-x="${esc(m.id)}" title="Apagar">🗑</button></div>`).join('')}
-        ${ls.length ? '' : '<p>Você ainda não salvou nenhum modelo. Monte o roteiro e toque em <b>☁️ Salvar na nuvem</b>.</p>'}
-        <button value="cancel" class="ghost" formnovalidate>Fechar</button></form>`;
+        ${card('📄 Modelo da NF (padrão)', `já vem com o sistema · ${passos(MODELO_NF)}`, 'padrao', '')}
+        ${ls.map(m => card(esc(m.nome), `${m.criado ? 'salvo em ' + new Date(m.criado).toLocaleDateString('pt-BR') + ' · ' : ''}${passos(m.texto)}`, esc(m.id), esc(m.id))).join('')}
+        ${ls.length ? '' : '<p class="nfm-vazio">Você ainda não salvou nenhum modelo. Monte o roteiro e toque em <b>☁️ Salvar na nuvem</b>.</p>'}
+        <button value="cancel" class="ghost nfm-fechar" formnovalidate>Fechar</button></form>`;
       d.onclose = () => d.remove();
       d.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { const m = b.dataset.u === 'padrao' ? { nome: 'Modelo da NF (padrão)', texto: MODELO_NF } : modelos().find(x => x.id === b.dataset.u); if (m && usar(m.nome, m.texto)) d.close(); });
       d.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { const m = modelos().find(x => x.id === b.dataset.x); if (!m || !confirm(`Apagar o modelo "${m.nome}"? Ele some da nuvem também.`)) return; CFO.store.set(MOD, modelos().filter(x => x.id !== m.id)); d.close(); abreModelos(); });
