@@ -52,6 +52,8 @@
     });
   }
 
+  const MODELO = '# Roteiro vazio. Escreva aqui, uma instrução por linha.\n# Exemplo:\n#   focar janela "Nome da janela"\n#   clicar em 300,200\n#   digitar {contrato}\n#   para cada produto\n#     digitar {produto}\n#   fim\n';
+
   // ---------- Estilo próprio (o CSS do sistema deixa <b> grande e <input> largo dentro de .card; por isso não usamos .card aqui) ----------
   const css = document.createElement('style');
   css.textContent = `
@@ -82,7 +84,7 @@
     body.innerHTML = `<div class="nf">
       <div class="nf-box"><h3>1) Agente no computador</h3>
         <div class="nf-st" id="st"><i></i><span>Verificando...</span></div>
-        <div class="nf-row"><button id="ver" class="ghost">Verificar de novo</button><button id="tk" class="ghost">Colar token</button><button id="bx" class="ghost">⬇️ Baixar agente</button></div></div>
+        <div class="nf-row"><button id="ver" class="ghost">Verificar de novo</button><button id="tk" class="ghost">Colar token</button><button id="bx" class="ghost">⬇️ Baixar agente</button><button id="zr" class="ghost danger">🗑 Zerar</button></div></div>
       <div class="nf-box"><h3>2) Roteiro (passo a passo)</h3>
         <p>Escreva uma instrução por linha. Para repetir por produto, use <b>para cada produto</b> ... <b>fim</b>.</p>
         <p>Campos: <code>{contrato}</code> <code>{nome}</code> <code>{requisicao}</code> e, dentro do bloco de produtos, <code>{produto}</code> <code>{quantidade}</code> <code>{tamanho}</code> <code>{codigo}</code>.</p>
@@ -103,6 +105,15 @@
       try { $('#rt').value = (await chamar('/roteiro')).texto; dizer('ok', 'Agente ligado e pronto.'); } catch (e) { dizer('av', e.message); }
     }
     $('#ver').onclick = status; $('#tk').onclick = async () => { if (pedeToken()) status(); }; $('#bx').onclick = baixarAgente;
+    // Zerar: apaga o roteiro aprendido (no agente) e esquece o token deste navegador
+    $('#zr').onclick = async () => {
+      if (!confirm('ZERAR a automação?\n\nIsso apaga o roteiro (passo a passo) e esquece o token deste navegador.\nDepois você terá que escrever o roteiro de novo e colar o token outra vez.')) return;
+      let msg = 'Token esquecido neste navegador.', roteiroApagado = false;
+      if (token() && await ligado()) { try { await chamar('/roteiro', { texto: MODELO }); roteiroApagado = true; } catch (e) { msg += '\nNão consegui apagar o roteiro: ' + e.message; } }
+      else msg += '\nO agente está desligado, então o roteiro NÃO foi apagado. Ligue o iniciar.bat e use Zerar de novo, ou apague o arquivo roteiro.txt na pasta do agente.';
+      localStorage.removeItem(TK); $('#rt').value = roteiroApagado ? MODELO : '';
+      dizer('av', 'Zerado. Cole o token para voltar a usar.'); alert((roteiroApagado ? 'Roteiro apagado. ' : '') + msg);
+    };
     $('#sv').onclick = async () => { if (!await garante()) return; try { await chamar('/roteiro', { texto: $('#rt').value }); alert('Roteiro salvo. Vale para todas as requisições.'); } catch (e) { alert('Não salvei: ' + e.message); } };
     const lista = () => {
       const t = CFO.norm($('#q').value);
