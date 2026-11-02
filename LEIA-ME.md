@@ -32,3 +32,9 @@ Mouse no canto superior esquerdo da tela, ou botão Parar.
 
 ## Passo a passo (blocos)
 Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de texto por blocos: toque em **＋ Adicionar passo**, escolha o bloco (Clicar, Escrever data, Apertar tecla, Abrir site, Para cada produto, Se tem código...) e só preencha os espaços (X, Y, texto). Os blocos entram em ordem (depois do bloco que você tocou por último), dá para subir/descer, copiar e apagar. **Para cada produto** e **Se** já vêm com o **Fim**. Ao **Salvar roteiro**, os blocos viram o texto normal do roteiro; **Voltar ao texto** mostra esse texto, e dá para ir e voltar entre os dois.
+
+## Assistente (botão flutuante)
+- `assistente.js` NOVO -> pasta do sistema; `index.html` 1 linha nova (`<script src="assistente.js...">`, antes do `app.js`).
+- Chat sem IA: entende palavras da pergunta e responde com os dados já existentes (Planilha EPI, Requisições, Mapa, Contratos, Movimentações, Contagens). Respeita as permissões do perfil.
+- Some sozinho no Mapa almoxarifado e no Mapa livre.
+- Para ensinar uma pergunta nova: linha em `INTENCOES` + função em `H` dentro do arquivo.

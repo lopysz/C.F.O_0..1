@@ -41,6 +41,7 @@ Pedaços "só de setor" que ficam dentro de arquivos comuns:
 ## 3) Arquivos COMUNS (mesmo código nos dois; no setor os dados começam vazios e os nomes podem mudar)
 - Núcleo: `core.js`, `login.js`, `app.js`, `config-perfis.js`, `index.html`, `style.css`
 - Planilhas e importar/exportar: `planilhas.js`, `exportar.js`, `importar-pasta.js`, `importar-drive.js`
+- Assistente (botão flutuante 🤖, chat SEM IA que responde com os dados do sistema; some nas telas de mapa): `assistente.js`
 - Funções do menu: `epi.js` (Planilha EPI), `contratos.js`, `requisicoes.js`, `historico-movimentacao.js`, `epis-por-contrato.js`, `controle-gastos.js`, `controle-mensal.js`, `foto-separacao.js`, `gerador-identificacao.js`, `contagem-estoque.js`, `mapa-almoxarifado.js`
 
 ## Importar planilhas (qualquer nome de coluna)
