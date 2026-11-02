@@ -37,7 +37,7 @@
     if (!await garante()) return;
     const q = montar(r);
     if (!q.itens.length) { alert('Esta requisição não tem itens aprovados.'); return; }
-    if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.\nPara pausar/continuar: leve o mouse ao canto superior direito.`)) return;
+    if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.\nPara pausar/continuar: aperte a tecla SHIFT (a mesma tecla pausa e continua) ou leve o mouse ao canto superior direito.`)) return;
     try { await chamar(simular ? '/testar' : '/executar', { requisicao: q }); aoIniciar ? aoIniciar() : tela(r); }
     catch (e) { alert(e.message); }
   }
@@ -51,7 +51,7 @@
   }
   function tela(r) {
     CFO.open('Preenchendo ' + r.id, b => {
-      b.innerHTML = '<div class="nf"><div class="nf-row" style="margin:0 0 .8rem"><button id="ps" class="ghost" hidden>⏸ Pausar</button><button id="p" class="ghost danger">⏹ Parar</button></div><pre class="nf-log" id="l"></pre></div>';
+      b.innerHTML = '<div class="nf"><div class="nf-row" style="margin:0 0 .8rem"><button id="ps" class="ghost" hidden>⏸ Pausar</button><button id="p" class="ghost danger">⏹ Parar</button></div><p class="nf-dica" style="margin:0 0 .6rem;font-size:.85rem;opacity:.75">Aperte <b>SHIFT</b> no teclado para pausar. Aperte de novo para continuar de onde parou.</p><pre class="nf-log" id="l"></pre></div>';
       const p = b.querySelector('#p'); p.onclick = () => chamar('/parar', {}).catch(() => {});
       const ps = b.querySelector('#ps'); ps.onclick = () => chamar(ps.dataset.p === '1' ? '/continuar' : '/pausar', {}).catch(() => {});
       acompanhar(b.querySelector('#l'), p, ps);
@@ -400,7 +400,7 @@ dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
   function baixarAgente() {
     const ir = () => CFO.baixarAgenteNF();
     if (CFO.baixarAgenteNF) return ir();
-    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261101b'; sc.onload = ir;
+    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261102a'; sc.onload = ir;
     sc.onerror = () => alert('Não achei o arquivo automacao-nf-pacote.js. Confira se ele foi enviado ao GitHub junto com os outros.');
     document.head.append(sc);
   }
