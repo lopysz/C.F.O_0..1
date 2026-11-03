@@ -62,7 +62,7 @@
   const PERFIS = {
     total: {},
     leve: { leve: true },
-    aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal', 'registros'], semApagar: ['epi', 'contratos', 'requisicoes'] },
+    aprendiz: { bloquear: ['epis_contrato', 'controle_gastos', 'controle_mensal', 'valores_epi', 'registros'], semApagar: ['epi', 'contratos', 'requisicoes'] },
     custom: { bloquear: ['registros'] },         // perfil novo: começa com tudo liberado, menos Registros; ajuste em ⚙ > Perfis
     setor: { bloquear: ['registros'] }           // outro setor: dados próprios, sem nuvem/WL (isso é fixo, não depende desta lista)
   };

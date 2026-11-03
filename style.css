@@ -626,3 +626,6 @@ body.locked .onl{display:none}
 :root svg.ic:where(:not(.ic-good,.ic-bad,.ic-warn)){color:var(--accent)}
 /* dentro de botão cheio (fundo de destaque) o ícone acompanha a cor do texto, senão some */
 :root button:not(.ghost):not(.link) svg.ic{color:inherit}
+
+/* ===== Valores dos EPIs ===== */
+.ve-in{width:130px;text-align:right;padding:.35rem .5rem}
