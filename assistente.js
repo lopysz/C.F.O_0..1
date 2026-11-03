@@ -11,6 +11,7 @@
    IA (Gemini, opcional): só entra quando as regras NÃO entendem a frase. A IA apenas REESCREVE a pergunta num modelo que as regras entendem; quem consulta
    e calcula é este arquivo (a IA não vê quantidades, preços nem requisições). Passa por uma Edge Function do Supabase (assistente-ia) que guarda a chave.
    Se a função não existir/falhar, tudo continua como antes. Desligar: CFO_SUPABASE.assistenteIA = false em supabase-config.js.
+   Botão flutuante (50% de opacidade): ao tocar abre 3 bolinhas (chat, bloco de notas, agenda — estas duas vêm de notas-agenda.js); com elas abertas o botão fica 45%.
    Remover = apagar este arquivo e a linha <script> do index.html. */
 (() => {
   const esc = CFO.esc, norm = CFO.norm, P = CFO.periodo;
@@ -579,10 +580,17 @@
   if (typeof document === 'undefined' || !document.body) return;
   const css = document.createElement('style');
   css.textContent = `
-  .as-fab{position:fixed;right:18px;bottom:calc(var(--tab-h,0px) + 18px + env(safe-area-inset-bottom,0px));z-index:40;width:56px;height:56px;border-radius:50%;padding:0;display:grid;place-items:center;box-shadow:var(--shadow)}
-  .as-fab svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .as-fab,.as-sub{position:fixed;right:18px;bottom:calc(var(--tab-h,0px) + 18px + env(safe-area-inset-bottom,0px));padding:0;display:grid;place-items:center;border-radius:50%;box-shadow:var(--shadow)}
+  .as-fab{z-index:43;width:56px;height:56px;opacity:.5;transition:opacity .2s ease}
+  .as-fab.open{opacity:.45}
+  .as-fab svg,.as-sub svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .as-fab .fx,.as-fab.open .fm{display:none}.as-fab.open .fx{display:inline}
+  .as-sub{z-index:42;width:46px;height:46px;right:23px;bottom:calc(var(--tab-h,0px) + 23px + env(safe-area-inset-bottom,0px));opacity:0;visibility:hidden;pointer-events:none;transform:translate(0,0) scale(.3);transition:transform .22s ease,opacity .22s ease,visibility 0s linear .22s}
+  .as-sub svg{width:24px;height:24px}
+  .as-menu .as-sub{opacity:.5;visibility:visible;pointer-events:auto;transform:translate(var(--dx,0),var(--dy,0)) scale(1);transition:transform .22s ease var(--d,0ms),opacity .22s ease var(--d,0ms),visibility 0s}
+  @media (prefers-reduced-motion:reduce){.as-fab,.as-sub{transition:none!important}}
   .as-pan{position:fixed;right:18px;bottom:calc(var(--tab-h,0px) + 86px + env(safe-area-inset-bottom,0px));z-index:41;width:min(410px,calc(100vw - 24px));height:min(580px,calc(100vh - var(--tab-h,0px) - var(--bar-h,0px) - 110px));display:flex;flex-direction:column;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
-  .as-pan[hidden],.as-fab[hidden]{display:none!important}
+  .as-pan[hidden],.as-fab[hidden],.as-sub[hidden]{display:none!important}
   .as-h{display:flex;align-items:center;gap:.5rem;padding:.65rem .8rem;border-bottom:1px solid var(--line)}.as-h b{flex:1;font-size:1rem}
   .as-h button{padding:.25rem .55rem;font-size:.85rem}
   .as-ms{flex:1;overflow:auto;padding:.7rem;display:flex;flex-direction:column;gap:.55rem}
@@ -598,16 +606,23 @@
   .as-ch{padding:0 .7rem .5rem;margin:0}
   .as-f{display:flex;gap:.5rem;padding:.6rem;border-top:1px solid var(--line)}.as-f input{flex:1;min-width:0}.as-f button{flex:none}
   @media (max-width:700px){.as-pan{right:12px;left:12px;width:auto}}
-  @media print{.as-fab,.as-pan{display:none!important}}`;
+  @media print{.as-fab,.as-sub,.as-pan{display:none!important}}`;
   document.head.append(css);
 
-  const fab = document.createElement('button'); fab.className = 'as-fab'; fab.hidden = true; fab.setAttribute('aria-label', 'AssisBlu-nt'); fab.title = 'Assistente';
-  fab.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10h7M8.5 13h4"/></svg>';
+  const fab = document.createElement('button'); fab.className = 'as-fab'; fab.hidden = true; fab.setAttribute('aria-label', 'Atalhos: chat, bloco de notas e agenda'); fab.setAttribute('aria-expanded', 'false'); fab.title = 'Atalhos';
+  fab.innerHTML = '<svg viewBox="0 0 24 24"><g class="fm"><path d="M4 7h16M4 12h16M4 17h16"/></g><g class="fx"><path d="M6 6l12 12M18 6L6 18"/></g></svg>';
+  // 3 bolinhas que abrem em leque ao tocar no botão: chat, bloco de notas, agenda (posições: esquerda, diagonal, cima)
+  const SLOTS = [[-88, 0], [-62, -62], [0, -88]];
+  const SUBS = [
+    { id: 'chat', rot: 'Assistente (chat)', ico: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10h7M8.5 13h4"/>', pode: () => CFO.pode('abrir', 'assistente') },
+    { id: 'notas', rot: 'Bloco de notas', ico: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>', pode: () => !!CFO.notasAgenda },
+    { id: 'agenda', rot: 'Agenda', ico: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>', pode: () => !!CFO.notasAgenda }
+  ].map(x => { const b = document.createElement('button'); b.type = 'button'; b.className = 'as-sub'; b.dataset.sub = x.id; b.setAttribute('aria-label', x.rot); b.title = x.rot; b.tabIndex = -1; b.innerHTML = `<svg viewBox="0 0 24 24">${x.ico}</svg>`; x.b = b; return x; });
   const pan = document.createElement('section'); pan.className = 'as-pan'; pan.hidden = true; pan.setAttribute('aria-label', 'Assistente');
   pan.innerHTML = `<div class="as-h"><b>🤖 AssisBlu-nt</b><button class="ghost" data-a="limpar" title="Limpar conversa">Limpar</button><button class="ghost" data-a="fechar" aria-label="Fechar">✕</button></div>
     <div class="as-ms" aria-live="polite"></div><div class="as-ch"></div>
     <form class="as-f"><input type="text" placeholder="Pergunte algo…" autocomplete="off" aria-label="Sua pergunta"><button type="submit">Enviar</button></form>`;
-  document.body.append(fab, pan);
+  document.body.append(fab, ...SUBS.map(x => x.b), pan);
   const ms = pan.querySelector('.as-ms'), chips = pan.querySelector('.as-ch'), inp = pan.querySelector('input');
 
   const bolha = (cls, html) => { const d = document.createElement('div'); d.className = 'as-m ' + cls; d.innerHTML = html; ms.append(d); ms.scrollTop = ms.scrollHeight; return d; };
@@ -667,7 +682,22 @@
     if (!abrirTela('mapa')) return;
     try { const q = document.querySelector('#screens .screen:last-child #mq'); if (q) { q.value = nome; q.dispatchEvent(new Event('input', { bubbles: true })); } } catch (e) { console.warn('assistente: abrir mapa', e); }
   };
-  fab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { if (!ms.children.length) inicio(); setTimeout(() => inp.focus(), 50); } };
+  const menuAberto = () => document.body.classList.contains('as-menu');
+  const fechaMenu = () => { document.body.classList.remove('as-menu'); fab.classList.remove('open'); fab.setAttribute('aria-expanded', 'false'); SUBS.forEach(x => { x.b.tabIndex = -1; }); };
+  const abreMenu = () => {                                            // só mostra as bolinhas que o perfil pode usar, ocupando as posições em ordem
+    SUBS.forEach(x => { let ok = false; try { ok = !!x.pode(); } catch { ok = false; } x.b.hidden = !ok; });
+    SUBS.filter(x => !x.b.hidden).forEach((x, i) => { x.b.style.setProperty('--dx', SLOTS[i][0] + 'px'); x.b.style.setProperty('--dy', SLOTS[i][1] + 'px'); x.b.style.setProperty('--d', i * 40 + 'ms'); x.b.tabIndex = 0; });
+    document.body.classList.add('as-menu'); fab.classList.add('open'); fab.setAttribute('aria-expanded', 'true');
+  };
+  const abrirChat = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { if (!ms.children.length) inicio(); setTimeout(() => inp.focus(), 50); } };
+  fab.onclick = () => { if (menuAberto()) fechaMenu(); else abreMenu(); };
+  SUBS.forEach(x => { x.b.onclick = () => {
+    fechaMenu();
+    if (x.id === 'chat') abrirChat();
+    else { pan.hidden = true; CFO.notasAgenda[x.id](); }              // notas/agenda abrem no meio da tela; o chat fecha para não ficar um janela em cima da outra
+  }; });
+  document.addEventListener('pointerdown', e => { if (menuAberto() && !e.target.closest('.as-fab, .as-sub')) fechaMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && menuAberto()) { fechaMenu(); fab.focus(); } });
   pan.addEventListener('click', e => {
     const ac = e.target.closest('[data-ac]');
     if (ac) { const row = ac.closest('.as-row'); if (row) row.remove(); if (!estado.acao || estado.acao.id !== ac.dataset.id) { bolha('bot', 'Esse pedido não está mais valendo. <b>Nada foi alterado.</b>'); return; } enviar(ac.dataset.ac === 'ok' ? 'confirmo' : 'recuso'); return; }
@@ -678,11 +708,11 @@
   pan.querySelector('form').onsubmit = e => { e.preventDefault(); enviar(inp.value); };
   pan.addEventListener('keydown', e => { if (e.key === 'Escape') { pan.hidden = true; fab.focus(); } });
 
-  // Aparece só com alguém logado e some nas telas de mapa (Mapa almoxarifado e Mapa livre), para não atrapalhar
+  // Aparece só com alguém logado e some nas telas de mapa (Mapa almoxarifado e Mapa livre), para não atrapalhar. Perfil sem acesso ao assistente ainda vê as bolinhas de notas e agenda
   const noMapa = () => [...document.querySelectorAll('#screens .screen')].some(s => /^mapa/i.test(s.dataset.title || '') || s.querySelector('#mq, #ml-q'));
   const atualiza = () => {
-    let ver = false; try { ver = !!CFO.usuario() && CFO.pode('abrir', 'assistente') && !noMapa(); } catch { ver = false; }
-    fab.hidden = !ver; if (!ver) pan.hidden = true;
+    let ver = false; try { ver = !!CFO.usuario() && (CFO.pode('abrir', 'assistente') || !!CFO.notasAgenda) && !noMapa(); } catch { ver = false; }
+    fab.hidden = !ver; if (!ver) { pan.hidden = true; fechaMenu(); try { CFO.notasAgenda && CFO.notasAgenda.fechar(); } catch { /* sem janela aberta */ } }
   };
   const alvoTelas = document.getElementById('screens'); if (alvoTelas) new MutationObserver(atualiza).observe(alvoTelas, { childList: true });
   window.addEventListener('cfo-user', () => { inicio(); atualiza(); });

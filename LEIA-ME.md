@@ -60,3 +60,11 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - Grava igual às telas: Planilha EPI + Histórico de movimentação (responsável: "Assistente (nome)"). Saída maior que o saldo é barrada.
 - **Desfazer** (botão ou texto, até 10 min) também pede confirmação.
 - A IA (Gemini) pode traduzir frases diferentes para esses comandos, mas a confirmação continua obrigatória. Para ela entender as alterações, cole de novo o `index.ts` na função (opcional).
+
+
+## Botão flutuante com atalhos (chat, bloco de notas, agenda)
+- `notas-agenda.js` NOVO -> pasta do sistema; `assistente.js` ATUALIZADO; `index.html` 1 linha nova (`notas-agenda.js`, antes do `assistente.js`) + versões trocadas.
+- O botão fica com 50% de opacidade. Ao tocar, abrem 3 bolinhas (50%): chat, bloco de notas e agenda; enquanto elas aparecem o botão geral fica com 45%. Toque fora, no botão de novo ou Esc para fechar.
+- Bloco de notas e Agenda abrem numa janela no meio da tela (não cobre tudo). Salvam sozinhos, um por PERFIL (`notas_<perfil>` e `agenda_<perfil>`), e vão para a nuvem pelo mesmo caminho dos outros dados (almoxarifado: Supabase principal | outros setores: pasta do setor).
+- Perfil sem acesso ao assistente continua vendo as bolinhas de notas e agenda.
+- Para desfazer: apague `notas-agenda.js` e a linha dele no `index.html` (sobra só o chat).
