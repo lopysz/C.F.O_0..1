@@ -52,3 +52,11 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - A IA só entra quando as regras não entendem a frase: ela reescreve a pergunta num modelo conhecido e o sistema consulta os dados. Não recebe quantidades nem preços.
 - A chave do Gemini fica no Supabase (secret `GEMINI_API_KEY`). Modelo trocável pelo secret `GEMINI_MODEL` (padrão `gemini-2.5-flash`).
 - Sem a função publicada, o assistente funciona como antes. Desligar: `assistenteIA: false` em `supabase-config.js`.
+
+## Assistente que altera o sistema (sempre com confirmação)
+- Frases aceitas: `dar saída de 5 luva nitrílica` · `entrada de 20 capacete` · `chegaram 30 luvas` · `contei 40 bota PVC` · `ajustar estoque da luva para 40` · `marcar RQ 3370 como retirada` · `negar requisição 3370` · `desfazer`.
+- Fluxo: o assistente mostra "Entendi: … Saldo 20 → 15" com **Confirmar** / **Recusar**. Nada muda antes de Confirmar; Recusar (ou qualquer outra frase) descarta. O pedido vale 3 minutos.
+- Respeita o perfil: precisa poder abrir e editar a Planilha EPI (ou Requisições). Perfil "só visualizar" é barrado.
+- Grava igual às telas: Planilha EPI + Histórico de movimentação (responsável: "Assistente (nome)"). Saída maior que o saldo é barrada.
+- **Desfazer** (botão ou texto, até 10 min) também pede confirmação.
+- A IA (Gemini) pode traduzir frases diferentes para esses comandos, mas a confirmação continua obrigatória. Para ela entender as alterações, cole de novo o `index.ts` na função (opcional).

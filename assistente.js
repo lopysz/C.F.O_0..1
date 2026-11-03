@@ -6,6 +6,8 @@
    Cérebro (v2): corrige erro de digitação em palavras de comando (nunca em números/códigos), lembra o assunto por 10 min
    ("e o mês passado?", "quanto dura dele?", "e do contrato 125?"), pergunta o que falta (item/contrato), confirma quando a frase é vaga,
    mostra a fonte dos dados em cada resposta e guarda (só neste aparelho, sem números) as frases que não entendeu.
+   Ações (v3): entrada / saída / contagem de itens e marcar requisição como retirada/negada. Cada pedido vira um cartão "Entendi: ... Confirmar / Recusar";
+   nada muda antes do Confirmar, respeita CFO.pode('editar') do perfil, grava no Histórico de movimentação e tem botão Desfazer (10 min).
    IA (Gemini, opcional): só entra quando as regras NÃO entendem a frase. A IA apenas REESCREVE a pergunta num modelo que as regras entendem; quem consulta
    e calcula é este arquivo (a IA não vê quantidades, preços nem requisições). Passa por uma Edge Function do Supabase (assistente-ia) que guarda a chave.
    Se a função não existir/falhar, tudo continua como antes. Desligar: CFO_SUPABASE.assistenteIA = false em supabase-config.js.
@@ -177,8 +179,8 @@
   const filtroTxt = (cn, nm) => (cn ? ` · contrato ${esc(cn)}${nm ? ' - ' + esc(nm) : ''}` : '');
 
   const H = {};
-  H.oi = () => ({ html: 'Olá! Respondo com os dados do sistema (a IA só ajuda a entender frases diferentes). Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
-  H.ajuda = () => ({ html: `Exemplos do que eu entendo:<ul><li><b>Onde fica</b> a luva nitrílica?</li><li><b>Quanto tem</b> de bota PVC (42)?</li><li>O que está <b>crítico</b> / abaixo do mínimo?</li><li>Quais itens <b>mais saem</b>? E os <b>parados</b>?</li><li><b>Previsão de gastos</b> do próximo mês (ou do contrato 123)</li><li><b>Quanto dura</b> o estoque de capacete?</li><li><b>Gasto</b> de outubro por contrato</li><li>Requisições <b>aguardando retirada</b> · requisição RQ-3370</li><li>Últimas <b>saídas</b> · última <b>contagem</b> · itens <b>sem local</b> no mapa</li><li>Quando <b>vence</b> o contrato 123? · quando <b>entrou</b> a última luva?</li><li><b>Como faço</b> a contagem? · como registro uma <b>entrada</b>?</li></ul><small>Depois de uma pergunta, é só continuar: “e o mês passado?”, “e do contrato 125?”, “quanto dura dele?”, “não, o outro”, “voltar”.</small><small>Dica: escreva o nome do item como na Planilha EPI. Posso responder só com o que está cadastrado.</small>` });
+  H.oi = () => ({ html: 'Olá! Respondo com os dados do sistema (a IA só ajuda a entender frases diferentes). Também lanço entradas, saídas e contagens, sempre pedindo sua confirmação antes. Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
+  H.ajuda = () => ({ html: `Exemplos do que eu entendo:<ul><li><b>Onde fica</b> a luva nitrílica?</li><li><b>Quanto tem</b> de bota PVC (42)?</li><li>O que está <b>crítico</b> / abaixo do mínimo?</li><li>Quais itens <b>mais saem</b>? E os <b>parados</b>?</li><li><b>Previsão de gastos</b> do próximo mês (ou do contrato 123)</li><li><b>Quanto dura</b> o estoque de capacete?</li><li><b>Gasto</b> de outubro por contrato</li><li>Requisições <b>aguardando retirada</b> · requisição RQ-3370</li><li>Últimas <b>saídas</b> · última <b>contagem</b> · itens <b>sem local</b> no mapa</li><li>Quando <b>vence</b> o contrato 123? · quando <b>entrou</b> a última luva?</li><li><b>Como faço</b> a contagem? · como registro uma <b>entrada</b>?</li><li><b>Alterar</b> (sempre peço confirmação): “dar saída de 5 luva nitrílica” · “entrada de 20 capacete” · “contei 40 bota PVC” · “marcar RQ 3370 como retirada” · “desfazer”</li></ul><small>Depois de uma pergunta, é só continuar: “e o mês passado?”, “e do contrato 125?”, “quanto dura dele?”, “não, o outro”, “voltar”.</small><small>Dica: escreva o nome do item como na Planilha EPI. Posso responder só com o que está cadastrado.</small>` });
 
   const GUIA = [
     [/entrada|saida|movimenta|lancar|lanco/, 'epi', 'Entradas e saídas', 'Almoxarifado Operacional › Planilha EPI: em cada item use o botão ⇅ para lançar entrada ou saída. Tudo aparece em Almoxarifado Operacional › Histórico de movimentação (verde = entrada, vermelho = saída, amarelo = ajuste de contagem).'],
@@ -348,9 +350,9 @@
 
   /* ---------- Cérebro: texto -> resposta ---------- */
   const FRESCO = 10 * 60 * 1000;                                      // depois de 10 min sem conversar, o assunto anterior é esquecido
-  const estado = { item: null, alts: [], pend: null, ult: null, conf: null, hist: [], ts: 0, pedeIA: false };
+  const estado = { item: null, alts: [], pend: null, ult: null, conf: null, hist: [], ts: 0, pedeIA: false, acao: null, desf: null };
   const fresco = () => estado.ts && Date.now() - estado.ts < FRESCO;
-  const zera = () => { estado.item = null; estado.alts = []; estado.pend = null; estado.ult = null; estado.conf = null; };
+  const zera = () => { estado.item = null; estado.alts = []; estado.pend = null; estado.ult = null; estado.conf = null; estado.acao = null; estado.desf = null; };
   const SEGUE = new Set(['gasto', 'previsao', 'giro', 'mov', 'contrato', 'estoque', 'local', 'ficha']);   // intenções que aceitam "e o mês passado?", "e do contrato 125?"
   // Palavra solta e vaga: não adivinha, pergunta qual das opções a pessoa quer
   const FRACAS = {
@@ -378,9 +380,120 @@
     return r;
   };
 
+  /* ---------- Ações (ALTERAM o sistema): sempre mostram o que entenderam e só executam depois de Confirmar. Recusar não altera nada ---------- */
+  const ACAO_VALE = 3 * 60 * 1000, DESF_VALE = 10 * 60 * 1000;
+  const QT = '(?:unidades?\\s+|un\\s+|pecas?\\s+|pares?\\s+)?(?:d[eoa]s?\\s+)?';
+  const AC_PAD = [
+    ['entrada', new RegExp('\\b(?:entrada\\s+(?:de\\s+|d[oa]s?\\s+)?|(?:chegaram|chegou|entraram|entrou|recebi|recebemos|receberam)\\s+)(\\d+)\\s+' + QT + '(.+)$')],
+    ['saida', new RegExp('\\b(?:(?:saida|baixa)\\s+(?:de\\s+|d[oa]s?\\s+)?|(?:saiu|sairam|retirei|retiramos|retiraram|baixei|usei|usamos)\\s+)(\\d+)\\s+' + QT + '(.+)$')],
+    ['contagem', new RegExp('\\b(?:contei\\s+|contamos\\s+|contagem\\s+(?:de\\s+)?)(\\d+)\\s+' + QT + '(.+)$')]
+  ];
+  const AC_AJ = /\b(?:ajust\w+|acert\w+|corrig\w+|atualiz\w+)\s+(?:o\s+)?(?:estoque|saldo|quantidade)\s+(?:d[eoa]s?\s+)?(.+?)\s+para\s+(\d+)\s*$/;
+  const RQN = '(?:requisicao|rq)\\s*(?:n|no|numero)?\\s*(\\d+)';
+  const lerAcao = t0 => {
+    let m;
+    if ((m = t0.match(AC_AJ))) return { tipo: 'contagem', n: +m[2], itemTxt: m[1] };
+    for (const [tipo, re] of AC_PAD) if ((m = t0.match(re))) return { tipo, n: +m[1], itemTxt: m[2] };
+    const marca = x => /^retirad/.test(x) ? 'retirada' : 'negada';
+    if ((m = t0.match(new RegExp('\\b(?:marc\\w+|coloc\\w+|pass\\w+|dar)\\b.*?\\b' + RQN + '\\b.*?\\b(retirad[ao]|negad[ao]|recusad[ao])\\b')))) return { tipo: 'req', num: m[1], marca: marca(m[2]) };
+    if ((m = t0.match(new RegExp('\\b(?:marc\\w+|coloc\\w+|pass\\w+)\\b.*?\\b(retirad[ao]|negad[ao]|recusad[ao])\\b.*?\\b' + RQN)))) return { tipo: 'req', num: m[2], marca: marca(m[1]) };
+    if ((m = t0.match(new RegExp('\\b(?:negar|negue|recusar|recuse)\\b.*?\\b' + RQN)))) return { tipo: 'req', num: m[1], marca: 'negada' };
+    return null;
+  };
+  const descAcao = a => {
+    if (a.tipo === 'req') return a.marca === 'restaurar' ? `Voltar <b>${esc(a.reqId)}</b> ao estado anterior` : `Marcar <b>${esc(a.reqId)}</b> como <b>${a.marca === 'retirada' ? 'RETIRADA' : 'NEGADA'}</b>`;
+    const u = a.n === 1 ? 'unidade' : 'unidades';
+    return a.tipo === 'entrada' ? `Dar <b>entrada</b> de <b>${N(a.n)}</b> ${u}` : a.tipo === 'saida' ? `Dar <b>saída</b> de <b>${N(a.n)}</b> ${u}` : `Ajustar o saldo (<b>contagem</b>) para <b>${N(a.n)}</b>`;
+  };
+  // Cartão de confirmação: guarda o pedido como PENDENTE (nada é alterado até a pessoa confirmar)
+  const cartao = (a, extra, desf) => {
+    a.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5); a.ts = Date.now(); estado.acao = a; estado.ts = Date.now();
+    return { semFonte: true, chips: [], html: `<b>${desf ? '↩️ Desfazer: você confirma?' : 'Você confirma esta alteração?'}</b><br>Entendi: ${descAcao(a)}${a.tipo === 'req' ? '' : ` · <b>${esc(a.item)}</b>`}${extra || ''}`
+      + `<div class="as-row"><button class="as-go" data-ac="ok" data-id="${a.id}">✅ Confirmar</button><button class="ghost as-go" data-ac="no" data-id="${a.id}">❌ Recusar</button></div>`
+      + '<small>Nada foi alterado ainda. Você também pode escrever “sim” ou “não”.</small>' };
+  };
+  const pendEstoque = (a, desf) => {
+    const r = CFO.store.get('epi', []).find(x => x.id === a.rid); if (!r) return sem('Esse item não está mais na Planilha EPI. Nada foi alterado.');
+    const ant = +r.qtd || 0, depois = a.tipo === 'entrada' ? ant + a.n : a.tipo === 'saida' ? ant - a.n : a.n;
+    if (a.tipo === 'saida' && a.n > ant) return sem(`Saldo insuficiente: <b>${esc(r.item)}</b> tem ${N(ant)} e o pedido é de ${N(a.n)}. <b>Nada foi alterado.</b><br><small>Se o saldo do sistema estiver errado, diga “contei ${N(a.n)} ${esc(r.item)}” para ajustar.</small>`);
+    if (a.tipo === 'contagem' && depois === ant) return sem(`<b>${esc(r.item)}</b> já está com saldo ${N(ant)}. Nada foi alterado.`);
+    return cartao({ ...a, item: r.item, ant, depois }, `<br>Saldo: ${N(ant)} → <b>${N(depois)}</b>`, desf);
+  };
+  const pendReq = (D, a, desf) => {
+    const q = D.todas.find(x => String(x.id) === String(a.reqId)); if (!q) return sem(`Não encontrei a requisição ${esc(a.reqId)}. Nada foi alterado.`);
+    const ng = D.neg[q.id], rr = D.ret[q.id];
+    if (a.marca === 'retirada' && rr) return sem(`${esc(q.id)} já está marcada como retirada. Nada foi alterado.`);
+    if (a.marca === 'negada' && ng) return sem(`${esc(q.id)} já está marcada como negada. Nada foi alterado.`);
+    const aviso = a.marca === 'retirada' && ng ? '<br><small>A marcação de “negada” será removida.</small>' : a.marca === 'negada' && rr ? '<br><small>A marcação de “retirada” será removida.</small>' : '';
+    return cartao({ ...a, reqId: q.id }, `<br><small>${q.contrato ? 'contrato ' + esc(String(q.contrato)) + ' · ' : ''}${(q.itens || []).length} item(ns)</small>${aviso}`, desf);
+  };
+  const montaAcao = (texto, t0) => {
+    const a = lerAcao(t0); if (!a) return null;
+    const D = carrega();
+    if (a.tipo === 'req') {
+      if (!CFO.pode('abrir', 'requisicoes') || !CFO.pode('editar', 'requisicoes')) return sem('Seu perfil não pode marcar requisições. Nada foi alterado.');
+      const q = acharReq(D, 'rq ' + a.num); if (!q || q.falta) return sem(`Não encontrei a requisição ${esc(a.num)}. Nada foi alterado.`);
+      return pendReq(D, { tipo: 'req', reqId: q.id, marca: a.marca });
+    }
+    if (!CFO.pode('abrir', 'epi') || !CFO.pode('editar', 'epi') || (a.tipo === 'contagem' && !CFO.pode('editar', 'contagem'))) return sem('Seu perfil não pode alterar o estoque. Nada foi alterado.');
+    if (!(a.n > 0) && !(a.tipo === 'contagem' && a.n >= 0)) return sem('Quantidade inválida. Use um número maior que zero. Nada foi alterado.');
+    const { hits, sug, toks } = acharItens(D, a.itemTxt), cmd = r => (a.tipo === 'entrada' ? 'dar entrada de ' : a.tipo === 'saida' ? 'dar saída de ' : 'contei ') + a.n + ' ' + r.item;
+    if (!hits.length) {
+      logar(texto, 'ação: item não encontrado', a.tipo); estado.pedeIA = !sug.length;
+      return { html: `Não encontrei “${esc(toks.join(' '))}” na Planilha EPI. <b>Nada foi alterado.</b>${sug.length ? '<br>Você quis dizer:' : '<br><small>Escreva o nome como está na Planilha EPI.</small>'}`, chips: sug.map(r => ch(r.item, cmd(r))) };
+    }
+    if (hits.length > 1) return { html: `Achei ${hits.length} itens parecidos. Qual deles? <b>Nada foi alterado.</b>`, chips: hits.slice(0, 6).map(r => ch(r.item, cmd(r))) };
+    return pendEstoque({ tipo: a.tipo, rid: hits[0].id, n: a.n });
+  };
+  const executa = a => {
+    const agora = new Date().toISOString(), quem = (CFO.usuario() || {}).nome || '', resp = 'Assistente' + (quem ? ' (' + quem + ')' : ''), hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const fim = (txt, inv) => { try { document.dispatchEvent(new Event('cfo-sync')); } catch { /* sem tela aberta */ }       // faz a tela aberta (Planilha EPI, Requisições) reler os dados
+      return { semFonte: true, chips: [], desf: inv, html: `✅ <b>Feito.</b> ${txt}<small class="as-src">Registrado por ${esc(resp)} às ${hora}.</small><div class="as-row"><button class="ghost as-go" data-q="desfazer">↩️ Desfazer</button></div>` }; };
+    if (a.tipo === 'req') {
+      if (!CFO.pode('editar', 'requisicoes')) return sem('Seu perfil não pode marcar requisições. Nada foi alterado.');
+      const ng = { ...CFO.store.get('req_negadas', {}) }, rr = { ...CFO.store.get('req_retiradas', {}) }, id = a.reqId, prev = { ng: ng[id] || null, rr: rr[id] || null };
+      if (a.marca === 'retirada') { rr[id] = agora; delete ng[id]; }
+      else if (a.marca === 'negada') { ng[id] = agora; delete rr[id]; }
+      else { if (a.restaura.ng) ng[id] = a.restaura.ng; else delete ng[id]; if (a.restaura.rr) rr[id] = a.restaura.rr; else delete rr[id]; }
+      CFO.store.set('req_negadas', ng); CFO.store.set('req_retiradas', rr);
+      return fim(a.marca === 'restaurar' ? `${esc(id)} voltou ao estado anterior.` : `${esc(id)} marcada como <b>${a.marca === 'retirada' ? 'RETIRADA' : 'NEGADA'}</b>.`, { tipo: 'req', reqId: id, marca: 'restaurar', restaura: prev });
+    }
+    if (!CFO.pode('editar', 'epi')) return sem('Seu perfil não pode alterar o estoque. Nada foi alterado.');
+    const rows = CFO.store.get('epi', []), movs = CFO.store.get('epi:mov', []), r = rows.find(x => x.id === a.rid);
+    if (!r) return sem('Esse item não está mais na Planilha EPI. Nada foi alterado.');
+    const ant = +r.qtd || 0, depois = a.tipo === 'entrada' ? ant + a.n : a.tipo === 'saida' ? ant - a.n : a.n;
+    if (depois < 0) return sem(`O saldo mudou (agora ${N(ant)}) e a saída não cabe mais. <b>Nada foi alterado.</b>`);
+    r.qtd = depois;
+    if (a.tipo === 'contagem') { if (ant !== depois) movs.push({ item: r.item, tipo: 'Contagem', qtd: depois, ant, resp, data: agora }); }
+    else movs.push({ item: r.item, tipo: a.tipo === 'entrada' ? 'Entrada' : 'Saída', qtd: a.n, resp, data: agora });
+    CFO.store.set('epi', rows); CFO.store.set('epi:mov', movs);
+    const inv = a.tipo === 'entrada' ? { tipo: 'saida', rid: a.rid, n: a.n } : a.tipo === 'saida' ? { tipo: 'entrada', rid: a.rid, n: a.n } : { tipo: 'contagem', rid: a.rid, n: ant };
+    return fim(`<b>${esc(r.item)}</b>: saldo ${N(ant)} → <b>${N(depois)}</b>.`, inv);
+  };
+  const confirmaAcao = () => {
+    const a = estado.acao; estado.acao = null;
+    if (!a || Date.now() - a.ts > ACAO_VALE) return sem('Esse pedido expirou. <b>Nada foi alterado.</b> Escreva o pedido de novo.');
+    const r = executa(a); if (r.desf) estado.desf = { a: r.desf, ts: Date.now() }; return r;
+  };
+  const recusaAcao = () => { estado.acao = null; return { html: 'Tudo bem, recusado. <b>Nada foi alterado.</b>', chips: H.oi().chips }; };
+  const desfazer = () => {
+    const d = estado.desf; estado.desf = null;
+    if (!d || Date.now() - d.ts > DESF_VALE) return sem('Não há nenhuma alteração recente para desfazer.');
+    return d.a.tipo === 'req' ? pendReq(carrega(), d.a, true) : pendEstoque(d.a, true);
+  };
+
   const responder = (texto, semHist) => {
     const t0 = T(texto); if (!t0) return sem('Escreva sua pergunta.');
     const expirou = !!estado.ts && !fresco(); if (expirou) { zera(); estado.ts = 0; }
+
+    // 0) Alteração pendente: só "sim/confirmo" executa; "não/recuso" descarta; qualquer outra frase descarta sem alterar nada
+    if (estado.acao) {
+      if (Date.now() - estado.acao.ts > ACAO_VALE) estado.acao = null;
+      else if (/^(sim|confirmo|confirmar|confirma|confirmado|pode|pode sim|pode fazer|isso|isso mesmo|ok|certo|sim confirmo|sim pode)$/.test(t0)) return confirmaAcao();
+      else if (/^(nao|recuso|recusar|recusado|cancelar|cancela|nao confirmo|negativo|deixa|deixa pra la|esquece)$/.test(t0)) return recusaAcao();
+      else estado.acao = null;
+    }
+    if (/^(desfazer|desfaz|desfazer isso|desfaz isso|desfazer ultima acao)$/.test(t0)) return desfazer();
 
     // 1) Palavras que controlam a conversa (não consultam dados)
     if (/^(obrigad\w*|valeu|vlw|brigad\w*)( \w+)?$/.test(t0)) return sem('De nada! Se precisar de mais alguma coisa, é só perguntar.');
@@ -396,6 +509,8 @@
       if (estado.alts.length) return { html: 'Tudo bem. Qual destes você quer?', chips: estado.alts.slice(0, 6).map(r => ch(r.item, r.item)) };
       estado.pend = { id: 'ficha', falta: 'item' }; return sem('Me diga o nome completo (ou o código) do item que você procura.');
     }
+
+    { const ac = montaAcao(texto, t0); if (ac) return ac; }          // pedidos de alteração (entrada/saída/contagem/requisição): viram cartão de confirmação
 
     // 2) Entender a frase: corrige palavras de comando, acha item/contrato/requisição e a intenção
     const D = carrega(), t = corrigir(t0, D.voc || (D.voc = vocab(D))), req = acharReq(D, t), pend = estado.pend, U = estado.ult;
@@ -554,6 +669,8 @@
   };
   fab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { if (!ms.children.length) inicio(); setTimeout(() => inp.focus(), 50); } };
   pan.addEventListener('click', e => {
+    const ac = e.target.closest('[data-ac]');
+    if (ac) { const row = ac.closest('.as-row'); if (row) row.remove(); if (!estado.acao || estado.acao.id !== ac.dataset.id) { bolha('bot', 'Esse pedido não está mais valendo. <b>Nada foi alterado.</b>'); return; } enviar(ac.dataset.ac === 'ok' ? 'confirmo' : 'recuso'); return; }
     const a = e.target.closest('[data-a]'), q = e.target.closest('[data-q]'), m = e.target.closest('[data-mapa]'), g = e.target.closest('[data-ir]');
     if (a) { if (a.dataset.a === 'fechar') pan.hidden = true; else inicio(); }
     else if (q) { e.preventDefault(); enviar(q.dataset.q); } else if (m) abrirMapa(m.dataset.mapa); else if (g) abrirTela(g.dataset.ir);
