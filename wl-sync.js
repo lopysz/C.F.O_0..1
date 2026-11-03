@@ -109,22 +109,26 @@
         + (r.lista && r.lista.length ? `<h4>Últimas ${r.lista.length} ignoradas</h4><div class="log">${r.lista.map(x => `<p><b>${esc(x.id)}</b>${x.data ? ' · ' + esc(String(x.data).slice(0, 10).split('-').reverse().join('/')) : ''}<br>${esc(x.motivo)}</p>`).join('')}</div>` : '')
         + (r.semNome || r.semPreco ? `<p class="log down">Atenção: ${r.semNome} item(ns) sem nome e ${r.semPreco} sem preço. Campos dos itens no WL: ${esc(r.amostraItem || '-')} · Campos do catálogo: ${esc(r.amostraCat || '-')}. Me mande esses nomes para eu ajustar.</p>` : '');
     }
-    // Diagnóstico: lista as tabelas legíveis do WL (colunas + um exemplo). Não grava nada.
+    // Diagnóstico: lista as tabelas legíveis do WL (colunas, meses com dados e exemplos). Não grava nada.
     const cur = (v, n = 40) => { v = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''); return v.length > n ? v.slice(0, n - 1) + '…' : v; };
     async function sonda(t) {
       try {
-        const r = await fetch(`${C.url}/rest/v1/${encodeURIComponent(t)}?select=*&limit=1`, { headers: hdr });
+        const r = await fetch(`${C.url}/rest/v1/${encodeURIComponent(t)}?select=*&limit=5`, { headers: hdr });
         if (r.status === 404) return { t, st: 'nao' };
         if (!r.ok) return { t, st: 'bloq', cod: r.status };
-        const l = await r.json(), n = r.headers.get('content-range');
-        return { t, st: 'ok', cols: l[0] ? Object.keys(l[0]) : [], ex: l[0] || null, total: n && n.split('/')[1] !== '*' ? n.split('/')[1] : '' };
+        const l = await r.json(), n = r.headers.get('content-range'), cols = l[0] ? Object.keys(l[0]) : [];
+        let meses = '';
+        if (cols.includes('month') && cols.includes('year')) {          // resumo: quais meses/anos têm dados
+          try { const m = await fetch(`${C.url}/rest/v1/${encodeURIComponent(t)}?select=month,year&limit=2000`, { headers: hdr }); if (m.ok) { const c = {}; (await m.json()).forEach(x => { const k = `${x.month}/${x.year}`; c[k] = (c[k] || 0) + 1; }); meses = Object.entries(c).map(([k, v]) => `${k} (${v})`).join(', '); } } catch { /* sem resumo */ }
+        }
+        return { t, st: 'ok', cols, ex: l[0] || null, exs: l.slice(1, 3), meses, total: n && n.split('/')[1] !== '*' ? n.split('/')[1] : '' };
       } catch (e) { return { t, st: 'erro', cod: String(e.message || e) }; }
     }
     const CAND = ['purchase_orders', 'purchase_order', 'purchases', 'orders', 'order_items', 'deliveries', 'delivery', 'receipts', 'receiving', 'receivings', 'shipments', 'inbound', 'arrivals', 'stock_entries', 'stock_entry', 'entries',
       'suppliers', 'supplier', 'vendors', 'epi_orders', 'epi_purchases', 'epi_receipts', 'epi_deliveries', 'epi_stock', 'epi_inventory', 'epi_entries', 'epi_movements', 'inventory', 'stock', 'stock_movements', 'movements',
       'requisition_items', 'contracts', 'users', 'profiles', 'notifications', 'pedidos', 'compras', 'entregas', 'recebimentos', 'fornecedores', 'estoque', 'previsao_entrega', 'quotes', 'budgets'];
     const mostra = (l, extra = '') => `${extra}${l.map(x => x.st === 'ok'
-      ? `<div class="card" style="margin-top:.5rem"><b>${esc(x.t)}</b> <small>· ${x.total || '?'} linha(s) · lê normalmente</small><p class="log" style="margin:.3rem 0 0">Colunas: ${x.cols.length ? esc(x.cols.join(', ')) : '(tabela vazia ou sem linhas visíveis)'}</p>${x.ex ? `<p class="log" style="margin:.3rem 0 0">Exemplo: ${esc(Object.entries(x.ex).slice(0, 12).map(([k, v]) => k + '=' + cur(v)).join(' | '))}</p>` : ''}</div>`
+      ? `<div class="card" style="margin-top:.5rem"><b>${esc(x.t)}</b> <small>· ${x.total || '?'} linha(s) · lê normalmente</small><p class="log" style="margin:.3rem 0 0">Colunas: ${x.cols.length ? esc(x.cols.join(', ')) : '(tabela vazia ou sem linhas visíveis)'}</p>${x.meses ? `<p class="log" style="margin:.3rem 0 0">Meses com dados: ${esc(x.meses)}</p>` : ''}${[x.ex, ...(x.exs || [])].filter(Boolean).map((e, i) => `<p class="log" style="margin:.3rem 0 0">Exemplo ${i + 1}: ${esc(Object.entries(e).slice(0, 14).map(([k, v]) => k + '=' + cur(v)).join(' | '))}</p>`).join('')}</div>`
       : x.st === 'bloq' ? `<p class="log down">${esc(x.t)}: existe, mas sem permissão de leitura (${x.cod}).</p>` : x.st === 'erro' ? `<p class="log down">${esc(x.t)}: erro (${esc(x.cod)}).</p>` : `<p class="log">${esc(x.t)}: não existe.</p>`).join('')}`;
     $('#dg').onclick = async () => {
       const o = $('#dgo'); $('#dg').disabled = true; o.innerHTML = '<p class="log">Procurando tabelas no WL...</p>';
