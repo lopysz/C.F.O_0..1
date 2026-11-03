@@ -142,7 +142,7 @@ summary.sum::-webkit-details-marker{display:none}
 summary.sum .val{color:var(--accent);font-weight:700;white-space:nowrap;margin-left:auto}
 
 /* ===== 12. Controle de gastos ===== */
-.tabs{display:flex;gap:.5rem;margin-bottom:.8rem}.tabs button.on{background:var(--accent);border-color:var(--accent)}
+.tabs{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem;align-items:center}.tabs button.on{background:var(--accent);border-color:var(--accent)}
 .chart svg{display:block;max-width:none}
 /* Ranking: nome completo (quebra em linhas) + valor na mesma linha, barra embaixo */
 .hbars{display:grid;gap:.7rem;margin-bottom:.8rem}
@@ -677,3 +677,24 @@ input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user
 .cf-rg .cf-rgt{flex:1 1 260px;min-width:0;line-height:2.2;color:var(--text)}
 .cf-rg select{width:auto;min-width:130px;display:inline-block}
 .cf-rg input[type=number]{width:4.2rem;display:inline-block;text-align:center}
+
+/* ===== Outros cálculos (gavetinha no Controle mensal e nos Gastos em EPIs) ===== */
+.xwrap{position:relative;display:inline-block}
+.tabs .xwrap{margin-left:auto}
+.xbtn{display:inline-flex;align-items:center;gap:.45rem}
+.xbtn::after{content:'▾';font-size:.85em;transition:transform .18s}
+.xbtn[aria-expanded=true]::after{transform:rotate(180deg)}
+.xbtn.on{border-color:var(--accent)}
+.xmenu{position:absolute;z-index:30;top:calc(100% + .35rem);right:0;width:min(320px,88vw);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:.35rem;display:grid;gap:.15rem;box-shadow:0 12px 30px rgba(0,0,0,.4);transform-origin:top right;animation:xdrop .16s ease-out}
+.xmenu[hidden]{display:none}
+@keyframes xdrop{from{opacity:0;transform:translateY(-6px) scaleY(.9)}to{opacity:1;transform:none}}
+.xmenu button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--text);padding:.5rem .7rem;border-radius:8px;line-height:1.25}
+.xmenu button small{display:block;color:var(--muted);font-weight:400;margin-top:.1rem}
+.xmenu button:hover,.xmenu button.on{background:var(--accent)}
+.xmenu button:hover small,.xmenu button.on small{color:var(--text)}
+.xcalc{margin-top:1rem}
+.xacoes{display:flex;gap:.4rem}
+.xpar{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.7rem;margin-bottom:.6rem}
+.xpar label{display:grid;gap:.25rem;font-size:.82rem;color:var(--muted)}
+
+.cf-rg .cf-rdel{padding:.3rem .45rem;color:var(--muted);display:grid;place-items:center}

@@ -81,7 +81,7 @@
       const linhaR = (x, i) => `<div class="cf-rg" data-i="${i}"><label class="cf-ck"><input type="checkbox" data-f="ativa" ${x.ativa ? 'checked' : ''}><span>Ativa</span></label>
         <div class="cf-rgt">Requisição do tipo <select data-f="tipo">${[...new Set([...tipos, x.tipo])].map(t => `<option${t === x.tipo ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
         conta <input data-f="meses" type="number" min="-12" max="12" step="1" value="${+x.meses || 0}" aria-label="Meses à frente"> mês(es) à frente do mês em que foi aprovada</div>
-        <button type="button" class="ghost cf-del" data-rdel="${i}" title="Apagar regra" aria-label="Apagar regra">${ico('trash', 16)}</button></div>`;
+        <button type="button" class="ghost cf-rdel" data-rdel="${i}" title="Apagar regra" aria-label="Apagar regra">${ico('trash', 16)}</button></div>`;
       return `<div class="cf-blk"><h4 style="margin:0 0 .3rem">Mês de uso das requisições</h4>
         <p class="log" style="margin-top:0">Define em qual mês cada tipo de requisição conta nos filtros por mês e no Controle mensal. Ex.: <b>MENSAL +1</b>: aprovada em outubro, conta em novembro. Use <b>0</b> para contar no mesmo mês da aprovação.</p>
         ${L.map(linhaR).join('') || '<p class="empty">Nenhuma regra: todo tipo conta no mês em que foi aprovado.</p>'}

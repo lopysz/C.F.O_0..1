@@ -57,15 +57,16 @@
   };
 
   CFO.modules.controle_mensal = body => {
-    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0, v: '', q: '' }, det = {}, ultimo = null;
+    let aba = 'fin', f = { c: '', t: 'MENSAL', h: 3, m: 0, v: '', q: '' }, det = {}, ultimo = null, ctxX = { reqs: [], key: mesRetirada, filtrado: true };
     body.style.maxWidth = '1280px';
-    body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Controle mensal</b> é para <b>acompanhar e planejar</b> os pedidos <b>MENSAIS</b> de cada contrato: quanto já foi, quanto é este mês, quanto ainda vem (programado e previsão pela média), o teto de cada contrato e o que comprar. <b>Regra do mês:</b> o pedido MENSAL conta no mês da <b>retirada</b>, ou seja, o mês da requisição + 1 (mensal de outubro entra em novembro). A aba <b>Revisão</b> aponta erros e alertas (duplicidade, consumo fora do padrão, acima do teto, item sem preço, recibo pendente).</p><p>Já <b>Gastos em EPIs</b> é para <b>analisar o gasto com cada EPI</b>: Curva ABC e previsão dos próximos meses pela média dos meses anteriores, para todos os tipos de pedido.</p></details>
+    body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Controle mensal</b> é para <b>acompanhar e planejar</b> os pedidos <b>MENSAIS</b> de cada contrato: quanto já foi, quanto é este mês, quanto ainda vem (programado e previsão pela média), o teto de cada contrato e o que comprar. <b>Regra do mês:</b> o pedido MENSAL conta no mês da <b>retirada</b>, ou seja, o mês da requisição + 1 (mensal de outubro entra em novembro). A aba <b>Revisão</b> aponta erros e alertas (duplicidade, consumo fora do padrão, acima do teto, item sem preço, recibo pendente).</p><p>O botão <b>Outros cálculos</b> abre mais ferramentas de estoque, que aparecem embaixo: <b>Variação de demanda</b> por item, <b>Ponto de pedido</b>, <b>Estoque de segurança</b>, <b>Estoque máximo</b> e os <b>Parâmetros</b> (prazo de entrega por item).</p><p>Já <b>Gastos em EPIs</b> é para <b>analisar o gasto com cada EPI</b>: Curva ABC e previsão dos próximos meses pela média dos meses anteriores, para todos os tipos de pedido.</p></details>
       <div class="tabs"><button id="tfin" class="ghost">Financeiro</button><button id="tprev" class="ghost">Previsão</button><button id="taud" class="ghost">Revisão</button></div>
       <div class="bar"><select id="fc"></select>${CFO.motivo.html()}<select id="fq" aria-label="Filtrar por saídas"><option value="">Todos os contratos</option><option value="1">Só contratos com saídas</option></select><select id="fv" aria-label="Filtrar por valor"><option value="">Todos (com e sem valor)</option><option value="1">Só com valor</option></select><select id="fh">${[1, 3, 6, 12].map(n => `<option value="${n}">Previsão: ${n === 1 ? '1 mês' : n + ' meses'}</option>`).join('')}</select>
         <span class="exp"><button id="exp" class="ghost">Exportar</button></span></div>
       <div id="out"></div>`;
     CFO.filtros(body);
     const $ = s => body.querySelector(s);
+    const X = CFO.extras.montar(body, { tela: 'mensal', onde: $('.tabs'), ctx: () => ctxX });   // botão "Outros cálculos" (variação, ponto de pedido, segurança, máximo, parâmetros)
     const keep = fn => { const sc = body.closest('.screen'), y = sc ? sc.scrollTop : 0; fn(); if (sc) sc.scrollTop = y; };
 
     function opcoes() {
@@ -82,6 +83,7 @@
       const cfg = CFO.store.get('mensal:cfg', {}), comp = CFO.store.get('mensal:comprov', {});
       const base = CFO.store.get('requisicoes', []).filter(r => (!f.c || r.contrato === f.c) && CFO.motivo.fn(f.t)(r));
       const reqs = base.filter(key), semMes = base.length - reqs.length;
+      ctxX = { reqs, key, filtrado: true };
       const nomes = new Map(CFO.store.get('contratos', []).map(c => [String(c.num), c.nome || '']));
       const nomeC = c => c.num + (c.nome ? ' - ' + c.nome : '');
 
@@ -268,6 +270,7 @@
         + (semMes ? `<p class="log">${semMes} requisição(ões) sem mês reconhecido ficaram de fora.</p>` : '')
         + (!reqs.length ? `<p class="log">Nenhuma requisição do tipo "${esc(f.t || 'TODOS')}" encontrada. Importe as requisições ou troque o tipo no filtro.</p>` : '');
       ultimo = { aba, kpis: r.kpis, chartHtml: r.chartHtml, secoes: r.secoes };
+      X.atualizar();
 
       // eventos
       body.querySelectorAll('.subtabs button').forEach(b => b.onclick = () => keep(() => { det[aba] = b.dataset.d; render(); }));

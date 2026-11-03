@@ -42,7 +42,7 @@ Pedaços "só de setor" que ficam dentro de arquivos comuns:
 - Núcleo: `core.js`, `login.js`, `app.js`, `config-perfis.js`, `index.html`, `style.css`
 - Planilhas e importar/exportar: `planilhas.js`, `exportar.js`, `importar-pasta.js`, `importar-drive.js`
 - Assistente (botão flutuante 🤖, chat SEM IA que responde com os dados do sistema; some nas telas de mapa): `assistente.js`
-- Funções do menu: `epi.js` (Planilha EPI), `contratos.js`, `requisicoes.js`, `historico-movimentacao.js`, `epis-por-contrato.js`, `controle-gastos.js`, `controle-mensal.js`, `foto-separacao.js`, `gerador-identificacao.js`, `contagem-estoque.js`, `mapa-almoxarifado.js`
+- Funções do menu: `epi.js` (Planilha EPI), `contratos.js`, `requisicoes.js`, `historico-movimentacao.js`, `epis-por-contrato.js`, `controle-gastos.js`, `controle-mensal.js`, `calculos-extras.js` (botão "Outros cálculos" das duas telas: variação de demanda, ponto de pedido, estoque de segurança, estoque máximo, parâmetros, giro, obsolescência 30/60/90 e acuracidade), `foto-separacao.js`, `gerador-identificacao.js`, `contagem-estoque.js`, `mapa-almoxarifado.js`
 
 ## Importar planilhas (qualquer nome de coluna)
 - `planilhas.js`: `CFO.SINONIMOS` guarda os nomes que valem para o mesmo campo (código = identificador, id, sku...; item = produto, descrição, material, peça...; quantidade = saldo, estoque, qtde...). Acrescente palavras ali.
