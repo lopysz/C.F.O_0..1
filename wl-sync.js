@@ -91,7 +91,11 @@
     body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p>Copia para o C.F.O as requisições que chegam no <b>WL</b>, só leitura (nada é gravado no WL). Enquanto o sistema estiver aberto, atualiza sozinho a cada ${C.minutosAuto} minutos (últimos ${C.diasAuto} dias). Use <b>Sincronização completa</b> para trazer tudo desde o começo. Se uma requisição já existe aqui, ela é atualizada pelo número RQ, sem duplicar.</p></details>
       <div class="bar"><button id="ag">Atualizar agora</button><button id="cp" class="ghost">Sincronização completa</button>
         <label class="chk"><input type="checkbox" id="au"> Atualizar sozinho</label></div>
-      <div id="st"></div>`;
+      <div id="st"></div>
+      <h3 class="sec">Diagnóstico do WL</h3>
+      <p class="sub">Mostra quais tabelas do WL este sistema consegue ler (só leitura). Serve para descobrir onde estão dados como previsão de chegada de EPIs.</p>
+      <div class="bar"><button id="dg" class="ghost">Procurar tabelas</button><input id="dgt" placeholder="ou digite o nome de uma tabela" autocomplete="off" style="max-width:260px"><button id="dgb" class="ghost">Testar</button></div>
+      <div id="dgo"></div>`;
     const $ = s => body.querySelector(s), fmt = iso => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
     $('#au').checked = CFO.store.get('wl:auto', true);
     $('#au').onchange = e => CFO.store.set('wl:auto', e.target.checked);
@@ -105,6 +109,35 @@
         + (r.lista && r.lista.length ? `<h4>Últimas ${r.lista.length} ignoradas</h4><div class="log">${r.lista.map(x => `<p><b>${esc(x.id)}</b>${x.data ? ' · ' + esc(String(x.data).slice(0, 10).split('-').reverse().join('/')) : ''}<br>${esc(x.motivo)}</p>`).join('')}</div>` : '')
         + (r.semNome || r.semPreco ? `<p class="log down">Atenção: ${r.semNome} item(ns) sem nome e ${r.semPreco} sem preço. Campos dos itens no WL: ${esc(r.amostraItem || '-')} · Campos do catálogo: ${esc(r.amostraCat || '-')}. Me mande esses nomes para eu ajustar.</p>` : '');
     }
+    // Diagnóstico: lista as tabelas legíveis do WL (colunas + um exemplo). Não grava nada.
+    const cur = (v, n = 40) => { v = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''); return v.length > n ? v.slice(0, n - 1) + '…' : v; };
+    async function sonda(t) {
+      try {
+        const r = await fetch(`${C.url}/rest/v1/${encodeURIComponent(t)}?select=*&limit=1`, { headers: hdr });
+        if (r.status === 404) return { t, st: 'nao' };
+        if (!r.ok) return { t, st: 'bloq', cod: r.status };
+        const l = await r.json(), n = r.headers.get('content-range');
+        return { t, st: 'ok', cols: l[0] ? Object.keys(l[0]) : [], ex: l[0] || null, total: n && n.split('/')[1] !== '*' ? n.split('/')[1] : '' };
+      } catch (e) { return { t, st: 'erro', cod: String(e.message || e) }; }
+    }
+    const CAND = ['purchase_orders', 'purchase_order', 'purchases', 'orders', 'order_items', 'deliveries', 'delivery', 'receipts', 'receiving', 'receivings', 'shipments', 'inbound', 'arrivals', 'stock_entries', 'stock_entry', 'entries',
+      'suppliers', 'supplier', 'vendors', 'epi_orders', 'epi_purchases', 'epi_receipts', 'epi_deliveries', 'epi_stock', 'epi_inventory', 'epi_entries', 'epi_movements', 'inventory', 'stock', 'stock_movements', 'movements',
+      'requisition_items', 'contracts', 'users', 'profiles', 'notifications', 'pedidos', 'compras', 'entregas', 'recebimentos', 'fornecedores', 'estoque', 'previsao_entrega', 'quotes', 'budgets'];
+    const mostra = (l, extra = '') => `${extra}${l.map(x => x.st === 'ok'
+      ? `<div class="card" style="margin-top:.5rem"><b>${esc(x.t)}</b> <small>· ${x.total || '?'} linha(s) · lê normalmente</small><p class="log" style="margin:.3rem 0 0">Colunas: ${x.cols.length ? esc(x.cols.join(', ')) : '(tabela vazia ou sem linhas visíveis)'}</p>${x.ex ? `<p class="log" style="margin:.3rem 0 0">Exemplo: ${esc(Object.entries(x.ex).slice(0, 12).map(([k, v]) => k + '=' + cur(v)).join(' | '))}</p>` : ''}</div>`
+      : x.st === 'bloq' ? `<p class="log down">${esc(x.t)}: existe, mas sem permissão de leitura (${x.cod}).</p>` : x.st === 'erro' ? `<p class="log down">${esc(x.t)}: erro (${esc(x.cod)}).</p>` : `<p class="log">${esc(x.t)}: não existe.</p>`).join('')}`;
+    $('#dg').onclick = async () => {
+      const o = $('#dgo'); $('#dg').disabled = true; o.innerHTML = '<p class="log">Procurando tabelas no WL...</p>';
+      let nomes = [], aviso = '';
+      try { const r = await fetch(`${C.url}/rest/v1/?apikey=${encodeURIComponent(C.key)}`, { headers: hdr }); if (r.ok) { const j = await r.json(); nomes = Object.keys(j.definitions || (j.components && j.components.schemas) || {}); } else aviso = `O WL não entrega a lista de tabelas (${r.status}); testei nomes comuns.`; } catch { aviso = 'Não consegui ler a lista de tabelas; testei nomes comuns.'; }
+      if (!nomes.length && !aviso) aviso = 'O WL não entrega a lista de tabelas; testei nomes comuns.';
+      const alvo = [...new Set([...nomes, ...(nomes.length ? [] : CAND), C.tabela, C.catalogo])];
+      const res = await Promise.all(alvo.map(sonda));
+      const ok = res.filter(x => x.st === 'ok'), outros = res.filter(x => x.st === 'bloq');
+      o.innerHTML = mostra([...ok, ...outros], `<p class="log">${aviso ? esc(aviso) + ' ' : ''}Tabelas que consegui ler: ${ok.length}. ${nomes.length ? '' : 'Se a tabela que você procura não apareceu, digite o nome dela ali em cima e toque em Testar.'}</p>`);
+      $('#dg').disabled = false;
+    };
+    $('#dgb').onclick = async () => { const t = $('#dgt').value.trim(); if (!t) return; $('#dgo').innerHTML = '<p class="log">Testando...</p>'; $('#dgo').innerHTML = mostra([await sonda(t)]); };
     const rodar = async completa => { $('#ag').disabled = $('#cp').disabled = true; $('#st').innerHTML = '<p class="log">Sincronizando com o WL...</p>'; await sincronizar({ completa }); $('#ag').disabled = $('#cp').disabled = false; mostrar(); };
     $('#ag').onclick = () => rodar(false);
     $('#cp').onclick = () => { if (confirm('Trazer TODAS as requisições do WL? Pode demorar um pouco.')) rodar(true); };
