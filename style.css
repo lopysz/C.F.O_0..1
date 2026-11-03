@@ -600,17 +600,14 @@ body.locked .onl{display:none}
 .crumb-logo b{font-size:1.15rem;letter-spacing:.14em;color:var(--text)}
 @media (max-width:900px){.crumb-img{height:40px}}
 
-/* ===== PC (a partir de 901px): tela inicial ocupa toda a largura/altura e a lateral não fica vazia ===== */
+/* ===== PC (a partir de 901px): tela inicial ocupa toda a largura e a lateral não fica vazia ===== */
 .rail-info{display:none}
 @media (min-width:901px){
-  #home{padding:28px clamp(24px,3vw,56px)}
-  #home>.wrap{max-width:none;min-height:100%;display:flex;flex-direction:column}
-  #home .cols{flex:1 1 auto;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(14px,1.6vw,24px);align-items:stretch}
-  #home .cols .card{display:flex;flex-direction:column}
-  #home .cols .short{flex:1;justify-content:space-evenly}
-  #home .short button{padding:clamp(9px,1.5vh,16px) 10px;font-size:clamp(14px,1.05vw,16px)}
-  .pg-stack{height:clamp(156px,26vh,340px)}
-  .pg-list{max-height:clamp(156px,26vh,340px)}
+  #home{padding:28px clamp(24px,3vw,48px)}
+  #home>.wrap{max-width:none}
+  #home .cols{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+  .pg-stack{height:clamp(156px,20vh,230px)}
+  .pg-list{max-height:clamp(156px,20vh,230px)}
   .rail-info{display:block;margin-top:18px;padding:14px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
   .rail-info small{display:block;margin-bottom:8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
   .rail-info div{display:flex;align-items:baseline;gap:8px;padding:4px 0}
@@ -621,7 +618,7 @@ body.locked .onl{display:none}
 }
 
 /* ===== Ícones padronizados (icones.js): desenhos de linha no lugar de emojis ===== */
-:root svg.ic{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;margin-right:.3em;stroke-width:1.7}
+:root svg.ic{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;margin-right:.25em;stroke-width:1.7}
 :root svg.ic:last-child{margin-right:0}
 :root button>svg.ic:only-child{margin-right:0}
 :root .ic-good{color:#4cc38a}:root .ic-bad{color:#ff6470}:root .ic-warn{color:var(--warn)}
