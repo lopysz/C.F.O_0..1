@@ -699,5 +699,3 @@ input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user
 
 .cf-rg .cf-rdel{padding:.3rem .45rem;color:var(--muted);display:grid;place-items:center}
 
-/* ===== Recebimento: alternar entre registros daqui e recebido no WL ===== */
-.rc-seg{display:flex;gap:.4rem;margin-bottom:.6rem}.rc-seg button{flex:1}

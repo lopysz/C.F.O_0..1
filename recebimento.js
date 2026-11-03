@@ -21,8 +21,10 @@
 
   /* ---------- Sincronização com o WL: tabela epi_monthly_receiving (quantidade recebida por EPI em cada mês) ----------
      - A partir de INICIO (Novembro/2026) o que o WL registra ENTRA no estoque da Planilha EPI, vira "Entrada" no Histórico
-       de movimentação e fica na aba Recebimento marcado "WL". Meses anteriores são ignorados (só aparecem para consulta),
-       porque o estoque já está contado até lá.
+       de movimentação e fica na aba Recebimento marcado "WL".
+     - Meses ANTERIORES a INICIO viram um registro por mês na aba Recebimento (marcado WL e "sem estoque"), só como histórico:
+       NÃO somam nem subtraem nada no estoque e não geram movimentação. O registro de cada mês é refeito a cada sincronização
+       (se o WL corrigir um número antigo, o histórico acompanha).
      - Não duplica: guarda em 'wl_receb_aplicado' quanto de cada linha do WL já foi somado; se o WL corrigir a quantidade,
        entra só a diferença (positiva ou negativa).
      - EPI do WL que não existe na Planilha EPI (por código ou nome exato) NÃO é somado e fica na lista de pendências;
@@ -60,6 +62,16 @@
   function aplicarWL(linhas) {
     const ap = CFO.store.get('wl_receb_aplicado', {}), rows = CFO.store.get('epi', []), movs = CFO.store.get('epi:mov', []), recs = CFO.store.get('recebimentos', []);
     const agora = new Date().toISOString(), semMatch = new Set(), porRow = new Map(), meses = new Set();
+    // Histórico (meses antes de INICIO): um registro por mês, sem mexer no estoque
+    const hist = new Map(); let mudouH = false, nHist = 0;
+    linhas.filter(x => !noPeriodo(x)).forEach(x => { const k = `${x.ano}-${pad(x.mes + 1)}`; if (!hist.has(k)) hist.set(k, []); hist.get(k).push(x); });
+    hist.forEach((L, k) => {
+      const itens = L.filter(x => x.qtd).map(x => ({ rid: '', codigo: x.codigo, item: x.nome, qtd: x.qtd, per: k })).sort((a, b) => a.item.localeCompare(b.item, 'pt-BR'));
+      if (!itens.length) return;
+      const id = 'WLH-' + k, novo = { id, data: L.map(x => x.em).filter(Boolean).sort().pop() || `${k}-28T12:00:00.000Z`, periodo: k, nf: '', obs: `Histórico do WL · ${NOME_MES(L[0].mes)}/${L[0].ano} (não altera o estoque)`, resp: 'WL', origem: 'WL', semEstoque: true, itens };
+      const i = recs.findIndex(r => r.id === id); nHist++;
+      if (i < 0) { recs.push(novo); mudouH = true; } else if (JSON.stringify(recs[i]) !== JSON.stringify(novo)) { recs[i] = novo; mudouH = true; }
+    });
     const achar = x => {
       let c = x.codigo ? rows.filter(r => r.codigo && norm(r.codigo) === norm(x.codigo)) : [];
       if (c.length > 1) c = c.filter(r => norm(r.item) === norm(x.nome));
@@ -72,14 +84,18 @@
       r.qtd = (+r.qtd || 0) + delta;
       movs.push({ item: r.item, tipo: delta > 0 ? 'Entrada' : 'Saída', qtd: Math.abs(delta), resp: 'WL (sincronização)', data: agora, wl: x.rid });
       ap[x.rid] = x.qtd; meses.add(`${NOME_MES(x.mes)}/${x.ano}`);
-      const it = porRow.get(r.id) || { rid: r.id, codigo: r.codigo || '', item: r.item, qtd: 0 }; it.qtd += delta; porRow.set(r.id, it);
+      const per = `${x.ano}-${pad(x.mes + 1)}`, ch = r.id + '|' + per;
+      const it = porRow.get(ch) || { rid: r.id, codigo: r.codigo || '', item: r.item, qtd: 0, per }; it.qtd += delta; porRow.set(ch, it);
     });
     if (porRow.size) {
       recs.push({ id: 'WL' + Date.now().toString(36), data: agora, nf: '', obs: 'Sincronizado do WL · ' + [...meses].join(', '), resp: 'WL', origem: 'WL', itens: [...porRow.values()] });
-      CFO.store.set('epi', rows); CFO.store.set('epi:mov', movs); CFO.store.set('recebimentos', recs); CFO.store.set('wl_receb_aplicado', ap);
+      CFO.store.set('epi', rows); CFO.store.set('epi:mov', movs); CFO.store.set('wl_receb_aplicado', ap);
+    }
+    if (porRow.size || mudouH) {
+      CFO.store.set('recebimentos', recs);
       try { document.dispatchEvent(new Event('cfo-sync')); } catch { /* sem tela aberta */ }
     }
-    return { itens: porRow.size, unidades: [...porRow.values()].reduce((a, i) => a + i.qtd, 0), semMatch: [...semMatch], em: agora };
+    return { meses: nHist, itens: porRow.size, unidades: [...porRow.values()].reduce((a, i) => a + i.qtd, 0), semMatch: [...semMatch], em: agora };
   }
 
   // Lê o WL e aplica no estoque. Chamada pelo Sincronizar WL e pelo botão da aba Recebimento.
@@ -89,7 +105,7 @@
     sincronizando = (async () => {
       try {
         const linhas = await lerWL(), rel = aplicarWL(linhas), em = new Date().toISOString();
-        CFO.store.set('wl_recebido', { em, linhas }); CFO.store.set('wl_receb_rel', rel);
+        CFO.store.set('wl_receb_rel', rel);
         return { linhas, em, rel };
       } finally { sincronizando = null; }
     })();
@@ -99,10 +115,9 @@
   CFO.modules.recebimento = body => {
     const ed = CFO.pode('editar', 'recebimento') && CFO.pode('editar', 'epi');
     const f = { q: '', de: '', ate: '' };
-    body.innerHTML = `<div class="rc-seg"><button type="button" data-m="reg">Registrados aqui</button><button type="button" data-m="wl" class="ghost">Recebido no WL</button></div>
-      <div id="vreg"><div class="bar"><input id="rq" type="search" placeholder="Buscar item, nota ou responsável...">
+    body.innerHTML = `<div class="bar"><input id="rq" type="search" placeholder="Buscar item, nota ou responsável...">
         <label class="hm-d">De <input id="rde" type="date"></label><label class="hm-d">Até <input id="rate" type="date"></label>
-        ${ed ? '<button id="rnovo">Novo recebimento</button>' : ''}</div><div id="rout"></div></div><div id="vwl" hidden></div>`;
+        ${ed ? '<button id="rnovo">Novo recebimento</button>' : ''}</div><div id="rwlst"></div><div id="rout"></div>`;
     const $ = s => body.querySelector(s), out = $('#rout');
 
     const lista = () => CFO.store.get(K, []).filter(r => r && r.itens)
@@ -113,7 +128,7 @@
       const L = lista(), ok = L.filter(r => !r.desfeito);
       out.innerHTML = `<div class="cards"><div class="card"><small>Recebimentos</small><b>${ok.length}</b></div>
           <div class="card hm-ce"><small>Unidades recebidas</small><b>+${N(ok.reduce((a, r) => a + total(r), 0))}</b></div></div>
-        ${L.map(r => `<details class="rc-d"><summary class="sum"><span><b>${esc(quando(r.data))}</b>${r.nf ? ' · NF ' + esc(r.nf) : ''} · ${r.itens.length} item(ns)${r.origem === 'WL' ? ' <span class="tag">WL</span>' : ''}${r.desfeito ? ' <span class="tag bad">Desfeito</span>' : ''}</span><span class="val">${total(r) > 0 ? '+' : ''}${N(total(r))} un.</span></summary>
+        ${L.map(r => `<details class="rc-d"><summary class="sum"><span><b>${esc(quando(r.data))}</b>${r.nf ? ' · NF ' + esc(r.nf) : ''} · ${r.itens.length} item(ns)${r.origem === 'WL' ? ' <span class="tag">WL</span>' : ''}${r.semEstoque ? ' <span class="tag">histórico</span>' : ''}${r.desfeito ? ' <span class="tag bad">Desfeito</span>' : ''}</span><span class="val">${total(r) > 0 ? '+' : ''}${N(total(r))} un.</span></summary>
           <div class="tw" style="margin-top:.5rem"><table><thead><tr><th>Código</th><th>EPI</th><th>Quantidade</th></tr></thead><tbody>
             ${r.itens.map(i => `<tr><td>${esc(i.codigo) || '-'}</td><td>${esc(i.item)}</td><td>+${N(i.qtd)}</td></tr>`).join('')}</tbody></table></div>
           <p class="sub" style="margin:.5rem 0">Responsável: ${esc(r.resp || '-')}${r.obs ? ' · ' + esc(r.obs) : ''}${r.desfeito ? ' · desfeito em ' + esc(quando(r.desfeito)) : ''}</p>
@@ -133,6 +148,21 @@
       rc.desfeito = agora;
       CFO.store.set('epi', rows); CFO.store.set('epi:mov', movs); CFO.store.set(K, recs);
       draw();
+    }
+
+    // Duplicidade: mesmo EPI e mesma quantidade já registrados no mesmo mês (pelo WL ou por aqui)
+    function duplicados(itens, ymd) {
+      const per = String(ymd || hojeStr()).slice(0, 7), out = [], recs = CFO.store.get(K, []).filter(r => r && r.itens && !r.desfeito);
+      itens.forEach(i => {
+        const nome = norm(i.item); let achou = null;
+        recs.forEach(r => r.itens.forEach(x => { if (!achou && (x.per || dia(r.data).slice(0, 7)) === per && (x.rid && x.rid === i.rid || norm(x.item) === nome) && +x.qtd === +i.qtd) achou = r; }));
+        if (!achou) {                                                      // também compara com o total do mês vindo do WL
+          const tot = recs.filter(r => r.origem === 'WL').reduce((a, r) => a + r.itens.filter(x => (x.per || dia(r.data).slice(0, 7)) === per && (x.rid && x.rid === i.rid || norm(x.item) === nome)).reduce((s2, x) => s2 + (+x.qtd || 0), 0), 0);
+          if (tot === +i.qtd) achou = recs.find(r => r.origem === 'WL');
+        }
+        if (achou) out.push(`${i.item}: ${N(i.qtd)} un. (já consta ${achou.origem === 'WL' ? 'no WL' : 'um recebimento seu'} em ${per.slice(5)}/${per.slice(0, 4)})`);
+      });
+      return out;
     }
 
     function novo() {
@@ -171,6 +201,8 @@
           if (!mapa.size && !erros.length) erros.push('Adicione pelo menos um item com a quantidade.');
           if (erros.length) return alert(erros.join('\n'));
           const itens = [...mapa.values()];
+          const dupl = duplicados(itens, b.querySelector('#rc-data').value);
+          if (dupl.length && !confirm('Possível duplicidade neste mês:\n\n' + dupl.join('\n') + '\n\nRegistrar mesmo assim?')) return;
           if (!confirm(`Registrar o recebimento de ${itens.length} item(ns), ${N(itens.reduce((a, i) => a + i.qtd, 0))} unidade(s)? Elas entram no estoque da Planilha EPI.`)) return;
           const rows = CFO.store.get('epi', []), movs = CFO.store.get('epi:mov', []), recs = CFO.store.get(K, []);
           const id = 'RC' + Date.now().toString(36), data = isoDe(b.querySelector('#rc-data').value), resp = eu();
@@ -187,46 +219,14 @@
     $('#rate').onchange = e => { f.ate = e.target.value; draw(); };
     if ($('#rnovo')) $('#rnovo').onclick = novo;
 
-    /* ---------- Recebido no WL (somente leitura): tabela epi_monthly_receiving do WL, quantidade recebida por EPI em cada mês ----------
-       Não mexe no estoque da Planilha EPI (o estoque só muda pelos recebimentos registrados aqui). */
-    const guardado = CFO.store.get('wl_recebido', null);
-    const wl = { linhas: guardado && guardado.linhas || null, em: guardado && guardado.em || '', rel: CFO.store.get('wl_receb_rel', null), erro: '', carregando: false, sel: '', q: '' };
-    const vwl = $('#vwl');
-
-    async function carregarWL() {
-      if (CFO.espaco) { wl.erro = 'A leitura do WL fica desligada neste perfil (outro setor).'; return desenhaWL(); }
-      wl.carregando = true; desenhaWL();
-      try { const r = await CFO.wlRecebimento(); wl.linhas = r.linhas; wl.em = r.em; wl.rel = r.rel; wl.erro = ''; draw(); }
-      catch (e) { wl.erro = (e && e.message) || String(e); if (/fetch|network|cors/i.test(wl.erro)) wl.erro += ' (confira a internet)'; }
-      wl.carregando = false; desenhaWL();
+    /* ---------- Aviso do WL (a atualização em si fica em ⋯ > Sincronizar WL e também roda sozinha) ---------- */
+    function statusWL(txt, erro) {
+      const rel = CFO.store.get('wl_receb_rel', null), sem = rel && rel.semMatch || [];
+      $('#rwlst').innerHTML = (txt ? `<p class="log${erro ? ' down' : ''}">${esc(txt)}</p>` : rel ? `<p class="log">WL lido em ${esc(quando(rel.em))}. De ${NOME_MES(INICIO.mes)}/${INICIO.ano} em diante o que chega entra sozinho no estoque; meses anteriores ficam só como histórico (não mexem no estoque).</p>` : '')
+        + (sem.length ? `<p class="log down">Não entraram no estoque (não achei na Planilha EPI): ${esc(sem.slice(0, 8).join(', '))}${sem.length > 8 ? ' e mais ' + (sem.length - 8) : ''}. Entram sozinhos quando o EPI existir na planilha.</p>` : '');
     }
-    function desenhaWL() {
-      const L = wl.linhas || [], agora = new Date(), atual = `${agora.getFullYear()}-${pad(agora.getMonth())}`;
-      const chaves = [...new Set([...L.map(x => `${x.ano}-${pad(x.mes)}`), atual])].sort().reverse();
-      if (!wl.manual || !chaves.includes(wl.sel)) wl.sel = L.length ? (chaves.find(k => L.some(x => `${x.ano}-${pad(x.mes)}` === k)) || chaves[0]) : chaves[0];   // padrão: mês mais recente que já tem dados
-      const doMes = L.filter(x => `${x.ano}-${pad(x.mes)}` === wl.sel), t = norm(wl.q);
-      const v = doMes.filter(x => !t || norm(x.nome + ' ' + x.codigo + ' ' + x.notas).includes(t)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-      vwl.innerHTML = `<div class="bar"><select id="wm" aria-label="Mês">${chaves.map(k => { const [a, m] = k.split('-'); return `<option value="${k}"${k === wl.sel ? ' selected' : ''}>${NOME_MES(+m)} ${a}</option>`; }).join('')}</select>
-          <input id="wq" type="search" placeholder="Buscar EPI..." value="${esc(wl.q)}"><button id="wa" class="ghost"${wl.carregando ? ' disabled' : ''}>${wl.carregando ? 'Lendo o WL...' : 'Atualizar do WL'}</button></div>
-        ${wl.erro ? `<p class="log down">${esc(wl.erro)}</p>` : ''}
-        <p class="log">${wl.em ? 'Atualizado do WL em ' + esc(quando(wl.em)) + '.' : 'Ainda não lido.'} De ${NOME_MES(INICIO.mes)}/${INICIO.ano} em diante o que o WL registra entra sozinho no estoque da Planilha EPI e fica na aba <b>Registrados aqui</b> (marcado WL). Os meses anteriores só aparecem aqui para consulta, para não duplicar.</p>
-        ${wl.rel && wl.rel.semMatch && wl.rel.semMatch.length ? `<p class="log down">Não entraram no estoque (não achei na Planilha EPI): ${esc(wl.rel.semMatch.slice(0, 8).join(', '))}${wl.rel.semMatch.length > 8 ? ' e mais ' + (wl.rel.semMatch.length - 8) : ''}. Entram sozinhos assim que o EPI existir na planilha.</p>` : ''}
-        <div class="cards"><div class="card"><small>EPIs recebidos no mês</small><b>${doMes.length}</b></div><div class="card hm-ce"><small>Unidades recebidas</small><b>+${N(doMes.reduce((a, x) => a + x.qtd, 0))}</b></div></div>
-        <div class="tw"><table><thead><tr><th>Código</th><th>EPI</th><th>Recebido</th><th>Atualizado</th></tr></thead><tbody>
-          ${v.map(x => `<tr><td>${esc(x.codigo) || '-'}</td><td>${esc(x.nome)}${x.notas ? `<br><small class="sub">${esc(x.notas)}</small>` : ''}</td><td>+${N(x.qtd)}</td><td>${esc(quando(x.em))}</td></tr>`).join('')
-            || `<tr><td colspan="4"><p class="empty">${wl.linhas ? 'Nenhum recebimento lançado no WL neste mês até agora.' : 'Toque em Atualizar do WL para ler.'}</p></td></tr>`}</tbody></table></div>`;
-      vwl.querySelector('#wm').onchange = e => { wl.sel = e.target.value; wl.manual = true; desenhaWL(); };
-      const q = vwl.querySelector('#wq'); q.oninput = e => { wl.q = e.target.value; const p = e.target.selectionStart; desenhaWL(); const n = vwl.querySelector('#wq'); n.focus(); n.setSelectionRange(p, p); };
-      vwl.querySelector('#wa').onclick = carregarWL;
-    }
-    body.querySelectorAll('.rc-seg button').forEach(b => b.onclick = () => {
-      const wlv = b.dataset.m === 'wl';
-      body.querySelectorAll('.rc-seg button').forEach(x => x.classList.toggle('ghost', x !== b));
-      body.querySelector('#vreg').hidden = wlv; vwl.hidden = !wlv;
-      if (wlv) { desenhaWL(); if (!wl.linhas || Date.now() - new Date(wl.em || 0) > 10 * 60e3) carregarWL(); }
-    });
-
-    const re = () => { if (body.isConnected) draw(); else document.removeEventListener('cfo-sync', re); };
+    statusWL();
+    const re = () => { if (body.isConnected) { statusWL(); draw(); } else document.removeEventListener('cfo-sync', re); };
     document.addEventListener('cfo-sync', re);
     draw();
   };
