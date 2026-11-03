@@ -76,6 +76,7 @@
       });
       if (res.add || res.upd) CFO.store.set('requisicoes', [...mapa.values()]);   // só grava (e só envia à nuvem) se mudou algo
       res.ok = true; res.total = reqs.length;
+      if (CFO.wlRecebimento) { try { await CFO.wlRecebimento(); } catch (e) { console.warn('WL recebimento:', e); } }   // recebimentos do mês (de novembro/2026 em diante) entram no estoque
     } catch (e) {
       res.erro = (e && e.message) || String(e);
       if (/fetch|network|cors/i.test(res.erro)) res.erro += ' (confira a internet; se persistir, o WL pode ter bloqueado a leitura)';
