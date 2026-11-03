@@ -179,7 +179,7 @@
   const filtroTxt = (cn, nm) => (cn ? ` · contrato ${esc(cn)}${nm ? ' - ' + esc(nm) : ''}` : '');
 
   const H = {};
-  H.oi = () => ({ html: 'Olá! Respondo com os dados do sistema (a IA só ajuda a entender frases diferentes). Também lanço entradas, saídas e contagens, sempre pedindo sua confirmação antes. Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
+  H.oi = () => ({ html: 'Olá! Sou o AssisBlu-nt seu assistente pessoal 🤙. Também lanço entradas, saídas e contagens, sempre pedindo sua confirmação antes. Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
   H.ajuda = () => ({ html: `Exemplos do que eu entendo:<ul><li><b>Onde fica</b> a luva nitrílica?</li><li><b>Quanto tem</b> de bota PVC (42)?</li><li>O que está <b>crítico</b> / abaixo do mínimo?</li><li>Quais itens <b>mais saem</b>? E os <b>parados</b>?</li><li><b>Previsão de gastos</b> do próximo mês (ou do contrato 123)</li><li><b>Quanto dura</b> o estoque de capacete?</li><li><b>Gasto</b> de outubro por contrato</li><li>Requisições <b>aguardando retirada</b> · requisição RQ-3370</li><li>Últimas <b>saídas</b> · última <b>contagem</b> · itens <b>sem local</b> no mapa</li><li>Quando <b>vence</b> o contrato 123? · quando <b>entrou</b> a última luva?</li><li><b>Como faço</b> a contagem? · como registro uma <b>entrada</b>?</li><li><b>Alterar</b> (sempre peço confirmação): “dar saída de 5 luva nitrílica” · “entrada de 20 capacete” · “contei 40 bota PVC” · “marcar RQ 3370 como retirada” · “desfazer”</li></ul><small>Depois de uma pergunta, é só continuar: “e o mês passado?”, “e do contrato 125?”, “quanto dura dele?”, “não, o outro”, “voltar”.</small><small>Dica: escreva o nome do item como na Planilha EPI. Posso responder só com o que está cadastrado.</small>` });
 
   const GUIA = [
@@ -446,7 +446,7 @@
     return pendEstoque({ tipo: a.tipo, rid: hits[0].id, n: a.n });
   };
   const executa = a => {
-    const agora = new Date().toISOString(), quem = (CFO.usuario() || {}).nome || '', resp = 'Assistente' + (quem ? ' (' + quem + ')' : ''), hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const agora = new Date().toISOString(), quem = (CFO.usuario() || {}).nome || '', resp = 'AssisBlu-nt' + (quem ? ' (' + quem + ')' : ''), hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const fim = (txt, inv) => { try { document.dispatchEvent(new Event('cfo-sync')); } catch { /* sem tela aberta */ }       // faz a tela aberta (Planilha EPI, Requisições) reler os dados
       return { semFonte: true, chips: [], desf: inv, html: `✅ <b>Feito.</b> ${txt}<small class="as-src">Registrado por ${esc(resp)} às ${hora}.</small><div class="as-row"><button class="ghost as-go" data-q="desfazer">↩️ Desfazer</button></div>` }; };
     if (a.tipo === 'req') {
@@ -601,10 +601,10 @@
   @media print{.as-fab,.as-pan{display:none!important}}`;
   document.head.append(css);
 
-  const fab = document.createElement('button'); fab.className = 'as-fab'; fab.hidden = true; fab.setAttribute('aria-label', 'Assistente'); fab.title = 'Assistente';
+  const fab = document.createElement('button'); fab.className = 'as-fab'; fab.hidden = true; fab.setAttribute('aria-label', 'AssisBlu-nt'); fab.title = 'Assistente';
   fab.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10h7M8.5 13h4"/></svg>';
   const pan = document.createElement('section'); pan.className = 'as-pan'; pan.hidden = true; pan.setAttribute('aria-label', 'Assistente');
-  pan.innerHTML = `<div class="as-h"><b>🤖 Assistente</b><button class="ghost" data-a="limpar" title="Limpar conversa">Limpar</button><button class="ghost" data-a="fechar" aria-label="Fechar">✕</button></div>
+  pan.innerHTML = `<div class="as-h"><b>🤖 AssisBlu-nt</b><button class="ghost" data-a="limpar" title="Limpar conversa">Limpar</button><button class="ghost" data-a="fechar" aria-label="Fechar">✕</button></div>
     <div class="as-ms" aria-live="polite"></div><div class="as-ch"></div>
     <form class="as-f"><input type="text" placeholder="Pergunte algo…" autocomplete="off" aria-label="Sua pergunta"><button type="submit">Enviar</button></form>`;
   document.body.append(fab, pan);
