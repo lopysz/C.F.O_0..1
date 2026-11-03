@@ -21,9 +21,9 @@
   const add = (k, n) => { for (; n > 0; n--) k = nextKey(k); for (; n < 0; n++) k = prevKey(k); return k; };
   const diff = (k, b) => (Math.floor(k / 100) - Math.floor(b / 100)) * 12 + k % 100 - b % 100;
   const curKey = () => { const d = new Date(); return d.getFullYear() * 100 + d.getMonth() + 1; };
-  // Pedido MENSAL é aprovado num mês e retirado/faturado no mês seguinte (ex.: mensal de setembro = outubro), igual à planilha MENSAL GERAL.
-  // Os demais tipos (admissão, eventual, troca...) ficam no próprio mês da requisição.
-  const mesRetirada = r => { const k = P.key(r.mes); return k && CFO.motivo.canon(r.motivo) === 'mensal' ? nextKey(k) : k; };
+  // Mês em que o pedido conta (retirada/faturamento): vem da regra em Configurações > Regras (padrão: MENSAL aprovado num mês conta no mês seguinte,
+  // ex.: mensal de setembro = outubro, igual à planilha MENSAL GERAL). Os demais tipos ficam no próprio mês da requisição.
+  const mesRetirada = r => CFO.regras.mesUso(r);
 
   const SC = { 'Acima': 'bad', 'Falta': 'bad', 'Previsto acima': 'warn', 'Atenção': 'warn', 'Excesso': 'warn', 'Sem giro': 'warn', 'Sem cadastro': 'warn', 'OK': 'ok', 'Dentro': 'ok' };
   const COR = { passado: '#3d8bfd', atual: '#f5b84a', prog: '#4cc38a', prev: '#8fa3c4', teto: '#ff8a8f' };

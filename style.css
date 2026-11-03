@@ -671,3 +671,9 @@ input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user
 .cf-gv .cf-sec:last-child{margin-bottom:0}
 .cf-tema{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
 .cf-tema button{display:flex;align-items:center;justify-content:center;gap:.4rem;padding:.7rem}
+
+/* ===== Regras ===== */
+.cf-rg{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;padding:.7rem 0;border-top:1px solid var(--line)}
+.cf-rg .cf-rgt{flex:1 1 260px;min-width:0;line-height:2.2;color:var(--text)}
+.cf-rg select{width:auto;min-width:130px;display:inline-block}
+.cf-rg input[type=number]{width:4.2rem;display:inline-block;text-align:center}

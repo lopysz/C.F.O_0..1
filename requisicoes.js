@@ -112,7 +112,7 @@
     function carrega() {
       base = all(); meta.clear();
       base.forEach(r => meta.set(r, { t: CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item)].join(' ')), tot: total(r), qt: qtd(r) }));
-      CFO.periodo.fill(body, base); CFO.motivo.fill(body, base);
+      CFO.periodo.fill(body, base.map(r => ({ mes: CFO.regras.texto(r) }))); CFO.motivo.fill(body, base);
       indexaFotos(); render();
     }
     function indexaFotos() {
@@ -123,13 +123,13 @@
 
     function render() {
       const neg = negs(), rt = rets(), fn = $('#fn').value, t = CFO.norm(q), ed = CFO.pode('editar', 'requisicoes');
-      const rs = base.filter(CFO.periodo.test(body)).filter(CFO.motivo.test(body)).filter(r => !fn || (fn === 'neg' ? !!neg[r.id] : fn === 'nao' ? !neg[r.id] : fn === 'ret' ? foiRetirada(r) && !neg[r.id] : !foiRetirada(r) && !neg[r.id]));
+      const rs = base.filter(CFO.regras.test(body)).filter(CFO.motivo.test(body)).filter(r => !fn || (fn === 'neg' ? !!neg[r.id] : fn === 'nao' ? !neg[r.id] : fn === 'ret' ? foiRetirada(r) && !neg[r.id] : !foiRetirada(r) && !neg[r.id]));
       const v = t ? rs.filter(r => meta.get(r).t.includes(t)) : rs;
       $('#cards').innerHTML = [['Requisições', rs.length], ['Itens aprovados', rs.reduce((a, r) => a + meta.get(r).qt, 0)],
         ['Valor aprovado', R$(rs.reduce((a, r) => a + meta.get(r).tot, 0))], ['Contratos atendidos', new Set(rs.map(r => r.contrato)).size]]
         .map(d => `<div class="card"><small>${d[0]}</small><b>${d[1]}</b></div>`).join('');
       $('#lst').innerHTML = v.slice(0, limite).map(r => { const n = neg[r.id]; return `<div class="foto rq${n ? ' neg' : ''}" data-id="${esc(r.id)}"><div class="rqtxt"><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>${esc(r.sol)}<br>
-        <small>${esc(r.mes)} · ${r.itens.length} linha(s) · ${R$(total(r))}</small></div>
+        <small>${esc(r.mes)}${CFO.regras.desloc(r) ? ' → conta em ' + CFO.regras.rotulo(CFO.regras.mesUso(r)) : ''} · ${r.itens.length} linha(s) · ${R$(total(r))}</small></div>
         <div class="rqdir">${n ? `<span class="rqneg">🚫 NEGADA<small>${fmtDH(n)}</small></span>` : ''}${rt[r.id] ? `<span class="rqret">✔ RETIRADA<small>${fmtDH(rt[r.id])} · manual</small></span>` : retHtml(retirada(r))}${ed ? `<span class="rqbtns" role="group" aria-label="Situação da requisição"><button type="button" class="rqb${rt[r.id] ? ' on' : ''}" data-a="ret" title="${rt[r.id] ? 'Desmarcar retirada' : 'Marcar como retirada'}" aria-pressed="${!!rt[r.id]}" aria-label="Marcar como retirada">${ICO_OK}</button><button type="button" class="rqb${n ? ' on' : ''}" data-a="neg" title="${n ? 'Desmarcar negada' : 'Marcar como negada (recusada depois de aprovada)'}" aria-pressed="${!!n}" aria-label="Marcar como negada">${ICO_X}</button></span>` : ''}</div></div>`; }).join('')
         || '<p class="empty">Nenhuma requisição. Importe a planilha de aprovações ou use "Importar pasta".</p>';
       if (v.length > limite) { $('#lst').insertAdjacentHTML('beforeend', `<div class="bar" style="justify-content:center"><button id="mais" class="ghost">Mostrar mais (${v.length - limite} restantes)</button></div>`); $('#mais').onclick = () => { limite += POR_PAGINA; render(); }; }

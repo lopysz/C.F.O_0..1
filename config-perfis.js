@@ -9,7 +9,7 @@
     moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/>',
-    chev: '<path d="M9 6l6 6-6 6"/>', grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.3"/>', plus: '<path d="M12 5v14M5 12h14"/>', shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
+    chev: '<path d="M9 6l6 6-6 6"/>', regra: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>', grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.3"/>', plus: '<path d="M12 5v14M5 12h14"/>', shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
   };
   const ico = (n, s = 18) => `<svg class="cf-i" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
   CFO.iconesCfg = IC;
@@ -75,6 +75,28 @@
       root.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { const [t, id] = b.dataset.show.split(':'); muda(t, id, false); });
     }
 
+    // Regras (empresa/setor): hoje só a de mês de uso das requisições; veja regras.js
+    function secRegras() {
+      const L = CFO.regras.lista(), tipos = CFO.motivo.LISTA;
+      const linhaR = (x, i) => `<div class="cf-rg" data-i="${i}"><label class="cf-ck"><input type="checkbox" data-f="ativa" ${x.ativa ? 'checked' : ''}><span>Ativa</span></label>
+        <div class="cf-rgt">Requisição do tipo <select data-f="tipo">${[...new Set([...tipos, x.tipo])].map(t => `<option${t === x.tipo ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
+        conta <input data-f="meses" type="number" min="-12" max="12" step="1" value="${+x.meses || 0}" aria-label="Meses à frente"> mês(es) à frente do mês em que foi aprovada</div>
+        <button type="button" class="ghost cf-del" data-rdel="${i}" title="Apagar regra" aria-label="Apagar regra">${ico('trash', 16)}</button></div>`;
+      return `<div class="cf-blk"><h4 style="margin:0 0 .3rem">Mês de uso das requisições</h4>
+        <p class="log" style="margin-top:0">Define em qual mês cada tipo de requisição conta nos filtros por mês e no Controle mensal. Ex.: <b>MENSAL +1</b>: aprovada em outubro, conta em novembro. Use <b>0</b> para contar no mesmo mês da aprovação.</p>
+        ${L.map(linhaR).join('') || '<p class="empty">Nenhuma regra: todo tipo conta no mês em que foi aprovado.</p>'}
+        <div class="bar" style="padding:0;min-height:0;margin-top:.5rem"><button type="button" id="cf-rnova" class="ghost">${ico('plus', 16)} Nova regra</button></div></div>`;
+    }
+    function ligaRegras(root) {
+      const salva = f => { const L = CFO.regras.lista(); f(L); CFO.regras.salvar(L); };
+      root.querySelectorAll('.cf-rg').forEach(el => {
+        const i = +el.dataset.i;
+        el.querySelectorAll('[data-f]').forEach(c => c.onchange = () => salva(L => { const f = c.dataset.f; L[i][f] = f === 'ativa' ? c.checked : f === 'meses' ? Math.max(-12, Math.min(12, Math.trunc(+c.value || 0))) : c.value; }));
+        el.querySelector('[data-rdel]').onclick = () => { if (confirm('Apagar esta regra?')) { salva(L => L.splice(i, 1)); draw(); } };
+      });
+      const n = root.querySelector('#cf-rnova'); if (n) n.onclick = () => { salva(L => L.push({ tipo: 'MENSAL', meses: 1, ativa: true })); draw(); };
+    }
+
     // Gaveta: bloco que abre e fecha (Aparência, Perfis, Funções). Lembra quais estavam abertas ao redesenhar.
     const abertas = new Set();
     const gav = (id, icone, titulo, sub, conteudo) => `<details class="cf-gav" data-g="${id}"${abertas.has(id) ? ' open' : ''}>
@@ -97,10 +119,11 @@
       const gUser = ico('user', 20), gGrid = ico('grid', 20);
       body.innerHTML = `<div class="cf">
         ${gavAparencia()}
-        ${adm ? gav('perfis', gUser, 'Perfis', 'Criar, excluir e limitar o que cada perfil pode fazer', perfisAdm) + gav('funcoes', gGrid, 'Funções', 'Apagar ou restaurar funções e gavetas do menu', secFuncoes())
-          : eu.isolado ? gav('perfis', gUser, 'Perfil', 'Seu setor e backup dos dados', secSetor(eu)) + (eu.jr ? gav('funcoes', gGrid, 'Funções', 'Nomes, apagar e restaurar funções', secNomes()) : '')
+        ${adm ? gav('perfis', gUser, 'Perfis', 'Criar, excluir e limitar o que cada perfil pode fazer', perfisAdm) + gav('funcoes', gGrid, 'Funções', 'Apagar ou restaurar funções e gavetas do menu', secFuncoes()) + gav('regras', ico('regra', 20), 'Regras', 'Como o sistema conta meses e tipos de requisição', secRegras())
+          : eu.isolado ? gav('perfis', gUser, 'Perfil', 'Seu setor e backup dos dados', secSetor(eu)) + (eu.jr ? gav('funcoes', gGrid, 'Funções', 'Nomes, apagar e restaurar funções', secNomes()) + gav('regras', ico('regra', 20), 'Regras', 'Como o sistema conta meses e tipos de requisição', secRegras()) : '')
           : gav('perfis', gUser, 'Perfil', 'Seu acesso', '<p class="log" style="margin-top:0">Só o perfil principal cria, exclui e limita perfis.</p>')}</div>`;
       body.querySelectorAll('details.cf-gav').forEach(d => d.addEventListener('toggle', () => { d.open ? abertas.add(d.dataset.g) : abertas.delete(d.dataset.g); }));
+      ligaRegras(body);
       body.querySelectorAll('[data-tema]').forEach(b => b.onclick = () => { if ((b.dataset.tema === 'escuro') !== escuro()) CFO.tema.alternar(); draw(); });
       if (!adm) {
         if (!eu.isolado) return;

@@ -56,3 +56,8 @@ Pedaços "só de setor" que ficam dentro de arquivos comuns:
 - **Só para setores:** arquivo novo + entrada em `DRAWERS` (`app.js`) + regra em `CFO.pode` (como `mapalivre`) + `<script>` no `index.html`.
 - **Só para o EPI:** o mesmo, com `if (CFO.espaco) return` no começo do arquivo (e esconda o item do menu para `CFO.espaco`).
 - **Para os dois:** não precisa de regra. Dados e nuvem se separam sozinhos pelo `CFO.espaco`.
+
+## Regras (Configurações > Regras)
+- `regras.js`: `CFO.regras` guarda regras ajustáveis por empresa/setor (chave `regras`, sincroniza como o resto). Regra atual: **mês de uso da requisição** (ex.: MENSAL +1 = aprovada em outubro conta em novembro; padrão MENSAL +1).
+- Quem usa: `controle-mensal.js` (`mesRetirada`) e o filtro de mês de `requisicoes.js`. Para outra tela seguir a regra: `CFO.regras.mesUso(requisicao)`.
+- A gaveta aparece para o perfil principal e para administrador júnior de setor (`config-perfis.js`, `secRegras`).
