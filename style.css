@@ -636,3 +636,13 @@ body.locked .onl{display:none}
 .rc-l{display:grid;grid-template-columns:minmax(0,1fr) 110px auto;gap:.5rem;align-items:center;margin-top:.5rem}
 .rc-e{grid-column:1/-1;color:var(--muted);font-size:.8rem;min-height:1em}.rc-e.rc-bad{color:#ff6470}
 .rc-x{padding:.4rem .6rem}.rc-d{margin-top:.6rem}
+
+/* ===== Sem "quadro" atrás dos botões ao tocar (destaque de toque do celular) ===== */
+*,*::before,*::after{-webkit-tap-highlight-color:transparent}
+button,.nav,.ico,.fi,[role="button"],[onclick],summary,label,a{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+button svg,button img,.nav svg,.ico svg,.fi svg,svg.ic{pointer-events:none;-webkit-user-select:none;user-select:none}
+img,svg{-webkit-user-drag:none;-webkit-touch-callout:none}
+button:focus:not(:focus-visible),[role="button"]:focus:not(:focus-visible),.nav:focus:not(:focus-visible){outline:none;box-shadow:none}
+button::-moz-focus-inner{border:0}
+/* campos de texto continuam permitindo selecionar/copiar */
+input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user-select:text}
