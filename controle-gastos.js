@@ -62,6 +62,7 @@
     let f = { c: '', b: 3 }, det = null, ultimo = null, ctxX = { reqs: [], key: r => P.key(r.mes), filtrado: false };
     body.style.maxWidth = '1280px';
     body.innerHTML = `<details class="sobre"><summary>ℹ️ Para que serve esta tela</summary><p><b>Gastos em EPIs</b> mostra <b>quanto se gasta com cada EPI</b>: gasto por mês, <b>Curva ABC</b> (custo e quantidade) e a <b>previsão dos próximos meses</b>, calculada pela média dos meses anteriores. Os valores contam no <b>mês da requisição</b>, de qualquer tipo de pedido (use o filtro Tipo para separar).</p><p>Para acompanhar e planejar os pedidos <b>MENSAIS</b> de cada contrato (mês de retirada, teto, revisão), use o <b>Controle mensal</b>.</p><p>O botão <b>Outros cálculos</b> mostra, embaixo, o <b>Giro</b> do estoque, a <b>Obsolescência</b> (parado há 30/60/90 dias) e a <b>Acuracidade</b> das contagens.</p></details>
+      <div class="tabs" id="tabsG"></div>
       <div class="bar"><select id="fc"></select>${P.html()}${CFO.motivo.html()}
         <select id="fb" aria-label="Base da previsão"><option value="3">Previsão: média de 3 meses</option><option value="6">Previsão: média de 6 meses</option><option value="12">Previsão: média de 12 meses</option></select>
         <span class="exp"><button id="exp" class="ghost" title="Exportar o que está na tela em Excel ou PDF">Exportar</button></span></div>

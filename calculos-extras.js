@@ -274,7 +274,7 @@
       const wrap = document.createElement('span'); wrap.className = 'xwrap';
       wrap.innerHTML = `<button type="button" class="ghost xbtn" aria-haspopup="menu" aria-expanded="false">Outros cálculos</button>
         <div class="xmenu" role="menu" hidden>${ids.map(id => `<button type="button" role="menuitem" data-x="${id}"><b>${esc(CALC[id].nome)}</b><small>${esc(CALC[id].desc)}</small></button>`).join('')}</div>`;
-      onde.append(wrap);
+      (onde || body).append(wrap);   // se a tela não tiver o lugar do botão, ele vai para o fim da tela em vez de quebrar tudo
       const out = document.createElement('div'); out.className = 'xout'; body.append(out);
       const btn = wrap.querySelector('.xbtn'), menu = wrap.querySelector('.xmenu');
       const abre = v => { menu.hidden = !v; btn.setAttribute('aria-expanded', String(v)); };
