@@ -629,3 +629,10 @@ body.locked .onl{display:none}
 
 /* ===== Valores dos EPIs ===== */
 .ve-in{width:130px;text-align:right;padding:.35rem .5rem}
+
+/* ===== Recebimento ===== */
+.rc-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.6rem;margin-top:.6rem}
+.rc-top label{display:grid;gap:.25rem;font-size:.85rem;color:var(--muted)}
+.rc-l{display:grid;grid-template-columns:minmax(0,1fr) 110px auto;gap:.5rem;align-items:center;margin-top:.5rem}
+.rc-e{grid-column:1/-1;color:var(--muted);font-size:.8rem;min-height:1em}.rc-e.rc-bad{color:#ff6470}
+.rc-x{padding:.4rem .6rem}.rc-d{margin-top:.6rem}

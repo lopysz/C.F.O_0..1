@@ -15,7 +15,7 @@
   CFO.iconesCfg = IC;
 
   const TIPO = { total: 'Acesso total', leve: 'Modo leve', aprendiz: 'Aprendiz', custom: 'Perfil criado', setor: 'Outro setor' };
-  const EDITAR = [['epi', 'Planilha EPI'], ['contratos', 'Contratos'], ['requisicoes', 'Requisições'], ['mapa', 'Mapa do almoxarifado'], ['mapalivre', 'Mapa livre']];
+  const EDITAR = [['epi', 'Planilha EPI'], ['contratos', 'Contratos'], ['requisicoes', 'Requisições'], ['recebimento', 'Recebimento'], ['mapa', 'Mapa do almoxarifado'], ['mapalivre', 'Mapa livre']];
   const EXTRAS = [['topo', 'Botões do topo (Importar planilhas, Nuvem, Sincronizar WL)'], ['registros', 'Registros (modificações de cada perfil)']];
 
   CFO.modules.config = body => {

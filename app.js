@@ -2,7 +2,7 @@
    Para criar uma subgaveta nova: registre o módulo (CFO.modules.<nome>) e adicione { name, m } em subs. */
 const DRAWERS = [
   { id: 'a', icon: 'box', name: 'Almoxarifado Operacional', short: 'Almox. Op.',
-    subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }, { name: 'Histórico de movimentação', m: 'historico' }] },
+    subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }, { name: 'Recebimento', m: 'recebimento' }, { name: 'Histórico de movimentação', m: 'historico' }] },
   { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
     subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }, { name: 'Valores dos EPIs', m: 'valores_epi' }] },
   { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
