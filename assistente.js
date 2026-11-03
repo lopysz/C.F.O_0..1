@@ -501,11 +501,11 @@
   /* ---------- IA (Gemini) via Edge Function do Supabase: só reescreve a frase que as regras não entenderam ---------- */
   const IA = (() => {
     const cfg = () => window.CFO_SUPABASE || {};
-    let off = false, marcas = []; const cache = new Map();
+    let off = false, marcas = [], ultimo = ''; const cache = new Map();
     const pode = () => { const c = cfg(); return !off && !!c.url && !!c.anonKey && c.assistenteIA !== false; };
     const entender = async txt => {
-      const k = T(txt); if (cache.has(k)) return cache.get(k);
-      const agora = Date.now(); marcas = marcas.filter(x => agora - x < 60000); if (marcas.length >= 8) return null;   // no máx. 8 pedidos por minuto neste aparelho
+      const k = T(txt); ultimo = ''; if (cache.has(k)) return cache.get(k);
+      const agora = Date.now(); marcas = marcas.filter(x => agora - x < 60000); if (marcas.length >= 8) { ultimo = 'limite de 8 pedidos por minuto'; return null; }   // no máx. 8 pedidos por minuto neste aparelho
       marcas.push(agora);
       const c = cfg(), D = carrega(), ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
       try {
@@ -514,12 +514,12 @@
           contratos: D.contratos.slice(0, 60).map(x => ({ num: String(x.num ?? ''), nome: String(x.nome || '').slice(0, 40) })) };
         const r = await fetch(String(c.url).replace(/\/+$/, '') + '/functions/v1/assistente-ia', { method: 'POST', signal: ctl.signal,
           headers: { 'Content-Type': 'application/json', apikey: c.anonKey }, body: JSON.stringify(body) });
-        if (r.status === 404) { off = true; return null; }          // função ainda não publicada: não tenta de novo nesta sessão
-        if (!r.ok) return null;
+        if (r.status === 404) { off = true; ultimo = 'função assistente-ia não encontrada (404)'; return null; }          // função ainda não publicada: não tenta de novo nesta sessão
+        if (!r.ok) { ultimo = 'erro ' + r.status + (r.status === 401 ? ' (Verify JWT ligado)' : ''); return null; }
         const j = await r.json(); if (j && (j.frase || j.resposta)) cache.set(k, j); return j;
-      } catch { return null; } finally { clearTimeout(to); }
+      } catch (e) { ultimo = 'sem conexão ou demorou demais'; return null; } finally { clearTimeout(to); }
     };
-    return { pode, entender };
+    return { pode, entender, erro: () => ultimo };
   })();
 
   const enviar = txt => {
@@ -536,7 +536,10 @@
           estado.pend = null; estado.conf = null; estado.pedeIA = false;
           const r2 = responder(j.frase), falhou = estado.pedeIA; estado.pedeIA = false;
           if (!falhou) { out = r2; nota = `<small class="as-src">🤖 IA: entendi como “${esc(j.frase)}”</small>`; }
+          else nota = `<small class="as-src">🤖 A IA sugeriu “${esc(j.frase)}”, mas o sistema também não achou.</small>`;
         } else if (j && j.resposta && !j.frase) { out = sem(esc(j.resposta)); nota = '<small class="as-src">🤖 resposta da IA (não consultou os dados)</small>'; }
+        else if (!j) nota = `<small class="as-src">⚠️ A IA não respondeu: ${esc(IA.erro() || 'motivo desconhecido')}.</small>`;
+        else if (!j.resposta) nota = '<small class="as-src">🤖 A IA respondeu, mas não achou nenhum item parecido na planilha.</small>';
       } catch (e) { console.warn('assistente IA', e); out = r; nota = ''; }
       espera.innerHTML = out.html + nota; mostraChips(out.chips); ms.scrollTop = ms.scrollHeight;
     });
