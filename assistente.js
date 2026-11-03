@@ -515,7 +515,7 @@
         const r = await fetch(String(c.url).replace(/\/+$/, '') + '/functions/v1/assistente-ia', { method: 'POST', signal: ctl.signal,
           headers: { 'Content-Type': 'application/json', apikey: c.anonKey }, body: JSON.stringify(body) });
         if (r.status === 404) { off = true; ultimo = 'função assistente-ia não encontrada (404)'; return null; }          // função ainda não publicada: não tenta de novo nesta sessão
-        if (!r.ok) { ultimo = 'erro ' + r.status + (r.status === 401 ? ' (Verify JWT ligado)' : ''); return null; }
+        if (!r.ok) { let g = ''; try { g = (await r.json()).status || ''; } catch { /* sem detalhe */ } ultimo = 'erro ' + r.status + (r.status === 401 ? ' (Verify JWT ligado)' : g ? ' (Google respondeu ' + g + ')' : ''); return null; }
         const j = await r.json(); if (j && (j.frase || j.resposta)) cache.set(k, j); return j;
       } catch (e) { ultimo = 'sem conexão ou demorou demais'; return null; } finally { clearTimeout(to); }
     };
