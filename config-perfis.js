@@ -9,7 +9,7 @@
     moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/>',
-    chev: '<path d="M9 6l6 6-6 6"/>', plus: '<path d="M12 5v14M5 12h14"/>', shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
+    chev: '<path d="M9 6l6 6-6 6"/>', grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.3"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.3"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.3"/>', plus: '<path d="M12 5v14M5 12h14"/>', shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
   };
   const ico = (n, s = 18) => `<svg class="cf-i" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
   CFO.iconesCfg = IC;
@@ -27,7 +27,7 @@
 
     // Setor isolado: aviso, backup e (administrador júnior) nomes das funções
     function secSetor(eu) {
-      return `<section class="cf-sec"><h3>Meu setor · ${esc(eu.setorNome)}</h3>
+      return `<section class="cf-sec"><h3>${esc(eu.setorNome)}</h3>
         <p class="log" style="margin-top:0">Os dados deste setor ficam <b>só neste aparelho</b>: não vão para a nuvem e não misturam com o almoxarifado de EPIs. Para não perder nada, exporte as planilhas (botão Exportar de cada função) e faça o backup abaixo de vez em quando.</p>
         <div class="bar" style="padding:0;gap:.6rem;flex-wrap:wrap;min-height:0"><button id="cf-bk">⬇️ Exportar backup do setor</button><button id="cf-rs" class="ghost">⬆️ Restaurar backup</button><button id="cf-ap" class="ghost danger">Apagar dados do setor</button></div>
         <input id="cf-fl" type="file" accept=".json,application/json" hidden></section>`;
@@ -57,12 +57,12 @@
       const oc = CFO.ocultos(), btn = (tipo, id, rot) => `<button type="button" class="ghost danger" data-hide="${tipo}:${esc(id)}" title="Apagar ${esc(rot)}" aria-label="Apagar ${esc(rot)}">${ico('trash', 16)} Apagar</button>`;
       const apagadas = [...DRAWERS_TODAS.filter(d => oc.g.includes(d.id)).map(d => ['g', d.id, d.name + ' (gaveta inteira)']),
         ...DRAWERS_TODAS.filter(d => !oc.g.includes(d.id)).flatMap(d => d.subs.filter(x => oc.f.includes(x.m)).map(x => ['f', x.m, x.name + ' (' + d.name + ')']))];
-      return `<section class="cf-sec"><h3>Funções do menu</h3>
+      return `<div class="cf-blk">
         <p class="log" style="margin-top:0">Apague o que o almoxarifado não usa: some do menu e do início de todos os perfis do almoxarifado. Os dados ficam guardados e você restaura quando quiser.</p>
         ${DRAWERS_TODAS.filter(d => !oc.g.includes(d.id)).map(d => `<div class="cf-g"><h4>${esc(d.name)}</h4>
           <div class="bar" style="padding:0;min-height:0;margin:.3rem 0">${btn('g', d.id, 'gaveta ' + d.name)}</div>
           ${d.subs.filter(x => !oc.f.includes(x.m)).map(x => `<div class="cf-row"><span><b>${esc(x.name)}</b></span>${btn('f', x.m, 'função ' + x.name)}</div>`).join('')}</div>`).join('')}
-        ${apagadas.length ? `<div class="cf-g"><h4>Apagadas</h4>${apagadas.map(([t, id, nome]) => `<div class="cf-row"><span><b>${esc(nome)}</b></span><button type="button" class="ghost" data-show="${t}:${esc(id)}">Restaurar</button></div>`).join('')}</div>` : ''}</section>`;
+        ${apagadas.length ? `<div class="cf-g"><h4>Apagadas</h4>${apagadas.map(([t, id, nome]) => `<div class="cf-row"><span><b>${esc(nome)}</b></span><button type="button" class="ghost" data-show="${t}:${esc(id)}">Restaurar</button></div>`).join('')}</div>` : ''}</div>`;
     }
     // Liga os botões Apagar / Restaurar (usado pelo perfil principal e pelo administrador júnior do setor)
     function ligaApagar(root) {
@@ -75,25 +75,33 @@
       root.querySelectorAll('[data-show]').forEach(b => b.onclick = () => { const [t, id] = b.dataset.show.split(':'); muda(t, id, false); });
     }
 
+    // Gaveta: bloco que abre e fecha (Aparência, Perfis, Funções). Lembra quais estavam abertas ao redesenhar.
+    const abertas = new Set();
+    const gav = (id, icone, titulo, sub, conteudo) => `<details class="cf-gav" data-g="${id}"${abertas.has(id) ? ' open' : ''}>
+      <summary>${icone}<span><b>${titulo}</b><small>${sub}</small></span>${ico('chev')}</summary><div class="cf-gv">${conteudo}</div></details>`;
+    const gavAparencia = () => gav('aparencia', ico(escuro() ? 'moon' : 'sun', 20), 'Aparência', escuro() ? 'Tema escuro' : 'Tema claro',
+      `<div class="cf-tema" role="group" aria-label="Tema"><button type="button" data-tema="claro" class="${escuro() ? 'ghost' : ''}" aria-pressed="${!escuro()}">${ico('sun', 16)} Claro</button><button type="button" data-tema="escuro" class="${escuro() ? '' : 'ghost'}" aria-pressed="${escuro()}">${ico('moon', 16)} Escuro</button></div>`);
+
     function draw() {
       const perfis = CFO.perfis(), eu = CFO.usuario() || {}, adm = CFO.admin();
       const epi = perfis.filter(p => p.perfil !== 'setor'), outros = perfis.filter(p => p.perfil === 'setor');
       const setores = [...new Map(outros.map(p => [p.setor, p.setorNome])).entries()];
-      body.innerHTML = `<div class="cf">
-        <section class="cf-sec"><h3>Aparência</h3>
-          <div class="cf-row"><span>${ico(escuro() ? 'moon' : 'sun')}<b>Tema</b><small>${escuro() ? 'Escuro' : 'Claro'}</small></span>
-          <button id="cf-tema" class="ghost">Mudar para ${escuro() ? 'claro' : 'escuro'}</button></div></section>
-        ${adm ? `<section class="cf-sec"><h3>Almoxarifado de EPIs</h3>
+      const perfisAdm = `<section class="cf-sec"><h3>Almoxarifado de EPIs</h3>
           <p class="log" style="margin-top:0">Usam os dados e a nuvem do sistema. Toque num perfil para limitar o que ele pode fazer. O perfil principal tem sempre acesso total.</p>
           <div class="cf-lista">${epi.map(p => linha(p, eu)).join('')}</div></section>
           <section class="cf-sec"><h3>Outros setores</h3>
           <p class="log" style="margin-top:0">Cada setor trabalha isolado, com dados próprios só no aparelho dele: sem nuvem, sem WL e sem as requisições e planilhas do almoxarifado de EPIs.</p>
           ${setores.map(([id, nome]) => `<div class="cf-setor"><h4><span>${esc(nome || 'Setor')}</span><button class="ghost cf-rn" data-rs="${esc(id)}" aria-label="Renomear setor ${esc(nome)}" title="Renomear setor">✎</button></h4>
             <div class="cf-lista">${outros.filter(p => p.setor === id).map(p => linha(p, eu)).join('')}</div></div>`).join('') || '<p class="empty">Nenhum perfil de outro setor ainda.</p>'}</section>
-          <div class="bar" style="padding:0;margin-bottom:1rem;min-height:0"><button id="cf-novo">${ico('plus', 16)} Novo perfil</button></div>
-          ${secFuncoes()}`
-        : (eu.isolado ? secSetor(eu) + (eu.jr ? secNomes() : '') : `<section class="cf-sec"><h3>Perfis</h3><p class="log" style="margin-top:0">Só o perfil principal cria, exclui e limita perfis.</p></section>`)}</div>`;
-      body.querySelector('#cf-tema').onclick = () => { CFO.tema.alternar(); draw(); };
+          <div class="bar" style="padding:0;margin-bottom:.4rem;min-height:0"><button id="cf-novo">${ico('plus', 16)} Novo perfil</button></div>`;
+      const gUser = ico('user', 20), gGrid = ico('grid', 20);
+      body.innerHTML = `<div class="cf">
+        ${gavAparencia()}
+        ${adm ? gav('perfis', gUser, 'Perfis', 'Criar, excluir e limitar o que cada perfil pode fazer', perfisAdm) + gav('funcoes', gGrid, 'Funções', 'Apagar ou restaurar funções e gavetas do menu', secFuncoes())
+          : eu.isolado ? gav('perfis', gUser, 'Perfil', 'Seu setor e backup dos dados', secSetor(eu)) + (eu.jr ? gav('funcoes', gGrid, 'Funções', 'Nomes, apagar e restaurar funções', secNomes()) : '')
+          : gav('perfis', gUser, 'Perfil', 'Seu acesso', '<p class="log" style="margin-top:0">Só o perfil principal cria, exclui e limita perfis.</p>')}</div>`;
+      body.querySelectorAll('details.cf-gav').forEach(d => d.addEventListener('toggle', () => { d.open ? abertas.add(d.dataset.g) : abertas.delete(d.dataset.g); }));
+      body.querySelectorAll('[data-tema]').forEach(b => b.onclick = () => { if ((b.dataset.tema === 'escuro') !== escuro()) CFO.tema.alternar(); draw(); });
       if (!adm) {
         if (!eu.isolado) return;
         body.querySelector('#cf-bk').onclick = () => CFO.setorBackup.exportar();

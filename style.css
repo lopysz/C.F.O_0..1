@@ -646,3 +646,28 @@ button:focus:not(:focus-visible),[role="button"]:focus:not(:focus-visible),.nav:
 button::-moz-focus-inner{border:0}
 /* campos de texto continuam permitindo selecionar/copiar */
 input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user-select:text}
+
+/* ===== Menu dos três pontinhos: ordem fixa (Nuvem, Baixar agente NF, Registros, Sincronizar WL, Importar planilhas, Sair) =====
+   Vale mesmo para botões que outros arquivos criam depois (Sair, Baixar agente). */
+.topbtns>#env,.topbtns>#envS{order:1}
+.topbtns>#nfdl{order:2}
+.topbtns>#regbtn{order:3}
+.topbtns>#wlbtn{order:4}
+.topbtns>#imp{order:5}
+.topbtns>#sair{order:6}
+
+/* ===== Configurações em gavetas (Aparência, Perfis, Funções) ===== */
+.cf-gav{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:.8rem;overflow:hidden}
+.cf-gav>summary{display:flex;align-items:center;gap:.8rem;padding:.9rem 1.1rem;cursor:pointer;list-style:none;color:var(--accent)}
+.cf-gav>summary::-webkit-details-marker{display:none}
+.cf-gav>summary>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem;color:var(--text)}
+.cf-gav>summary b{font-size:1rem}
+.cf-gav>summary small{color:var(--muted);font-size:.78rem}
+.cf-gav>summary>svg:last-child{color:var(--muted);transition:transform .2s}
+.cf-gav[open]>summary>svg:last-child{transform:rotate(90deg)}
+.cf-gav[open]>summary{border-bottom:1px solid var(--line)}
+.cf-gv{padding:1rem 1.1rem 1.1rem}
+.cf-gv .cf-sec{background:none;border:0;padding:0;margin:0 0 1rem}
+.cf-gv .cf-sec:last-child{margin-bottom:0}
+.cf-tema{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.cf-tema button{display:flex;align-items:center;justify-content:center;gap:.4rem;padding:.7rem}
