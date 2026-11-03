@@ -3,6 +3,9 @@
    giro, previsão de gastos, requisições, contratos...) e responde só com os dados que o sistema já tem: Planilha EPI, Requisições,
    Mapa, Contratos, Movimentações e Contagens. Respeita as permissões do perfil. O botão some sozinho nas telas de mapa.
    Para ensinar uma pergunta nova: acrescente uma linha em INTENCOES (palavras) e uma função em H (resposta).
+   Cérebro (v2): corrige erro de digitação em palavras de comando (nunca em números/códigos), lembra o assunto por 10 min
+   ("e o mês passado?", "quanto dura dele?", "e do contrato 125?"), pergunta o que falta (item/contrato), confirma quando a frase é vaga,
+   mostra a fonte dos dados em cada resposta e guarda (só neste aparelho, sem números) as frases que não entendeu.
    Remover = apagar este arquivo e a linha <script> do index.html. */
 (() => {
   const esc = CFO.esc, norm = CFO.norm, P = CFO.periodo;
@@ -18,12 +21,46 @@
 
   /* ---------- Palavras que NÃO fazem parte do nome de um item ---------- */
   const STOP = new Set(('o a os as um uma uns umas de do da dos das em no na nos nas por para pra pro com e ou que qual quais quanto quantos quantas onde esta estao ta fica ficam ha tem tenho temos me diga fala fale ' +
-    'mostra mostrar mostre ver veja listar liste lista item itens produto produtos epi epis material materiais tamanho tam pelo pela voce vc preciso quero queria saber sobre ao aos meu minha nosso').split(' '));
+    'mostra mostrar mostre ver veja listar liste lista item itens produto produtos epi epis material materiais tamanho tam pelo pela voce vc preciso quero queria saber sobre ao aos meu minha nosso mesmo mesma').split(' '));
   const KW = new Set(('local localizacao localizar prateleira corredor fileira andar palete estoque saldo critico criticos baixo baixos acabando acabar zerado zerados falta faltando repor reposicao minimo giro rotatividade ' +
     'saem sai saiu saida saidas gasto gastos gastou gastar custo custos custou valor previsao prever projecao proximo mes meses contrato contratos requisicao requisicoes movimentacao movimentacoes entrada entradas ' +
     'ultima ultimas ultimo ultimos resumo ajuda mais menos maior menor top ranking consumo consumido pedido pedidos hoje dele dela desse dessa esse essa isso dura durar durara quando quanto tempo guardado guardados ' +
     'disponivel disponiveis parado parados encalhado encalhados sem contagem contagens historico situacao geral reais total').split(' '));
   const MESES_T = new Set(MES);
+  ['passado', 'anterior', 'atual', 'corrente', 'acumulado', 'ano', 'inteiro', 'entrou', 'chegou', 'deu', 'deram', 'lugar', 'posicao', 'endereco', 'cade', 'aonde', 'unidades', 'restam', 'sobrando',
+   'vence', 'vencem', 'vencendo', 'vencimento', 'vencimentos', 'venceu', 'termina', 'prazo', 'despesas', 'orcamento', 'duracao', 'faco', 'fazer', 'registro', 'registrar'].forEach(w => KW.add(w));
+
+  /* ---------- Tolerância a erro de digitação: só palavras de comando são corrigidas sozinhas; nome de item vira sugestão; número/código nunca muda ---------- */
+  const VOCI = ['estoque', 'critico', 'criticos', 'previsao', 'contrato', 'contratos', 'requisicao', 'requisicoes', 'movimentacao', 'movimentacoes', 'historico', 'resumo', 'giro', 'parado', 'parados',
+    'localizacao', 'localizar', 'saldo', 'prateleira', 'corredor', 'gasto', 'gastos', 'gastou', 'entradas', 'saidas', 'contagem', 'acabando', 'zerado', 'zerados', 'reposicao', 'rotatividade', 'disponivel', 'vencimento', 'quantos', 'quantas'];
+  const lev = (a, b, max) => {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let p = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) { const c = [i]; let min = i; for (let j = 1; j <= b.length; j++) { c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); if (c[j] < min) min = c[j]; } if (min > max) return max + 1; p = c; }
+    return p[b.length];
+  };
+  const tolCmd = (w, v) => w.length >= 8 ? 2 : w.length >= 6 ? (w[0] === v[0] ? 2 : 1) : w.length >= 5 ? 1 : 0;      // erros aceitos por tamanho da palavra (2 em palavra média só se a 1ª letra bate)
+  const vocab = D => { const v = new Set(); D.rows.forEach(r => T(r.item).split(' ').forEach(w => w.length >= 3 && v.add(w))); return v; };
+  // Abreviações que o pessoal usa no dia a dia (acrescente as que aparecerem no log de frases não entendidas)
+  const ABREV = { qto: 'quanto', qtos: 'quantos', qtas: 'quantas', qtd: 'quantos', qts: 'quantas', req: 'requisicao', reqs: 'requisicoes', requi: 'requisicao', estq: 'estoque', est: 'estoque', hist: 'historico', mov: 'movimentacao', prev: 'previsao', ctr: 'contrato', vlr: 'valor', pq: 'porque', vc: 'voce' };
+  const corrigir = (t, vocItem) => t.split(' ').map(w => {
+    if (ABREV[w] && !vocItem.has(w)) return ABREV[w];
+    if (w.length < 5 || /\d/.test(w) || STOP.has(w) || KW.has(w) || MESES_T.has(w) || vocItem.has(w)) return w;
+    let best = null, bd = 9; VOCI.forEach(v => { const d = lev(w, v, tolCmd(w, v)); if (d <= tolCmd(w, v) && d < bd) { bd = d; best = v; } });
+    return best || w;
+  }).join(' ');
+  // Período citado na frase, em forma normalizada (para repetir em "e o mês passado?")
+  const perTxt = t => {
+    if (/mes passado/.test(t)) return 'mes passado';
+    if (/(este|esse|neste|nesse) mes|mes atual|mes corrente/.test(t)) return 'este mes';
+    if (/\b(acumulad\w*|desde o inicio)\b/.test(t)) return 'acumulado';
+    const mi = MES.findIndex(n => new RegExp('\\b' + n + '\\b').test(t)), ym = t.match(/\b(20\d\d)\b/);
+    if (mi >= 0) return MES[mi] + (ym ? ' ' + ym[1] : '');
+    return ym ? ym[1] : '';
+  };
+  // Frases que o assistente não entendeu: guardadas só neste aparelho (localStorage direto, não sincroniza), sem números
+  const LOGK = 'cfo-assist-log';
+  const logar = (texto, motivo, id) => { try { const L = JSON.parse(localStorage.getItem(LOGK) || '[]'); L.push({ ts: Date.now(), t: T(texto).replace(/\d+/g, '#').slice(0, 80), m: motivo, id: id || '' }); localStorage.setItem(LOGK, JSON.stringify(L.slice(-100))); } catch { /* sem armazenamento: ignora */ } };
 
   /* ---------- Leitura dos dados (a cada pergunta, para estar sempre atualizado) ---------- */
   const carrega = () => {
@@ -75,10 +112,14 @@
     const pool = D.rows.map(r => ({ r, s: norm(r.item + ' ' + (r.codigo || '')) }));
     const ok = (s, [a, b]) => s.includes(a) || (b && s.includes(b));
     const rank = (a, b) => (norm(b.r.item) === todo) - (norm(a.r.item) === todo) || a.r.item.length - b.r.item.length;
+    const ex = pool.filter(x => norm(x.r.item) === todo); if (ex.length === 1) return { toks, hits: [ex[0].r], sug: [] };   // nome completo = um item só
     const hits = pool.filter(x => alvos.every(a => ok(x.s, a))).sort(rank).map(x => x.r);
     if (hits.length) return { toks, hits, sug: [] };
     const sc = pool.map(x => ({ r: x.r, n: alvos.filter(a => ok(x.s, a)).length })).filter(x => x.n >= (toks.length > 1 ? 2 : 1)).sort((a, b) => b.n - a.n);
-    return { toks, hits: [], sug: sc.slice(0, 5).map(x => x.r) };
+    const voc = D.voc || (D.voc = vocab(D));                          // erro de digitação no nome: só SUGERE (nunca troca sozinho), e nunca mexe em números
+    const fix = toks.map(w => { if (/\d/.test(w) || pool.some(x => x.s.includes(w))) return w; const tl = w.length >= 7 ? 2 : w.length >= 4 ? 1 : 0; let b = w, bd = 9; voc.forEach(v => { const d = lev(w, v, tl); if (d < bd && d <= tl) { bd = d; b = v; } }); return b; });
+    const fz = fix.join(' ') !== toks.join(' ') ? pool.filter(x => fix.every(w => x.s.includes(w))).slice(0, 5).map(x => x.r) : [];
+    return { toks, hits: [], sug: fz.length ? fz : sc.slice(0, 5).map(x => x.r) };
   };
   const acharContrato = (D, t) => {
     const m = t.match(/contrato\s*(?:n|no|numero)?\s*(\d+)/); if (m) return String(m[1]);
@@ -89,6 +130,7 @@
   const acharReq = (D, t) => { const m = t.match(/\brq\s*(\d+)/) || t.match(/requisicao\s*(?:n|no|numero)?\s*(\d+)/); if (!m) return null; return D.todas.find(r => (String(r.id).match(/\d+/) || [])[0] === m[1]) || { falta: m[1] }; };
   const periodo = (D, t) => {
     const now = new Date(), kNow = now.getFullYear() * 100 + now.getMonth() + 1;
+    if (/\b(acumulad\w*|desde o inicio)\b/.test(t)) return { f: () => true, rot: 'acumulado (todos os meses)' };
     if (/mes passado/.test(t)) { const k = addM(kNow, -1); return { f: x => x === k, rot: rotK(k) }; }
     if (/(este|esse|neste|nesse) mes|mes atual|mes corrente/.test(t)) return { f: x => x === kNow, rot: rotK(kNow) };
     const m = MES.findIndex(n => new RegExp('\\b' + n + '\\b').test(t)) + 1, ym = t.match(/\b(20\d\d)\b/), y = ym ? +ym[1] : 0;
@@ -100,20 +142,24 @@
   /* ---------- Intenções: a primeira que casar vence. Para ensinar algo novo, acrescente uma linha ---------- */
   const INTENCOES = [
     ['oi', /^(oi|ola|opa|eae|e ai|hey|bom dia|boa tarde|boa noite)\b/],
-    ['ajuda', /\b(ajuda|help|comandos|o que (voce|vc) (faz|sabe)|como (te )?uso|como funciona)\b/],
+    ['ajuda', /\b(ajuda|help|comandos|o que (voce|vc) (faz|sabe|consegue)|como (te )?uso|como funciona)\b/],
+    ['logassist', /\b(nao entendi|frases? que nao entend\w+|perguntas? que (voce )?nao (entend\w+|soub\w+)|falhas do assistente)\b/],
     ['semlocal', /\b(sem (local|localizacao|lugar)|nao (tem|possui) (local|localizacao)|nao (esta )?(mapead|cadastrad)\w*)\b/],
-    ['local', /\b(onde|local|localizacao|localizar|fica|ficam|guardad\w+|prateleira|corredor|fileira|andar|palete|achar|encontr\w+)\b/],
+    ['local', /\b(onde|aonde|cade|local|localizacao|localizar|fica|ficam|guardad\w+|prateleira|corredor|fileira|andar|palete|achar|encontr\w+|posicao|endereco|em que lugar)\b/],
+    ['tutorial', /\bcomo (eu )?(faco|fazer|fazemos|registro|registrar|lanco|lancar|cadastro|cadastrar|acesso|acessar|abro|abrir|importo|importar|exporto|exportar|conto|contar)\b/],
+    ['mov', /\b(quando|ultima|ultimo) (entrou|chegou|deu entrada|deram entrada|saiu|deu saida|deram saida)\b|\bquem (deu|deram|retirou|pegou|lancou) (saida|entrada)\b|\bultima (entrada|saida)\b/],
     ['parado', /\b(parad\w+|sem giro|sem saida|encalhad\w+|nao (sai|saiu|saem)|menos (sai|saem|giro|rotatividade|consumid\w+|pedid\w+)|menor (giro|rotatividade|consumo|saida))\b/],
     ['giro', /\b(giro|rotatividade|rotativ\w+|mais (sai|saem|saiu|consumid\w+|pedid\w+|usad\w+)|maior (giro|rotatividade|consumo|saida)|ranking|top)\b/],
-    ['criticos', /\b(critic\w*|acabando|zerad\w*|em falta|faltando|falta|repor|reposicao|baixo|baixos|abaixo do minimo|estoque minimo|minimo|precisa comprar|comprar)\b/],
+    ['previsao', /\b(quando (acaba|vai acabar|vai faltar|falta|termina)|quanto (tempo )?(dura|durar|vai durar|durara)|dura quanto)\b/],
+    ['criticos', /\b(critic\w*|acabando|quase acabando|zerad\w*|em falta|faltando|falta|vai faltar|repor|reposicao|baixo|baixos|abaixo do minimo|estoque minimo|minimo|precisa comprar|comprar)\b/],
     ['previsao', /\b(previs\w+|prever|projecao|projetar|estimativa|estimar|vou gastar|vai gastar|vai custar|proximo mes|mes que vem|dura|durar|durara|quando (acaba|vai acabar|falta)|acabar)\b/],
-    ['gasto', /\b(gast\w+|custo|custos|custou|valor|quanto (custa|foi)|reais|despesa)\b/],
-    ['contrato', /\bcontratos?\b/],
+    ['gasto', /\b(gast\w+|custo|custos|custou|valor|quanto (custa|foi)|reais|despesas?|orcamento)\b/],
+    ['contrato', /\b(contratos?|vencimentos?|vence|vencem|vencendo|venceu)\b/],
     ['requisicao', /\b(requisic\w+|rq|aguardando|pendentes?|retirad\w+|negad\w+|pedidos?)\b/],
     ['mov', /\b(movimentac\w+|movimento|entradas?|saidas?|historico|lancamentos?)\b/],
     ['contagem', /\b(contagem|contagens|contei|inventario|divergenc\w+)\b/],
-    ['resumo', /\b(resumo|painel|visao geral|geral|situacao|panorama|status)\b/],
-    ['estoque', /\b(estoque|saldo|quanto (tem|tenho|temos|ha|sobrou|resta)|quantos|quantas|disponivel|disponiveis)\b/]
+    ['resumo', /\b(resumo|painel|visao geral|geral|situacao|panorama|status|como (esta|anda|vai) (o |a )?(almoxarifado|setor|sistema))\b/],
+    ['estoque', /\b(estoque|saldo|quanto (tem|tenho|temos|ha|sobrou|resta)|quantos|quantas|disponivel|disponiveis|unidades|restam|sobrando|sobraram)\b/]
   ];
   const AREA = { local: 'mapa', semlocal: 'mapa', estoque: 'epi', ficha: 'epi', criticos: 'epi', giro: 'epi', parado: 'epi', gasto: 'controle_gastos', contrato: 'contratos', requisicao: 'requisicoes', mov: 'historico', contagem: 'contagem' };
   const PRECISA_ITEM = new Set(['local', 'estoque']);
@@ -129,11 +175,37 @@
 
   const H = {};
   H.oi = () => ({ html: 'Olá! Pergunto aos dados do sistema, sem inteligência artificial. Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
-  H.ajuda = () => ({ html: `Exemplos do que eu entendo:<ul><li><b>Onde fica</b> a luva nitrílica?</li><li><b>Quanto tem</b> de bota PVC (42)?</li><li>O que está <b>crítico</b> / abaixo do mínimo?</li><li>Quais itens <b>mais saem</b>? E os <b>parados</b>?</li><li><b>Previsão de gastos</b> do próximo mês (ou do contrato 123)</li><li><b>Quanto dura</b> o estoque de capacete?</li><li><b>Gasto</b> de outubro por contrato</li><li>Requisições <b>aguardando retirada</b> · requisição RQ-3370</li><li>Últimas <b>saídas</b> · última <b>contagem</b> · itens <b>sem local</b> no mapa</li></ul><small>Dica: escreva o nome do item como na Planilha EPI. Posso responder só com o que está cadastrado.</small>` });
+  H.ajuda = () => ({ html: `Exemplos do que eu entendo:<ul><li><b>Onde fica</b> a luva nitrílica?</li><li><b>Quanto tem</b> de bota PVC (42)?</li><li>O que está <b>crítico</b> / abaixo do mínimo?</li><li>Quais itens <b>mais saem</b>? E os <b>parados</b>?</li><li><b>Previsão de gastos</b> do próximo mês (ou do contrato 123)</li><li><b>Quanto dura</b> o estoque de capacete?</li><li><b>Gasto</b> de outubro por contrato</li><li>Requisições <b>aguardando retirada</b> · requisição RQ-3370</li><li>Últimas <b>saídas</b> · última <b>contagem</b> · itens <b>sem local</b> no mapa</li><li>Quando <b>vence</b> o contrato 123? · quando <b>entrou</b> a última luva?</li><li><b>Como faço</b> a contagem? · como registro uma <b>entrada</b>?</li></ul><small>Depois de uma pergunta, é só continuar: “e o mês passado?”, “e do contrato 125?”, “quanto dura dele?”, “não, o outro”, “voltar”.</small><small>Dica: escreva o nome do item como na Planilha EPI. Posso responder só com o que está cadastrado.</small>` });
+
+  const GUIA = [
+    [/entrada|saida|movimenta|lancar|lanco/, 'epi', 'Entradas e saídas', 'Almoxarifado Operacional › Planilha EPI: em cada item use o botão ⇅ para lançar entrada ou saída. Tudo aparece em Almoxarifado Operacional › Histórico de movimentação (verde = entrada, vermelho = saída, amarelo = ajuste de contagem).'],
+    [/contagem|contar|inventario/, 'contagem', 'Contagem de estoque', 'Ferramentas › Contagem de estoque. Os ajustes feitos por ela ficam registrados no Histórico de movimentação (amarelo).'],
+    [/historico/, 'historico', 'Histórico de movimentação', 'Almoxarifado Operacional › Histórico de movimentação: entradas (verde), saídas (vermelho) e ajustes de contagem (amarelo).'],
+    [/mapa livre/, 'mapalivre', 'Mapa livre', 'Ferramentas › Mapa livre.'],
+    [/mapa|prateleira|corredor/, 'mapa', 'Mapa almoxarifado', 'Ferramentas › Mapa almoxarifado: busque o item para ver corredor, fileira e andar. “Itens sem local” ajuda a definir o que ainda não está no mapa.'],
+    [/requisic/, 'requisicoes', 'Requisição', 'Almoxarifado Operacional › Requisição.'],
+    [/contrato/, 'contratos', 'Contratos', 'Almoxarifado Operacional › Contratos.'],
+    [/gasto|financeiro|despesa/, 'controle_gastos', 'Gastos em EPIs', 'Jurídico Operacional › Gastos em EPIs.'],
+    [/mensal/, 'controle_mensal', 'Controle mensal', 'Jurídico Operacional › Controle mensal.'],
+    [/foto|separacao/, 'fotos', 'Foto de Separação', 'Ferramentas › Foto de Separação.'],
+    [/etiqueta|identificacao/, 'etiquetas', 'Gerador de Identificação', 'Ferramentas › Gerador de Identificação.'],
+    [/\bnf\b|nota fiscal|automacao/, 'autonf', 'Automação de NF', 'Ferramentas › Automação de NF.'],
+    [/planilha|epi|estoque|item|importar|exportar/, 'epi', 'Planilha EPI', 'Almoxarifado Operacional › Planilha EPI.']
+  ];
+  H.tutorial = t => {
+    const g = GUIA.find(x => x[0].test(t)); if (!g) return H.ajuda();
+    const [, m, nome, txt] = g, ok = CFO.pode('abrir', m);
+    return { html: `<b>${esc(nome)}</b><br>${esc(txt)}` + (ok ? `<div class="as-row"><button class="ghost as-go" data-ir="${m}">Abrir ${esc(nome)}</button></div>` : '<br><small>Seu perfil não tem acesso a essa tela.</small>') };
+  };
+  H.logassist = () => {
+    let L = []; try { L = JSON.parse(localStorage.getItem(LOGK) || '[]'); } catch { L = []; }
+    L = L.filter(x => x && x.m).slice(-10).reverse();
+    return L.length ? { html: `<b>Últimas frases que não consegui responder</b>${lis(L.map(x => `“${esc(x.t)}” <small>${esc(x.m)}</small>`), 10)}<small>Sem números, guardadas só neste aparelho. Use para ensinar palavras novas em INTENCOES.</small>` } : sem('Nenhuma frase sem resposta registrada neste aparelho.');
+  };
 
   // Ficha de itens (modo: local | estoque | ficha)
   H.itens = (D, hits, modo, t) => {
-    const veMapa = CFO.pode('abrir', 'mapa');
+    const veMapa = CFO.pode('abrir', 'mapa'), pre = modo === 'local' ? 'onde fica ' : modo === 'estoque' ? 'quanto tem de ' : '';
     const linhaItem = r => { const s = situacao(D, r), ls = locais(D, r);
       return `<b>${esc(r.item)}</b>${r.codigo ? ` <small>cód. ${esc(r.codigo)}</small>` : ''}`
         + (modo !== 'local' ? `<br>Estoque: <b>${N(r.qtd)}</b>${s.min ? ` · mínimo ${N(s.min)}${s.origem === 'auto' ? ' (auto)' : ''}` : ''} ${ICO[s.tipo]}` : '')
@@ -145,7 +217,7 @@
         html2: botaoMapa(r.item), chips: [ch('Quanto dura?', 'quanto dura o estoque de ' + r.item), ch('Previsão de gasto', 'previsão de gasto de ' + r.item), ch('Últimas saídas', 'últimas movimentações de ' + r.item)] };
     }
     const tot = hits.reduce((a, r) => a + (+r.qtd || 0), 0);
-    return { html: `Achei <b>${hits.length}</b> itens${modo !== 'local' ? ` (estoque somado: <b>${N(tot)}</b>)` : ''}:` + lis(hits.map(linhaItem), 8) + '<small>Escreva o tamanho ou o nome completo para ver só um.</small>', ctx: hits[0] };
+    return { html: `Achei <b>${hits.length}</b> itens${modo !== 'local' ? ` (estoque somado: <b>${N(tot)}</b>)` : ''}:` + lis(hits.map(linhaItem), 8) + '<small>Escreva o tamanho ou o nome completo, ou toque em um botão para ver só um.</small>', alts: hits, chips: hits.slice(0, 6).map(r => ch(r.item, pre + r.item)) };
   };
 
   H.criticos = D => {
@@ -173,28 +245,34 @@
   };
 
   H.previsao = (D, t, hits, cn) => {
-    const sd = semDados(D); if (sd) return sd; const pode$ = CFO.pode('abrir', 'controle_gastos');
+    const sd = semDados(D); if (sd) return sd;
+    const pode$ = CFO.pode('abrir', 'controle_gastos'), base = `${rotK(D.K3[JANELA - 1])} a ${rotK(D.ult)}`, alvoMes = rotK(addM(D.ult, 1));
+    const meses = rs => { const ids = new Set(rs.map(r => r.id)); return new Set(D.linhas.filter(l => ids.has(l.rid) && D.K3.includes(l.k)).map(l => l.k)).size; };
+    const conf = n => n >= 3 ? 'boa' : n === 2 ? 'média' : n === 1 ? 'baixa' : 'sem base';
+    const NOTA = 'Inclui: quantidade aprovada × preço das requisições. Não inclui: despesas fora do C.F.O., pedidos ainda não cadastrados nem mudança de preço.';
     if (hits.length > 3) {                                          // muitos tamanhos do mesmo produto: soma tudo
-      const q = hits.reduce((a, r) => a + (+r.qtd || 0), 0), med = hits.reduce((a, r) => a + (D.med.get(r.id) || 0), 0), v = hits.reduce((a, r) => a + (D.med.get(r.id) || 0) * (D.preco.get(r.id) || 0), 0), dias = med > 0 ? Math.round(q / med * 30) : null;
-      return { ctx: hits[0], html: `<b>${hits.length} itens parecidos com “${esc(CFO.baseEpi(hits[0].item))}”</b> (todos os tamanhos somados)<br>Estoque: ${N(q)} un · saída média ${N(med)}/mês` + (med > 0 ? `<br>Próximo mês: <b>~${N(Math.ceil(med))} un</b>${pode$ && v ? ` · ${R$(v)}` : ''}<br>Estoque ${duracao(dias)}` : '<br>Sem saídas nesse período.') + '<br><small>Escreva o tamanho para ver só um. Estimativa pela média dos últimos 3 meses.</small>' };
+      const q = hits.reduce((a, r) => a + (+r.qtd || 0), 0), med = hits.reduce((a, r) => a + (D.med.get(r.id) || 0), 0), v = hits.reduce((a, r) => a + (D.med.get(r.id) || 0) * (D.preco.get(r.id) || 0), 0), dias = med > 0 ? Math.round(q / med * 30) : null, n = meses(hits);
+      return { html: `<b>${hits.length} itens parecidos com “${esc(CFO.baseEpi(hits[0].item))}”</b> (todos os tamanhos somados)<br>Estoque: ${N(q)} un · saída média ${N(med)}/mês` + (med > 0 ? `<br>${alvoMes}: <b>~${N(Math.ceil(med))} un</b>${pode$ && v ? ` · ${R$(v)}` : ''}<br>Estoque ${duracao(dias)}<br>Confiabilidade: <b>${conf(n)}</b> (${n} de ${JANELA} meses com saída)` : '<br>Sem saídas nesse período: não dá para estimar.') + `<small>Escreva o tamanho para ver só um. Base: média de ${base}. ${NOTA}</small>`, chips: [ch('Itens críticos', 'o que está crítico?')] };
     }
-    if (hits.length && hits.length <= 3) {
-      return { ctx: hits[0], html: hits.map(r => { const s = situacao(D, r), pre = D.preco.get(r.id) || 0, fim = s.dias != null && s.q > 0 ? new Date(Date.now() + s.dias * 864e5).toLocaleDateString('pt-BR') : '';
-        return `<b>${esc(r.item)}</b><br>Estoque: ${N(s.q)} un · saída média ${N(s.med)}/mês (${rotK(D.K3[JANELA - 1])} a ${rotK(D.ult)})`
-          + (s.med > 0 ? `<br>Previsão do próximo mês: <b>~${N(Math.ceil(s.med))} un</b>${pode$ && pre ? ` · ${R$(s.med * pre)}` : ''}<br>${s.q > 0 ? `Estoque ${duracao(s.dias)}${fim ? ` (por volta de ${fim})` : ''}` : '⛔ Estoque zerado'}` : '<br>Sem saídas nesse período: não dá para prever.'); }).join('<hr>') + '<br><small>Estimativa pela média dos últimos 3 meses, sem inteligência artificial.</small>' };
+    if (hits.length) {
+      return { ctx: hits.length === 1 ? hits[0] : null, html: hits.map(r => { const s = situacao(D, r), pre = D.preco.get(r.id) || 0, fim = s.dias != null && s.q > 0 ? new Date(Date.now() + s.dias * 864e5).toLocaleDateString('pt-BR') : '', n = meses([r]);
+        return `<b>${esc(r.item)}</b><br>Estoque: ${N(s.q)} un · saída média ${N(s.med)}/mês (${base})`
+          + (s.med > 0 ? `<br>${alvoMes}: <b>~${N(Math.ceil(s.med))} un</b>${pode$ && pre ? ` · ${R$(s.med * pre)}` : ''}<br>${s.q > 0 ? `Estoque ${duracao(s.dias)}${fim ? ` (por volta de ${fim})` : ''}` : '⛔ Estoque zerado'}<br>Confiabilidade: <b>${conf(n)}</b> (${n} de ${JANELA} meses com saída)` : '<br>Sem saídas nesse período: não dá para prever.'); }).join('<hr>') + `<small>Base: média de ${base}. ${NOTA}</small>` };
     }
-    if (!pode$) return sem('Seu perfil não tem acesso a valores em reais. Posso prever a quantidade de um item específico: pergunte “quanto dura o estoque de …”.');
+    if (!pode$) return { html: 'Seu perfil não tem acesso a valores em reais. Posso prever a quantidade de um item específico: pergunte “quanto dura o estoque de …”.', semFonte: true };
     const ks = Array.from({ length: 6 }, (_, i) => addM(D.ult, -5 + i)), flt = l => !cn || l.contrato === cn;
     const mensal = f => ks.map(k => D.linhas.filter(l => l.k === k && f(l)).reduce((a, l) => a + l.valor, 0));
     const prev = v => { const [a, b, c] = [v[5], v[4], v[3]]; return { p: (3 * a + 2 * b + c) / 6, lo: Math.min(a, b, c), hi: Math.max(a, b, c), media: (a + b + c) / 3 }; };
-    const v = mensal(flt), p = prev(v), tend = p.media ? (v[5] - p.media) / p.media * 100 : 0, max = Math.max(...v, 1);
+    const v = mensal(flt), nm = [v[3], v[4], v[5]].filter(x => x > 0).length;
+    if (!nm) return sem(`Não há requisições aprovadas${filtroTxt(cn, '')} em ${esc(base)}, então não consigo estimar.`);
+    const p = prev(v), tend = p.media ? (v[5] - p.media) / p.media * 100 : 0, max = Math.max(...v, 1);
     const porC = new Map(); D.linhas.forEach(l => { if (D.K3.includes(l.k) && flt(l)) porC.set(l.contrato, (porC.get(l.contrato) || 0) + l.valor / JANELA); });
     const peso = somaPor(D, l => D.K3.includes(l.k) && flt(l)).map(x => ({ r: { item: x.item }, v: x.valor / JANELA })).filter(x => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 5);
-    return { html: `<b>Previsão de gasto em EPIs${filtroTxt(cn, nomeContrato(D, cn))}</b><br>Próximo mês: <b>~${R$(p.p)}</b><br><small>faixa provável ${R$(p.lo)} a ${R$(p.hi)} · ${tend >= 0 ? '▲' : '▼'} ${N(Math.abs(tend))}% do último mês vs. média</small>`
+    return { html: `<b>Estimativa de gasto em EPIs${filtroTxt(cn, nomeContrato(D, cn))} · ${alvoMes}</b><br><b style="font-size:1.15em">~${R$(p.p)}</b><br><small>faixa provável ${R$(p.lo)} a ${R$(p.hi)} · ${tend >= 0 ? '▲' : '▼'} ${N(Math.abs(tend))}% do último mês vs. média<br>Confiabilidade: ${conf(nm)} (${nm} de ${JANELA} meses com requisições)</small>`
       + `<div class="as-t">Histórico</div>${lis(ks.map((k, i) => `${rotK(k)} · ${R$(v[i])}<br>${bar(v[i], max)}`), 6)}`
       + (!cn && porC.size ? `<div class="as-t">Por contrato (média mensal)</div>${lis([...porC].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c, x]) => `${esc(c)}${nomeContrato(D, c) ? ' - ' + esc(nomeContrato(D, c)) : ''} · ${R$(x)}`), 5)}` : '')
       + (peso.length ? `<div class="as-t">Itens que mais pesam</div>${lis(peso.map(x => `${esc(x.r.item)} · ${R$(x.v)}/mês`), 5)}` : '')
-      + `<small>Estimativa: média ponderada dos 3 últimos meses (o mais recente pesa mais). Não considera mudança de preço nem obras novas.</small>`, chips: [ch('Gasto do mês', 'gasto do último mês'), ch('Itens críticos', 'o que está crítico?')] };
+      + `<small>Estimativa baseada no histórico de requisições aprovadas: média ponderada de ${base} (o mês mais recente pesa mais). ${NOTA}</small>`, chips: [ch('Gasto do mês', 'gasto do último mês'), ch('Itens críticos', 'o que está crítico?')] };
   };
 
   H.gasto = (D, t, hits, cn) => {
@@ -204,18 +282,29 @@
     const prevK = pe ? null : addM(D.ult, -1), ant = prevK ? D.linhas.filter(l => l.k === prevK && (!cn || l.contrato === cn) && (!hits.length || hits.some(r => r.id === l.rid))).reduce((a, l) => a + l.valor, 0) : 0;
     if (!L.length) return sem(`Não achei gasto em ${esc(rot)}${filtroTxt(cn, '')}${hits.length ? ' para esse item' : ''}.`);
     const agr = (kf, nf) => { const m = new Map(); L.forEach(l => { const k = kf(l); m.set(k, (m.get(k) || 0) + l.valor); }); return [...m].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${nf(k)} · ${R$(v)}`); };
-    return { ctx: hits[0], html: `<b>Gasto em EPIs · ${esc(rot)}${filtroTxt(cn, nomeContrato(D, cn))}</b>${hits.length === 1 ? `<br>${esc(hits[0].item)}` : ''}<br><b style="font-size:1.15em">${R$(tot)}</b><br><small>${nreq} requisição(ões) · ${N(un)} unidades${ant ? ` · mês anterior ${R$(ant)} (${tot >= ant ? '▲' : '▼'} ${N(Math.abs((tot - ant) / ant * 100))}%)` : ''}</small>`
+    return { ctx: hits.length === 1 ? hits[0] : null, html: `<b>Gasto em EPIs · ${esc(rot)}${filtroTxt(cn, nomeContrato(D, cn))}</b>${hits.length === 1 ? `<br>${esc(hits[0].item)}` : ''}<br><b style="font-size:1.15em">${R$(tot)}</b><br><small>${nreq} requisição(ões) · ${N(un)} unidades${ant ? ` · mês anterior ${R$(ant)} (${tot >= ant ? '▲' : '▼'} ${N(Math.abs((tot - ant) / ant * 100))}%)` : ''}</small>`
       + (!cn ? `<div class="as-t">Por contrato</div>${lis(agr(l => l.contrato, c => esc(c) + (nomeContrato(D, c) ? ' - ' + esc(nomeContrato(D, c)) : '')), 5)}` : '')
       + (!hits.length ? `<div class="as-t">Itens mais caros</div>${lis(agr(l => l.item, esc), 5)}` : ''), chips: [ch('Previsão de gastos', 'previsão de gastos' + (cn ? ' do contrato ' + cn : '')), ch('Maior giro', 'quais itens mais saem?')] };
   };
 
   H.contrato = (D, t, hits, cn) => {
+    if (/venc|termin|prazo|expir/.test(t)) return H.vence(D, cn);
     if (!cn) { if (!D.contratos.length) return sem('Não há contratos cadastrados. Diga o número, por exemplo: “contrato 123”.'); const at = D.contratos.filter(c => c.status === 'Ativo');
       return { html: `<b>${D.contratos.length}</b> contratos cadastrados (${at.length} ativos).<br>Pergunte por um: “gasto do contrato 123”.${lis((at.length ? at : D.contratos).slice(0, 8).map(c => `${esc(c.num)} - ${esc(c.nome)}${c.fim ? ` · termina ${esc(c.fim)}` : ''}`), 8)}` }; }
     const c = D.contratos.find(x => String(x.num) === cn), L = D.linhas.filter(l => l.contrato === cn), nreq = new Set(L.map(l => l.q.id)).size, tot = L.reduce((a, l) => a + l.valor, 0), top = somaPor(D, l => l.contrato === cn).sort((a, b) => b.qa - a.qa).slice(0, 5);
     return { html: `<b>Contrato ${esc(cn)}${nomeContrato(D, cn) ? ' - ' + esc(nomeContrato(D, cn)) : ''}</b>` + (c ? `<br>${esc(c.status || '')}${c.ini ? ` · ${esc(c.ini)}` : ''}${c.fim ? ` a ${esc(c.fim)}` : ''}${c.valor ? ` · valor ${R$(c.valor)}` : ''}` : '<br><small>Não está na planilha de contratos.</small>')
       + (L.length ? `<br>${nreq} requisição(ões) · ${N(L.reduce((a, l) => a + l.qa, 0))} un${CFO.pode('abrir', 'controle_gastos') ? ` · gasto total ${R$(tot)}` : ''}<div class="as-t">Mais pedidos</div>${lis(top.map(x => `${esc(x.item)} · ${N(x.qa)} un`), 5)}` : '<br>Nenhuma requisição aprovada para este contrato.'),
       chips: CFO.pode('abrir', 'controle_gastos') ? [ch('Previsão de gastos', 'previsão de gastos do contrato ' + cn), ch('Gasto do mês', 'gasto do contrato ' + cn)] : [] };
+  };
+
+  const dtFim = s => { const x = String(s ?? ''); let m = x.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return new Date(+m[1], m[2] - 1, +m[3]); m = x.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], m[2] - 1, +m[1]) : null; };
+  H.vence = (D, cn) => {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const txtDias = n => n < 0 ? `⛔ venceu há ${-n} dia(s)` : n === 0 ? '⚠️ vence hoje' : n <= 30 ? `⚠️ vence em ${n} dia(s)` : `vence em ${n} dias`;
+    const L = (cn ? D.contratos.filter(c => String(c.num) === cn) : D.contratos.filter(c => !c.status || c.status === 'Ativo'))
+      .map(c => { const d = dtFim(c.fim); return d ? { c, dias: Math.round((d - hoje) / 864e5) } : null; }).filter(Boolean).sort((a, b) => a.dias - b.dias);
+    if (!L.length) return sem(cn ? 'Não achei a data de término desse contrato na planilha de contratos.' : 'Nenhum contrato ativo com data de término cadastrada.');
+    return { html: `<b>${cn ? 'Vencimento do contrato' : 'Vencimentos dos contratos ativos'}</b>${lis(L.map(x => `${esc(x.c.num)} - ${esc(x.c.nome || '')} · termina ${esc(x.c.fim)} · ${txtDias(x.dias)}`), 8)}` };
   };
 
   H.requisicao = (D, t, req) => {
@@ -231,10 +320,11 @@
   };
 
   H.mov = (D, t, hits) => {
-    const ids = new Set(hits.map(r => norm(r.item))), L = D.movs.filter(m => !hits.length || ids.has(norm(m.item))).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
-    if (!L.length) return sem('Nenhuma movimentação registrada' + (hits.length ? ' para esse item.' : '.'));
+    const ids = new Set(hits.map(r => norm(r.item))), tp = /\b(saida|saidas|saiu)\b|deu saida|deram saida/.test(t) ? 'Saída' : /\b(entrada|entradas|entrou|chegou)\b|deu entrada|deram entrada/.test(t) ? 'Entrada' : null, um = /\bultim[ao]\b/.test(t);
+    const L = D.movs.filter(m => (!hits.length || ids.has(norm(m.item))) && (!tp || m.tipo === tp)).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, um ? 1 : 8);
+    if (!L.length) return sem('Nenhuma ' + (tp ? (tp === 'Saída' ? 'saída' : 'entrada') : 'movimentação') + ' registrada' + (hits.length ? ' para esse item.' : '.'));
     const dt = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR'); };
-    return { html: `<b>Últimas movimentações</b>${lis(L.map(m => `${dt(m.data)} · ${{ 'Entrada': '🟢 entrou', 'Saída': '🔴 saiu', 'Contagem': '🟡 contagem' }[m.tipo] || esc(m.tipo)} ${N(m.qtd)} · ${esc(m.item)}${m.resp ? ` <small>(${esc(m.resp)})</small>` : ''}`), 8)}` };
+    return { html: `<b>${um ? 'Último lançamento' : tp === 'Saída' ? 'Últimas saídas' : tp === 'Entrada' ? 'Últimas entradas' : 'Últimas movimentações'}</b>${lis(L.map(m => `${dt(m.data)} · ${{ 'Entrada': '🟢 entrou', 'Saída': '🔴 saiu', 'Contagem': '🟡 contagem' }[m.tipo] || esc(m.tipo)} ${N(m.qtd)} · ${esc(m.item)}${m.resp ? ` <small>(${esc(m.resp)})</small>` : ''}`), 8)}` };
   };
   H.contagem = D => {
     const L = D.contagens.slice().sort((a, b) => String(b.ts || b.dia).localeCompare(String(a.ts || a.dia))), c = L[0];
@@ -254,34 +344,117 @@
   };
 
   /* ---------- Cérebro: texto -> resposta ---------- */
-  const estado = { item: null, pend: null };
-  const responder = texto => {
-    const t = T(texto); if (!t) return sem('Escreva sua pergunta.');
-    const D = carrega(), req = acharReq(D, t), cn = acharContrato(D, t), { hits, sug, toks } = acharItens(D, texto);
-    let id = req ? 'requisicao' : null; if (!id) for (const [k, re] of INTENCOES) if (re.test(t)) { id = k; break; }
-    const pron = /\b(dele|dela|desse|dessa|esse|essa|ele|ela)\b/.test(t) && estado.item;
-    let alvo = hits.length ? hits : (pron ? [estado.item] : []);
-    if (!id && estado.pend && hits.length) id = estado.pend;
-    if (!id) id = hits.length ? 'ficha' : (toks.length ? 'naoachei' : 'ajuda');
-    estado.pend = null;
-    if (id === 'naoachei' || (!hits.length && toks.length && (PRECISA_ITEM.has(id) || id === 'ficha'))) {
-      const s = sug.length ? `<br>Você quis dizer:${lis(sug.map(r => `<a href="#" class="as-q" data-q="${esc(r.item)}">${esc(r.item)}</a>`), 5)}` : '';
-      return sem(`Não encontrei “${esc(toks.join(' '))}” na Planilha EPI.${s}`);
-    }
-    if (PRECISA_ITEM.has(id) && !alvo.length) { estado.pend = id; return sem(id === 'local' ? 'De qual item? Escreva o nome (ou parte dele).' : 'Estoque de qual item? Escreva o nome (ou parte dele).'); }
-    if (AREA[id] && !CFO.pode('abrir', AREA[id])) return sem('Seu perfil não tem acesso a essa informação.');
-    let r;
-    if (id === 'local' || id === 'estoque' || id === 'ficha') r = H.itens(D, alvo, id, t);
-    else if (id === 'previsao' || id === 'gasto') r = H[id](D, t, hits.length ? hits : (pron ? [estado.item] : []), cn);
-    else if (id === 'contrato') r = H.contrato(D, t, hits, cn);
-    else if (id === 'requisicao') r = H.requisicao(D, t, req);
-    else if (id === 'mov') r = H.mov(D, t, hits.length ? hits : (pron ? [estado.item] : []));
-    else r = (H[id] || H.ajuda)(D, t);
-    if (r.ctx) estado.item = r.ctx;
+  const FRESCO = 10 * 60 * 1000;                                      // depois de 10 min sem conversar, o assunto anterior é esquecido
+  const estado = { item: null, alts: [], pend: null, ult: null, conf: null, hist: [], ts: 0 };
+  const fresco = () => estado.ts && Date.now() - estado.ts < FRESCO;
+  const zera = () => { estado.item = null; estado.alts = []; estado.pend = null; estado.ult = null; estado.conf = null; };
+  const SEGUE = new Set(['gasto', 'previsao', 'giro', 'mov', 'contrato', 'estoque', 'local', 'ficha']);   // intenções que aceitam "e o mês passado?", "e do contrato 125?"
+  // Palavra solta e vaga: não adivinha, pergunta qual das opções a pessoa quer
+  const FRACAS = {
+    valor: [['Gasto do mês', 'gasto do último mês'], ['Previsão de gastos', 'previsão de gastos'], ['Gasto por contrato', 'gasto por contrato']],
+    pedido: [['Aguardando retirada', 'requisições aguardando retirada'], ['Últimas requisições', 'últimas requisições']],
+    pedidos: [['Aguardando retirada', 'requisições aguardando retirada'], ['Últimas requisições', 'últimas requisições']],
+    historico: [['Últimas movimentações', 'últimas movimentações'], ['Última contagem', 'última contagem']],
+    top: [['Maior giro', 'quais itens mais saem?'], ['Itens críticos', 'o que está crítico?']]
+  };
+  const FONTE = { local: 'Planilha EPI + Mapa', semlocal: 'Planilha EPI + Mapa', estoque: 'Planilha EPI', ficha: 'Planilha EPI + Mapa + Requisições', criticos: 'Planilha EPI + Requisições aprovadas',
+    giro: 'Requisições aprovadas (negadas não contam)', parado: 'Planilha EPI + Requisições aprovadas', previsao: 'Requisições aprovadas (qtd aprovada × preço)', gasto: 'Requisições aprovadas (qtd aprovada × preço)',
+    contrato: 'Contratos + Requisições', requisicao: 'Requisições', mov: 'Histórico de movimentação', contagem: 'Contagens de estoque', resumo: 'Planilha EPI + Requisições' };
+
+  // Fecha a resposta: guarda o contexto da conversa, junta botões e mostra de onde vieram os dados
+  const fecha = (r, id, x = {}) => {
+    estado.ts = Date.now();
+    if (r.ctx) { estado.item = r.ctx; estado.alts = []; }
+    if (r.alts) { estado.alts = r.alts; estado.item = null; }                // vários resultados: "dele" não aponta para ninguém até a pessoa escolher
+    if (SEGUE.has(id)) estado.ult = { id, cn: x.cn || '', per: x.per || '', item: r.ctx || (x.alvo && x.alvo.length === 1 ? x.alvo[0] : null) };
     if (r.html2) r.html += '<div class="as-row">' + r.html2 + '</div>';
+    if (FONTE[id] && !r.semFonte) {
+      r.html += `<small class="as-src">Fonte: ${FONTE[id]} · consulta às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small>`;
+      if (!x.semHist && x.texto) { estado.hist.push(x.texto); if (estado.hist.length > 10) estado.hist.shift(); }
+    }
     return r;
   };
-  CFO.assistente = { responder, carrega, T };
+
+  const responder = (texto, semHist) => {
+    const t0 = T(texto); if (!t0) return sem('Escreva sua pergunta.');
+    const expirou = !!estado.ts && !fresco(); if (expirou) { zera(); estado.ts = 0; }
+
+    // 1) Palavras que controlam a conversa (não consultam dados)
+    if (/^(obrigad\w*|valeu|vlw|brigad\w*)( \w+)?$/.test(t0)) return sem('De nada! Se precisar de mais alguma coisa, é só perguntar.');
+    if (/^(cancelar|cancela|deixa|deixa pra la|esquece|esquece isso|recomecar|comecar de novo|comecar do zero|reiniciar)$/.test(t0)) { zera(); estado.hist = []; return { html: 'Tudo bem, limpei o assunto. O que você quer ver agora?', chips: H.oi().chips }; }
+    if (/^(nao|nao obrigad\w*|nada|so isso|era so isso)$/.test(t0)) { const c = estado.conf; estado.conf = null; estado.pend = null; return c ? { html: 'Tudo bem. Escreva o nome completo (ou o código) do item, ou escolha um atalho.', chips: H.oi().chips } : sem('Certo. Qualquer coisa é só chamar.'); }
+    if (/^(sim|isso|isso mesmo|exato|claro|pode|pode ser|quero)$/.test(t0)) { if (estado.conf) { const q = estado.conf; estado.conf = null; return responder(q, true); } return { html: 'Certo! O que você quer ver?', chips: H.oi().chips }; }
+    if (/^(voltar|volta|anterior|pergunta anterior)$/.test(t0)) { const h = estado.hist; if (h.length < 2) return sem('Ainda não há pergunta anterior.'); h.pop(); return responder(h[h.length - 1], true); }
+    if (/^(mais detalhes|detalhes|detalhar|me conta mais|ver mais|mais informacoes)$/.test(t0)) {
+      if (!estado.item) { estado.pend = { id: 'ficha', falta: 'item' }; return sem('Detalhes de qual item? Escreva o nome (ou parte dele).'); }
+      return fecha(H.itens(carrega(), [estado.item], 'ficha', t0), 'ficha', { alvo: [estado.item] });
+    }
+    if (/\b(nao (e|era) (esse|essa|ele|ela)|o outro|a outra|outro item|outra opcao)\b/.test(t0)) {
+      if (estado.alts.length) return { html: 'Tudo bem. Qual destes você quer?', chips: estado.alts.slice(0, 6).map(r => ch(r.item, r.item)) };
+      estado.pend = { id: 'ficha', falta: 'item' }; return sem('Me diga o nome completo (ou o código) do item que você procura.');
+    }
+
+    // 2) Entender a frase: corrige palavras de comando, acha item/contrato/requisição e a intenção
+    const D = carrega(), t = corrigir(t0, D.voc || (D.voc = vocab(D))), req = acharReq(D, t), pend = estado.pend, U = estado.ult;
+    let cn = acharContrato(D, t);
+    if (!cn && pend && pend.falta === 'contrato') { const m = t.match(/^(?:contrato\s*)?(?:n|no|numero)?\s*(\d+)$/); if (m) cn = m[1]; }
+    const soNum = !!(pend && pend.falta === 'contrato' && cn && /^(contrato\s*)?(n|no|numero)?\s*\d+$/.test(t));
+    const { hits, sug, toks } = soNum ? { hits: [], sug: [], toks: [] } : acharItens(D, t);
+    const casou = []; for (const [k, re] of INTENCOES) { const m = t.match(re); if (m) casou.push([k, m[0]]); }
+    let id = req ? 'requisicao' : casou.length ? casou[0][0] : null;
+    if (!req && hits.length && casou[0] && casou[0][0] === 'local' && casou.some(c => c[0] === 'estoque')) id = 'ficha';   // "onde fica e quanto tem": mostra os dois
+
+    // 3) Contexto: pergunta pendente, "e o mês passado?", "ele/esse"
+    if (pend && pend.falta === 'item' && hits.length && !id) id = pend.id;
+    if (pend && pend.falta === 'contrato' && cn && (!id || id === 'contrato')) id = pend.id;
+    let seg = false;
+    if (!id && U && !hits.length && (perTxt(t) || cn || /^e\b/.test(t))) { id = U.id; seg = true; }
+    else if (!id && U && hits.length && /^e\b/.test(t) && ['local', 'estoque', 'previsao', 'gasto', 'mov', 'ficha'].includes(U.id)) { id = U.id; seg = true; }
+    else if (id === 'contrato' && U && cn && /^e\b/.test(t) && ['gasto', 'previsao'].includes(U.id)) { id = U.id; seg = true; }   // "e do contrato 130?" depois de um gasto
+    const pron = /\b(dele|dela|desse|dessa|esse|essa|ele|ela|o mesmo|a mesma)\b/.test(t);
+    if (pron && !hits.length && !estado.item && expirou) return sem('Faz um tempo desde a última pergunta e perdi o assunto. Qual item você quer? Escreva o nome.');
+    cn = cn || (seg && U && U.cn) || null;
+    const alvo = hits.length ? hits : (pron || seg || (/^e\b/.test(t) && PRECISA_ITEM.has(id))) ? [(seg && U && U.item) || estado.item].filter(Boolean) : [];
+    const tt = seg ? (perTxt(t) || (U && U.per) || '') : t;          // período que os cálculos vão ler
+    if (pron && !hits.length && !alvo.length && id && id !== 'requisicao' && id !== 'contrato') {
+      estado.pend = { id, falta: 'item' };
+      return estado.alts.length ? { html: 'Qual destes você quer dizer?', chips: estado.alts.slice(0, 6).map(r => ch(r.item, r.item)) } : sem('De qual item você está falando? Escreva o nome (ou parte dele).');
+    }
+
+    // 4) Frase vaga: não adivinha, confirma
+    if (!req && !seg && casou.length && !hits.length && !cn) { const f = FRACAS[casou[0][1]]; if (f && t.split(' ').length <= 2) { logar(texto, 'frase vaga (pediu escolha)', id); return { html: 'Você quer ver qual destes?', chips: f.map(([a, b]) => ch(a, b)) }; } }
+
+    if (!id) id = hits.length ? 'ficha' : (toks.length ? 'naoachei' : 'ajuda');
+    estado.pend = null;
+
+    // 5) Faltou dado: pergunta
+    if (id === 'naoachei' || (!hits.length && toks.length && (PRECISA_ITEM.has(id) || id === 'ficha'))) {
+      logar(texto, id === 'naoachei' ? 'sem intenção e sem item' : 'item não encontrado', id);
+      const s = sug.length ? `<br>Você quis dizer:${lis(sug.map(r => `<a href="#" class="as-q" data-q="${esc(r.item)}">${esc(r.item)}</a>`), 5)}` : '';
+      if (sug.length === 1) estado.conf = (id === 'local' ? 'onde fica ' : id === 'estoque' ? 'quanto tem de ' : id === 'previsao' ? 'previsão de gasto de ' : '') + sug[0].item;
+      estado.pend = { id: id === 'naoachei' ? 'ficha' : id, falta: 'item' };
+      return { html: `Não encontrei “${esc(toks.join(' '))}” na Planilha EPI.${s}` + (sug.length ? '' : '<br><small>Posso ajudar, mas preciso identificar o material: escreva o nome como está na Planilha EPI ou o código do item.</small>'), chips: sug.length ? [] : [ch('Exemplos', 'ajuda'), ch('Itens críticos', 'o que está crítico?')] };
+    }
+    if (PRECISA_ITEM.has(id) && !alvo.length) { estado.pend = { id, falta: 'item' }; return sem(id === 'local' ? 'De qual item? Escreva o nome (ou parte dele).' : 'Estoque de qual item? Escreva o nome (ou parte dele).'); }
+    if ((id === 'gasto' || id === 'previsao') && /\bcontrato\b/.test(t) && !cn && !hits.length) {
+      const top = new Map(); D.linhas.forEach(l => { if (D.K3.includes(l.k) && l.contrato) top.set(l.contrato, (top.get(l.contrato) || 0) + l.valor); });
+      estado.pend = { id, falta: 'contrato' };
+      return { html: 'De qual contrato? Diga o número (ou toque em um).', chips: [...top].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c]) => ch(c + (nomeContrato(D, c) ? ' - ' + nomeContrato(D, c) : ''), 'contrato ' + c)) };
+    }
+    if (AREA[id] && !CFO.pode('abrir', AREA[id])) return sem('Seu perfil não tem acesso a essa informação.');
+
+    // 6) Consultar e responder
+    let r;
+    if (id === 'local' || id === 'estoque' || id === 'ficha') r = H.itens(D, alvo, id, tt);
+    else if (id === 'previsao' || id === 'gasto') r = H[id](D, tt, alvo, cn);
+    else if (id === 'contrato') r = H.contrato(D, tt, alvo, cn);
+    else if (id === 'requisicao') r = H.requisicao(D, t, req);
+    else if (id === 'mov') r = H.mov(D, tt, alvo);
+    else if (id === 'tutorial') r = H.tutorial(t);
+    else r = (H[id] || H.ajuda)(D, tt);
+    return fecha(r, id, { cn, per: perTxt(tt), alvo, texto, semHist });
+  };
+  CFO.assistente = { responder, carrega, T, estado, log: () => { try { return JSON.parse(localStorage.getItem(LOGK) || '[]'); } catch { return []; } } };
 
   /* ---------- Tela: botão flutuante + painel de conversa ---------- */
   if (typeof document === 'undefined' || !document.body) return;
@@ -299,6 +472,7 @@
   .as-m.bot{align-self:flex-start;background:var(--panel2);border-bottom-left-radius:4px}
   .as-m ul{margin:.35rem 0;padding-left:1.1rem}.as-m li{margin:.25rem 0}.as-m small{color:var(--muted);display:block;margin-top:.3rem}.as-m hr{border:0;border-top:1px solid var(--line);margin:.5rem 0}
   .as-m a{color:var(--accent)}.as-t{font-weight:700;margin:.55rem 0 .1rem}
+  .as-m small.as-src{opacity:.7;font-size:.72rem;margin-top:.45rem}
   .as-bar{display:block;height:6px;border-radius:3px;background:var(--line);margin-top:.15rem}.as-bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
   .as-row,.as-ch{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
   .as-pan .as-go,.as-pan .as-ch button{padding:.3rem .6rem;font-size:.82rem;border-radius:999px}
@@ -319,21 +493,25 @@
 
   const bolha = (cls, html) => { const d = document.createElement('div'); d.className = 'as-m ' + cls; d.innerHTML = html; ms.append(d); ms.scrollTop = ms.scrollHeight; return d; };
   const mostraChips = L => { chips.innerHTML = (L || []).map(c => `<button class="ghost" data-q="${esc(c.q)}">${esc(c.t)}</button>`).join(''); };
-  const inicio = () => { ms.innerHTML = ''; estado.item = estado.pend = null; const r = H.oi(); bolha('bot', r.html); mostraChips(r.chips); };
+  const inicio = () => { ms.innerHTML = ''; zera(); estado.hist = []; const r = H.oi(); bolha('bot', r.html); mostraChips(r.chips); };
   const enviar = txt => {
     txt = String(txt || '').trim(); if (!txt) return; bolha('eu', esc(txt)); inp.value = '';
     let r; try { r = responder(txt); } catch (e) { console.warn('assistente', e); r = sem('Tive um problema ao ler os dados. Tente de novo ou reformule a pergunta.'); }
     bolha('bot', r.html); mostraChips(r.chips);
   };
+  const abrirTela = m => {
+    try { const d = DRAWERS.find(x => x.subs.some(s => s.m === m)), s = d && d.subs.find(x => x.m === m); if (!s) return false; pan.hidden = true; ir(d, s); return true; }
+    catch (e) { console.warn('assistente: abrir tela', e); return false; }
+  };
   const abrirMapa = nome => {
-    try { const d = DRAWERS.find(x => x.subs.some(s => s.m === 'mapa')), s = d && d.subs.find(x => x.m === 'mapa'); if (!s) return; pan.hidden = true; ir(d, s);
-      const q = document.querySelector('#screens .screen:last-child #mq'); if (q) { q.value = nome; q.dispatchEvent(new Event('input', { bubbles: true })); } } catch (e) { console.warn('assistente: abrir mapa', e); }
+    if (!abrirTela('mapa')) return;
+    try { const q = document.querySelector('#screens .screen:last-child #mq'); if (q) { q.value = nome; q.dispatchEvent(new Event('input', { bubbles: true })); } } catch (e) { console.warn('assistente: abrir mapa', e); }
   };
   fab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { if (!ms.children.length) inicio(); setTimeout(() => inp.focus(), 50); } };
   pan.addEventListener('click', e => {
-    const a = e.target.closest('[data-a]'), q = e.target.closest('[data-q]'), m = e.target.closest('[data-mapa]');
+    const a = e.target.closest('[data-a]'), q = e.target.closest('[data-q]'), m = e.target.closest('[data-mapa]'), g = e.target.closest('[data-ir]');
     if (a) { if (a.dataset.a === 'fechar') pan.hidden = true; else inicio(); }
-    else if (q) { e.preventDefault(); enviar(q.dataset.q); } else if (m) abrirMapa(m.dataset.mapa);
+    else if (q) { e.preventDefault(); enviar(q.dataset.q); } else if (m) abrirMapa(m.dataset.mapa); else if (g) abrirTela(g.dataset.ir);
   });
   pan.querySelector('form').onsubmit = e => { e.preventDefault(); enviar(inp.value); };
   pan.addEventListener('keydown', e => { if (e.key === 'Escape') { pan.hidden = true; fab.focus(); } });

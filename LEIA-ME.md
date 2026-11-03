@@ -35,6 +35,14 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 
 ## Assistente (botão flutuante)
 - `assistente.js` NOVO -> pasta do sistema; `index.html` 1 linha nova (`<script src="assistente.js...">`, antes do `app.js`).
-- Chat sem IA: entende palavras da pergunta e responde com os dados já existentes (Planilha EPI, Requisições, Mapa, Contratos, Movimentações, Contagens). Respeita as permissões do perfil.
+- Chat sem IA: entende palavras da pergunta e responde com os dados já existentes (Planilha EPI, Requisições, Mapa, Contratos, Movimentações, Contagens). Respeita as permissões do perfil e o espaço de dados (almoxarifado × outros setores).
 - Some sozinho no Mapa almoxarifado e no Mapa livre.
-- Para ensinar uma pergunta nova: linha em `INTENCOES` + função em `H` dentro do arquivo.
+- Para ensinar uma pergunta nova: linha em `INTENCOES` + função em `H` dentro do arquivo. Abreviações novas: `ABREV`.
+
+### Cérebro v2 (baseado no "Projeto Cérebro do Assistente")
+- **Contexto (10 min):** "e o mês passado?", "e do contrato 130?", "quanto dura dele?", "e o saldo?", "não, o outro", "voltar", "cancelar", "mais detalhes". Se a pergunta ficou incompleta, ele pergunta (qual item? qual contrato?) e aceita só "125" como resposta.
+- **Erro de digitação:** palavras de comando são corrigidas sozinhas ("estoke", "previzão"); nome de item vira sugestão "Você quis dizer…" (nunca troca sozinho); números e códigos nunca são alterados.
+- **Frase vaga** ("valor", "pedido", "histórico"): não adivinha, oferece botões. Vários itens parecidos: botões para escolher.
+- **Transparência:** toda resposta mostra a fonte dos dados e a hora da consulta; previsões mostram base, o que inclui/não inclui e a confiabilidade (quantos dos 3 meses têm dados).
+- **Novas perguntas:** vencimento de contratos ("quando vence o contrato 125?", "contratos vencendo"), "quando entrou a última luva", "últimas saídas/entradas", "como faço a contagem?" (com botão para abrir a tela).
+- **Frases não entendidas:** ficam salvas só neste aparelho (sem números). Pergunte "não entendi" ao assistente para ver as últimas 10 e ensinar palavras novas.
