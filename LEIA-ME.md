@@ -46,3 +46,9 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - **Transparência:** toda resposta mostra a fonte dos dados e a hora da consulta; previsões mostram base, o que inclui/não inclui e a confiabilidade (quantos dos 3 meses têm dados).
 - **Novas perguntas:** vencimento de contratos ("quando vence o contrato 125?", "contratos vencendo"), "quando entrou a última luva", "últimas saídas/entradas", "como faço a contagem?" (com botão para abrir a tela).
 - **Frases não entendidas:** ficam salvas só neste aparelho (sem números). Pergunte "não entendi" ao assistente para ver as últimas 10 e ensinar palavras novas.
+
+## IA no assistente (Gemini, opcional)
+- `assistente.js` ATUALIZADO + `supabase/functions/assistente-ia/index.ts` NOVO (vai para o Supabase, não para a pasta do sistema).
+- A IA só entra quando as regras não entendem a frase: ela reescreve a pergunta num modelo conhecido e o sistema consulta os dados. Não recebe quantidades nem preços.
+- A chave do Gemini fica no Supabase (secret `GEMINI_API_KEY`). Modelo trocável pelo secret `GEMINI_MODEL` (padrão `gemini-2.5-flash`).
+- Sem a função publicada, o assistente funciona como antes. Desligar: `assistenteIA: false` em `supabase-config.js`.

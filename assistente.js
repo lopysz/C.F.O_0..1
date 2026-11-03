@@ -6,6 +6,9 @@
    Cérebro (v2): corrige erro de digitação em palavras de comando (nunca em números/códigos), lembra o assunto por 10 min
    ("e o mês passado?", "quanto dura dele?", "e do contrato 125?"), pergunta o que falta (item/contrato), confirma quando a frase é vaga,
    mostra a fonte dos dados em cada resposta e guarda (só neste aparelho, sem números) as frases que não entendeu.
+   IA (Gemini, opcional): só entra quando as regras NÃO entendem a frase. A IA apenas REESCREVE a pergunta num modelo que as regras entendem; quem consulta
+   e calcula é este arquivo (a IA não vê quantidades, preços nem requisições). Passa por uma Edge Function do Supabase (assistente-ia) que guarda a chave.
+   Se a função não existir/falhar, tudo continua como antes. Desligar: CFO_SUPABASE.assistenteIA = false em supabase-config.js.
    Remover = apagar este arquivo e a linha <script> do index.html. */
 (() => {
   const esc = CFO.esc, norm = CFO.norm, P = CFO.periodo;
@@ -174,7 +177,7 @@
   const filtroTxt = (cn, nm) => (cn ? ` · contrato ${esc(cn)}${nm ? ' - ' + esc(nm) : ''}` : '');
 
   const H = {};
-  H.oi = () => ({ html: 'Olá! Pergunto aos dados do sistema, sem inteligência artificial. Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
+  H.oi = () => ({ html: 'Olá! Respondo com os dados do sistema (a IA só ajuda a entender frases diferentes). Posso dizer onde está um item, o que está crítico, o que mais sai, previsão de gastos e mais.', chips: [ch('Itens críticos', 'o que está crítico?'), ch('Maior giro', 'quais itens mais saem?'), ch('Previsão de gastos', 'previsão de gastos'), ch('Resumo', 'resumo')] });
   H.ajuda = () => ({ html: `Exemplos do que eu entendo:<ul><li><b>Onde fica</b> a luva nitrílica?</li><li><b>Quanto tem</b> de bota PVC (42)?</li><li>O que está <b>crítico</b> / abaixo do mínimo?</li><li>Quais itens <b>mais saem</b>? E os <b>parados</b>?</li><li><b>Previsão de gastos</b> do próximo mês (ou do contrato 123)</li><li><b>Quanto dura</b> o estoque de capacete?</li><li><b>Gasto</b> de outubro por contrato</li><li>Requisições <b>aguardando retirada</b> · requisição RQ-3370</li><li>Últimas <b>saídas</b> · última <b>contagem</b> · itens <b>sem local</b> no mapa</li><li>Quando <b>vence</b> o contrato 123? · quando <b>entrou</b> a última luva?</li><li><b>Como faço</b> a contagem? · como registro uma <b>entrada</b>?</li></ul><small>Depois de uma pergunta, é só continuar: “e o mês passado?”, “e do contrato 125?”, “quanto dura dele?”, “não, o outro”, “voltar”.</small><small>Dica: escreva o nome do item como na Planilha EPI. Posso responder só com o que está cadastrado.</small>` });
 
   const GUIA = [
@@ -345,7 +348,7 @@
 
   /* ---------- Cérebro: texto -> resposta ---------- */
   const FRESCO = 10 * 60 * 1000;                                      // depois de 10 min sem conversar, o assunto anterior é esquecido
-  const estado = { item: null, alts: [], pend: null, ult: null, conf: null, hist: [], ts: 0 };
+  const estado = { item: null, alts: [], pend: null, ult: null, conf: null, hist: [], ts: 0, pedeIA: false };
   const fresco = () => estado.ts && Date.now() - estado.ts < FRESCO;
   const zera = () => { estado.item = null; estado.alts = []; estado.pend = null; estado.ult = null; estado.conf = null; };
   const SEGUE = new Set(['gasto', 'previsao', 'giro', 'mov', 'contrato', 'estoque', 'local', 'ficha']);   // intenções que aceitam "e o mês passado?", "e do contrato 125?"
@@ -430,6 +433,7 @@
     // 5) Faltou dado: pergunta
     if (id === 'naoachei' || (!hits.length && toks.length && (PRECISA_ITEM.has(id) || id === 'ficha'))) {
       logar(texto, id === 'naoachei' ? 'sem intenção e sem item' : 'item não encontrado', id);
+      estado.pedeIA = !sug.length;                                  // sem sugestão para mostrar: vale pedir ajuda à IA (se estiver ligada)
       const s = sug.length ? `<br>Você quis dizer:${lis(sug.map(r => `<a href="#" class="as-q" data-q="${esc(r.item)}">${esc(r.item)}</a>`), 5)}` : '';
       if (sug.length === 1) estado.conf = (id === 'local' ? 'onde fica ' : id === 'estoque' ? 'quanto tem de ' : id === 'previsao' ? 'previsão de gasto de ' : '') + sug[0].item;
       estado.pend = { id: id === 'naoachei' ? 'ficha' : id, falta: 'item' };
@@ -494,10 +498,48 @@
   const bolha = (cls, html) => { const d = document.createElement('div'); d.className = 'as-m ' + cls; d.innerHTML = html; ms.append(d); ms.scrollTop = ms.scrollHeight; return d; };
   const mostraChips = L => { chips.innerHTML = (L || []).map(c => `<button class="ghost" data-q="${esc(c.q)}">${esc(c.t)}</button>`).join(''); };
   const inicio = () => { ms.innerHTML = ''; zera(); estado.hist = []; const r = H.oi(); bolha('bot', r.html); mostraChips(r.chips); };
+  /* ---------- IA (Gemini) via Edge Function do Supabase: só reescreve a frase que as regras não entenderam ---------- */
+  const IA = (() => {
+    const cfg = () => window.CFO_SUPABASE || {};
+    let off = false, marcas = []; const cache = new Map();
+    const pode = () => { const c = cfg(); return !off && !!c.url && !!c.anonKey && c.assistenteIA !== false; };
+    const entender = async txt => {
+      const k = T(txt); if (cache.has(k)) return cache.get(k);
+      const agora = Date.now(); marcas = marcas.filter(x => agora - x < 60000); if (marcas.length >= 8) return null;   // no máx. 8 pedidos por minuto neste aparelho
+      marcas.push(agora);
+      const c = cfg(), D = carrega(), ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+      try {
+        const body = { frase: String(txt).slice(0, 300), anterior: estado.hist[estado.hist.length - 1] || '',
+          itens: D.rows.slice(0, 500).map(r => String(r.item).slice(0, 60)),
+          contratos: D.contratos.slice(0, 60).map(x => ({ num: String(x.num ?? ''), nome: String(x.nome || '').slice(0, 40) })) };
+        const r = await fetch(String(c.url).replace(/\/+$/, '') + '/functions/v1/assistente-ia', { method: 'POST', signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json', apikey: c.anonKey }, body: JSON.stringify(body) });
+        if (r.status === 404) { off = true; return null; }          // função ainda não publicada: não tenta de novo nesta sessão
+        if (!r.ok) return null;
+        const j = await r.json(); if (j && (j.frase || j.resposta)) cache.set(k, j); return j;
+      } catch { return null; } finally { clearTimeout(to); }
+    };
+    return { pode, entender };
+  })();
+
   const enviar = txt => {
     txt = String(txt || '').trim(); if (!txt) return; bolha('eu', esc(txt)); inp.value = '';
+    estado.pedeIA = false;
     let r; try { r = responder(txt); } catch (e) { console.warn('assistente', e); r = sem('Tive um problema ao ler os dados. Tente de novo ou reformule a pergunta.'); }
-    bolha('bot', r.html); mostraChips(r.chips);
+    const pede = estado.pedeIA && IA.pode(); estado.pedeIA = false;
+    if (!pede) { bolha('bot', r.html); mostraChips(r.chips); return; }
+    const espera = bolha('bot', '💭 Entendendo sua pergunta…'); mostraChips([]);
+    IA.entender(txt).then(j => {
+      let out = r, nota = '';
+      try {
+        if (j && j.frase && T(j.frase) !== T(txt)) {
+          estado.pend = null; estado.conf = null; estado.pedeIA = false;
+          const r2 = responder(j.frase), falhou = estado.pedeIA; estado.pedeIA = false;
+          if (!falhou) { out = r2; nota = `<small class="as-src">🤖 IA: entendi como “${esc(j.frase)}”</small>`; }
+        } else if (j && j.resposta && !j.frase) { out = sem(esc(j.resposta)); nota = '<small class="as-src">🤖 resposta da IA (não consultou os dados)</small>'; }
+      } catch (e) { console.warn('assistente IA', e); out = r; nota = ''; }
+      espera.innerHTML = out.html + nota; mostraChips(out.chips); ms.scrollTop = ms.scrollHeight;
+    });
   };
   const abrirTela = m => {
     try { const d = DRAWERS.find(x => x.subs.some(s => s.m === m)), s = d && d.subs.find(x => x.m === m); if (!s) return false; pan.hidden = true; ir(d, s); return true; }
