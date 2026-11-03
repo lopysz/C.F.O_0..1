@@ -62,7 +62,7 @@ CFO.modules.epi = CFO.sheet({
     return {
       cols: [{ label: 'Saiu no período', get: r => saiu.get(r.id) || 0 },
         { label: 'Mínimo', get: r => { const m = mins.get(r.id); return m && m.min ? m.min + (m.origem === 'auto' ? ' (auto)' : ' (manual)') : '-'; } },
-        { label: 'Situação', get: r => ({ zerado: '⛔ Zerado', baixo: '⚠ Estoque baixo', ok: 'OK' }[sit(r)] || '-') }],
+        { label: 'Situação', get: r => ({ zerado: 'Zerado', baixo: 'Estoque baixo', ok: 'OK' }[sit(r)] || '-') }],
       cards: [['Estoque baixo', baixos, baixos ? 'warn' : ''], ['Saiu no período', total], ['Itens sem cadastro', sem.size, 'warn']],
       filtro: { label: 'Só estoque baixo', test: r => ['baixo', 'zerado'].includes(sit(r)) }
     };

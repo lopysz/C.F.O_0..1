@@ -53,9 +53,21 @@ function voltarInicio() { fechar(); while (CFO.screens.length) CFO.close(); }
 // Menus (a mesma lista alimenta a lateral e a barra inferior)
 const navHTML = lateral => `<button class="nav" data-home aria-label="Início">${svg('home')}<b>Início</b></button>` +
   DRAWERS.map(d => `<button class="nav" data-d="${d.id}" aria-expanded="false" aria-haspopup="menu">${svg(d.icon)}<b>${lateral ? nD(d) : nC(d)}</b>${lateral ? svg('chev', 'chev') : ''}</button>`).join('');
+// Resumo no rodapé do menu lateral (só aparece no PC; preenche o espaço que sobrava)
+function resumoLateral() {
+  const sp = rail.querySelector('.sp'); if (!sp) return;
+  let reqs = []; try { reqs = CFO.store.get('requisicoes', []).filter(r => r && r.itens); } catch {}
+  const mes = new Date().toISOString().slice(0, 7);
+  const doMes = reqs.filter(r => String(r.chegou || '').slice(0, 7) === mes).length;
+  const u = (CFO.usuario() || {}).nome || '';
+  sp.insertAdjacentHTML('beforebegin', `<div class="rail-info"><small>Resumo</small>
+    <div><b>${reqs.length}</b><span>requisições no total</span></div>
+    <div><b>${doMes}</b><span>neste mês</span></div>${u ? `<p>Conectado como <b>${CFO.esc(u)}</b></p>` : ''}</div>`);
+}
 function montarNav() {
   rail.innerHTML = `<div class="brand">${CFO.logo('icone', 'brand-img')}<span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261031a</div>`;
   tabbar.innerHTML = navHTML(false);
+  resumoLateral();
   document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
   document.querySelectorAll('.nav[data-home]').forEach(b => b.onclick = voltarInicio);
 }

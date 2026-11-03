@@ -16,7 +16,7 @@
   const ligado = () => fetch(URL + '/ping').then(r => r.ok).catch(() => false);
   const VMIN = 3;                                                // versão mínima do agente (a que entende se/senão, perguntar, teclar...)
   const versao = () => fetch(URL + '/ping').then(r => r.json()).then(x => x.versao || 1).catch(() => 0);
-  const ANTIGO = 'O agente que está aberto neste computador é ANTIGO e não entende os comandos novos.\n\nClique em "⬇️ Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.';
+  const ANTIGO = 'O agente que está aberto neste computador é ANTIGO e não entende os comandos novos.\n\nClique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.';
   const pedeToken = () => { const t = prompt('Cole o TOKEN que aparece na janela do agente:'); if (t) localStorage.setItem(TK, t.trim()); return !!token(); };
   const garante = async () => {
     if (!await ligado()) { alert('O agente não está ligado neste computador.\nAbra o "iniciar.bat" (pasta agente-windows) e tente de novo.'); return false; }
@@ -319,7 +319,7 @@
     async function status() {
       const on = await ligado();
       if (!on) return dizer('', 'Agente desligado. No computador da empresa, abra o iniciar.bat (use "Baixar agente" se ainda não tem).');
-      if (await versao() < VMIN) return dizer('av', 'Agente ANTIGO aberto. Clique em "⬇️ Baixar agente", troque a pasta e abra o iniciar.bat de novo.');
+      if (await versao() < VMIN) return dizer('av', 'Agente ANTIGO aberto. Clique em "Baixar agente", troque a pasta e abra o iniciar.bat de novo.');
       if (!token()) return dizer('av', 'Agente ligado, mas falta o token. Clique em "Colar token".');
       try { setTexto((await chamar('/roteiro')).texto); dizer('ok', 'Agente ligado e pronto.'); } catch (e) { dizer('av', e.message); }
     }
