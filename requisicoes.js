@@ -15,7 +15,7 @@
   const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   const mesKey = s => { const m = CFO.norm(s).match(/^([a-z]+)(\d{4})$/), i = m ? MESES.indexOf(m[1]) : -1; return i >= 0 ? m[2] + String(i + 1).padStart(2, '0') : '000000'; };
   const parseContrato = s => { s = String(s || '').trim(); const m = s.match(/^(\d+)\s*[-–]?\s*(.*)$/); return m ? { num: m[1], nome: m[2].trim() } : { num: s, nome: '' }; };
-  const total = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
+  const total = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
 
   const score = data => CFO.findHeader(data, COLS, 4).n;   // só reconhece se achar 4+ colunas do modelo
 
@@ -43,7 +43,7 @@
     const achar = CFO.casarEpi(CFO.store.get('epi', []));
     const resumo = new Map();
     r.itens.filter(i => i.qa > 0).forEach(i => { const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = resumo.get(k) || { item: i.item, tam: i.tam || 'N/A', qa: 0 }; x.qa += i.qa; resumo.set(k, x); });
-    const linhas = [...resumo.values()], vS = r.itens.reduce((a, i) => a + i.qs * i.preco, 0);
+    const linhas = [...resumo.values()], vS = r.itens.reduce((a, i) => a + i.qs * CFO.preco(i), 0);
     const card = (t, v, cls = '') => `<div class="rq-c"><small>${t}</small><b class="${cls}">${v}</b></div>`;
     const html = `<style>
       .rq{padding:14mm 12mm;font-family:Arial,Helvetica,sans-serif;color:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -154,7 +154,7 @@
         b.innerHTML = `<div class="card" style="margin-bottom:1rem"><b style="font-size:1.1rem">${esc(r.id)}</b>
           <p class="log">Contrato: ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>Data: ${esc(r.mes)}<br>Solicitante: ${esc(r.sol)}<br>Motivo: ${esc(r.motivo)}${negs()[r.id] ? `<br><b style="color:#e74c3c">🚫 NEGADA em ${fmtDH(negs()[r.id])}</b>` : ''}${(x => rets()[r.id] ? `<br>Retirada: ✔ ${fmtDH(rets()[r.id])} (marcada manualmente)` : x ? `<br>Retirada: ${x.ok === x.total ? '✔ ' + (fmtDH(x.ts) || 'retirada') : x.ok ? 'parcial (' + x.ok + ' de ' + x.total + ' fotos)' : 'aguardando'}` : '')(retirada(r))}</p></div>
           <div class="tw"><table><thead><tr><th>Item</th><th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
-          ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(i.preco)}</td><td>${R$(i.qa * i.preco)}</td></tr>`).join('')}
+          ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(CFO.preco(i))}</td><td>${R$(i.qa * CFO.preco(i))}</td></tr>`).join('')}
           <tr><th>Totais</th><th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
           <div class="bar" style="margin-top:1rem"><button id="prn">🖨 Imprimir / PDF</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="del" class="ghost danger">Excluir requisição</button>' : ''}</div>`;
         b.querySelector('#prn').onclick = () => relatorio(r);

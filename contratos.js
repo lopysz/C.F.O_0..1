@@ -12,7 +12,7 @@ CFO.modules.contratos = CFO.sheet({
   ],
   // Quanto cada contrato gastou em EPIs (requisições aprovadas) no mês/ano escolhido
   calc: ({ reqs, rows }) => {
-    const gasto = new Map(), qtd = new Map(), val = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0);
+    const gasto = new Map(), qtd = new Map(), val = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0);
     reqs.forEach(r => { const k = String(r.contrato); gasto.set(k, (gasto.get(k) || 0) + val(r)); qtd.set(k, (qtd.get(k) || 0) + 1); });
     const R$ = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const doCad = rows.reduce((a, r) => a + (gasto.get(String(r.num)) || 0), 0);

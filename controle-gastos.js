@@ -9,7 +9,7 @@
   const pct = v => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
   const curto = v => v >= 1e6 ? (v / 1e6).toFixed(1).replace('.', ',') + ' mi' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.', ',') + ' mil' : String(Math.round(v * 10) / 10).replace('.', ',');
   const numCmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
-  const valor = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
+  const valor = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
   const NOME_MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const lbl = k => NOME_MES[k % 100 - 1] + '/' + Math.floor(k / 100);
   const prevKey = k => k % 100 === 1 ? k - 100 + 11 : k - 1;
@@ -98,7 +98,7 @@
       const ultMes = hist[hist.length - 1];
       const prevMeses = []; if (ultMes) { let k = ultMes; for (let i = 0; i < NPREV; i++) { k = nextKey(k); prevMeses.push(k); } }
       const wSet = new Set(W), eV = new Map();
-      base.filter(r => wSet.has(key(r))).forEach(r => r.itens.forEach(i => { const b = CFO.baseEpi(i.item), x = eV.get(b) || { nome: b, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; eV.set(b, x); }));
+      base.filter(r => wSet.has(key(r))).forEach(r => r.itens.forEach(i => { const b = CFO.baseEpi(i.item), x = eV.get(b) || { nome: b, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * CFO.preco(i); eV.set(b, x); }));
       const nW = Math.max(1, W.length);
       const prevItens = [...eV.values()].filter(x => x.valor > 0 || x.qtd > 0).map(x => ({ ...x, mq: x.qtd / nW, mv: x.valor / nW, pu: x.qtd ? x.valor / x.qtd : 0 })).sort((a, b) => b.mv - a.mv);
       const prevMes = prevItens.reduce((a, x) => a + x.mv, 0);
@@ -106,7 +106,7 @@
 
       /* ---- Curva ABC: classe pelo % acumulado (até 80% = A, até 95% = B, resto = C) ---- */
       const itens = new Map();
-      rs.forEach(r => r.itens.forEach(i => { const b = CFO.baseEpi(i.item), x = itens.get(b) || { nome: b, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; itens.set(b, x); }));   // todos os tamanhos juntos
+      rs.forEach(r => r.itens.forEach(i => { const b = CFO.baseEpi(i.item), x = itens.get(b) || { nome: b, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * CFO.preco(i); itens.set(b, x); }));   // todos os tamanhos juntos
       const curva = (campo, tot) => { let ac = 0; return [...itens.values()].filter(x => x[campo] > 0).sort((a, b) => b[campo] - a[campo]).map((x, i) => { ac += x[campo]; const p = tot ? ac / tot : 0; return { ...x, p, cls: i === 0 || p <= .8 ? 'A' : p <= .95 ? 'B' : 'C' }; }); };
       const abcC = curva('valor', totV), abcQ = curva('qtd', totQ);
       const resC = ['A', 'B', 'C'].map(k => { const l = abcC.filter(x => x.cls === k); return { k, n: l.length, p: totV ? l.reduce((a, x) => a + x.valor, 0) / totV : 0 }; });

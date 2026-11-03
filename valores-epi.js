@@ -41,6 +41,26 @@
     return lista;
   }
 
+  // Preço de um item de requisição para os cálculos de gasto: vale o da requisição; se vier sem preço (ou zero), usa o valor guardado nesta tabela
+  let cache = null, quando = 0;
+  const tabela = () => {
+    const agora = Date.now(); if (cache && agora - quando < 1500) return cache;
+    cache = { salvo: CFO.store.get(LS, {}), achar: CFO.casarEpi(CFO.store.get('epi', []).filter(e => e && e.item)), memo: new Map() }; quando = agora;
+    return cache;
+  };
+  CFO.preco = i => {
+    const p = +i.preco; if (p > 0) return p;
+    const t = tabela(); let k = t.memo.get(i.item);
+    if (k === undefined) { const m = t.achar(i.item); k = chave(m ? m.item : i.item); t.memo.set(i.item, k); }
+    const v = t.salvo[k]; return v > 0 ? +v : 0;
+  };
+  CFO.preco.limpar = () => { cache = null; };
+
+  // Preenche a tabela sozinha (sem precisar abrir a tela), pouco depois de carregar e quando chegam dados novos da nuvem
+  let espera = null;
+  const auto = () => { clearTimeout(espera); espera = setTimeout(() => { try { if (CFO.usuario && CFO.usuario()) { fixar(); CFO.preco.limpar(); } } catch { /* sem dados ainda */ } }, 2500); };
+  document.addEventListener('cfo-sync', auto); window.addEventListener('cfo-user', auto); auto();
+
   CFO.valorEpi = nome => { const k = chave(nome), x = calcular().lista.find(r => r.k === k); return x ? x.valor : null; };
 
   CFO.modules.valores_epi = body => {
@@ -75,7 +95,7 @@
       const k = inp.closest('tr').dataset.k, t = inp.value.trim(), m = CFO.store.get(LS, {});
       if (!t) m[k] = null;                              // apagado de propósito: fica vazio e não é preenchido de novo
       else { const n = CFO.toNum(t); if (!(n >= 0)) { inp.value = ''; return; } m[k] = Math.round(n * 100) / 100; }
-      CFO.store.set(LS, m);
+      CFO.store.set(LS, m); CFO.preco.limpar();
       lista = calcular().lista;
       const x = lista.find(r => r.k === k); inp.value = x && x.valor != null ? num(x.valor) : '';
       resumo();

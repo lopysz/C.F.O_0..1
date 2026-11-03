@@ -12,7 +12,7 @@
   const pct = v => (v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
   const curto = v => v >= 1e6 ? (v / 1e6).toFixed(1).replace('.', ',') + ' mi' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.', ',') + ' mil' : String(Math.round(v * 10) / 10).replace('.', ',');
   const numCmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
-  const valor = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
+  const valor = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
 
   /* ---------- Meses (chave AAAAMM) ---------- */
   const MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -156,7 +156,7 @@
 
         const g = new Map();                                               // itens a faturar no mês escolhido (contrato + item + tam. + preço)
         reqs.filter(r => key(r) === mr).forEach(r => r.itens.filter(i => i.qa > 0).forEach(i => {
-          const kk = [r.contrato, i.item, i.tam, i.preco].join('|'), x = g.get(kk) || { c: r.contrato, item: i.item, tam: i.tam, q: 0, p: i.preco };
+          const kk = [r.contrato, i.item, i.tam, CFO.preco(i)].join('|'), x = g.get(kk) || { c: r.contrato, item: i.item, tam: i.tam, q: 0, p: CFO.preco(i) };
           x.q += i.qa; g.set(kk, x);
         }));
         const itensF = [...g.values()].sort((a, b) => numCmp(a.c, b.c) || b.q * b.p - a.q * a.p);
@@ -188,7 +188,7 @@
         CFO.store.get('epi', []).forEach(e => { const k = CFO.norm(CFO.baseEpi(e.item)); estBase.set(k, (estBase.get(k) || 0) + (+e.qtd || 0)); });   // estoque de todos os tamanhos somado
         reqs.forEach(r => r.itens.forEach(i => {
           const b = CFO.baseEpi(i.item), x = it.get(b) || { nome: b, q: new Map(), preco: 0, ult: 0 }, k = key(r);   // todos os tamanhos do item contam juntos
-          x.q.set(k, (x.q.get(k) || 0) + i.qa); if (k >= x.ult && i.preco) { x.ult = k; x.preco = i.preco; } it.set(b, x);
+          x.q.set(k, (x.q.get(k) || 0) + i.qa); if (k >= x.ult && CFO.preco(i)) { x.ult = k; x.preco = CFO.preco(i); } it.set(b, x);
         }));
         const PR = { 'Falta': 0, 'Atenção': 1, 'Sem cadastro': 2, 'Excesso': 3, 'Sem giro': 4, 'OK': 5 };
         const itens = [...it.values()].map(x => {
@@ -226,7 +226,7 @@
         }));
         dup.forEach(x => { if (x.ids.size > 1) al.push({ tipo: 'Duplicidade', c: x.r.contrato, k: key(x.r), d: `${x.i.item}${x.i.tam ? ' (' + x.i.tam + ')' : ''} · ${x.r.sol || '(sem nome)'} em ${x.ids.size} requisições: ${[...x.ids].join(', ')}` }); });
         passados.forEach(r => r.itens.forEach(i => { if (i.qs > 0 && i.qa > i.qs) al.push({ tipo: 'Aprovado > solicitado', c: r.contrato, k: key(r), d: `Req. ${r.id}: ${i.item} - solicitado ${N(i.qs)}, aprovado ${N(i.qa)}` }); }));
-        passados.forEach(r => r.itens.forEach(i => { if (i.qa > 0 && !(i.preco > 0)) al.push({ tipo: 'Sem preço', c: r.contrato, k: key(r), d: `Req. ${r.id}: ${i.item}${i.tam ? ' (' + i.tam + ')' : ''} - ${N(i.qa)} un. sem preço (não entra nos valores)` }); }));
+        passados.forEach(r => r.itens.forEach(i => { if (i.qa > 0 && !(CFO.preco(i) > 0)) al.push({ tipo: 'Sem preço', c: r.contrato, k: key(r), d: `Req. ${r.id}: ${i.item}${i.tam ? ' (' + i.tam + ')' : ''} - ${N(i.qa)} un. sem preço (não entra nos valores)` }); }));
         stats.forEach(s => {
           const kq = [...s.c.q.keys()].filter(k => k <= cur).sort((a, b) => a - b);
           kq.forEach((k, idx) => {

@@ -3,7 +3,7 @@
 (() => {
   const esc = CFO.esc, R$ = v => 'R$ ' + (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const numCmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
-  const valor = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
+  const valor = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
 
   // Contratos cadastrados + contratos que aparecem nas requisições
   const montar = ok => {
@@ -21,7 +21,7 @@
   // Soma itens por nome: [{item, qtd, valor}] do maior valor para o menor
   const porItem = reqs => {
     const m = new Map();
-    reqs.forEach(r => r.itens.forEach(i => { const x = m.get(i.item) || { item: i.item, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * i.preco; m.set(i.item, x); }));
+    reqs.forEach(r => r.itens.forEach(i => { const x = m.get(i.item) || { item: i.item, qtd: 0, valor: 0 }; x.qtd += i.qa; x.valor += i.qa * CFO.preco(i); m.set(i.item, x); }));
     return [...m.values()].sort((a, b) => b.valor - a.valor);
   };
   // Código do item: procura na Planilha EPI (nome igual; se não achar, nome parecido)

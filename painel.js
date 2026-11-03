@@ -8,7 +8,7 @@
   const R$ = v => 'R$ ' + (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const N = v => (+v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const numCmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
-  const total = r => r.itens.reduce((a, i) => a + i.qa * i.preco, 0);
+  const total = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0);
   const LS = 'cfo_painel_ult';           // últimas 3 já mostradas neste aparelho (só para saber quando animar)
   let host = null, abrir = () => {}, timer = null, token = 0;
 

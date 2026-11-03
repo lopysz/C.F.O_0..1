@@ -76,7 +76,7 @@
     const ach = nome => { if (!memo.has(nome)) memo.set(nome, achar(nome) || null); return memo.get(nome); };
     const linhas = [];                                                // uma linha por item aprovado de cada requisição (negadas ficam de fora)
     reqs.forEach(q => { const k = P.key(q.mes); if (!k) return; q.itens.forEach(i => {
-      const qa = +i.qa || 0; if (qa <= 0) return; const r = ach(i.item), preco = +i.preco || 0;
+      const qa = +i.qa || 0; if (qa <= 0) return; const r = ach(i.item), preco = CFO.preco(i);
       linhas.push({ k, q, rid: r ? r.id : null, item: r ? r.item : String(i.item), qa, preco, valor: qa * preco, contrato: String(q.contrato ?? '') }); }); });
     const ult = linhas.reduce((a, l) => Math.max(a, l.k), 0), K3 = ult ? Array.from({ length: JANELA }, (_, i) => addM(ult, -i)) : [];
     const med = new Map(), preco = new Map(), pk = new Map();         // média mensal de saída e último preço de cada item
@@ -314,7 +314,7 @@
 
   H.requisicao = (D, t, req) => {
     const st = r => D.neg[r.id] ? '🚫 negada' : D.ret[r.id] ? '✅ retirada' : '⏳ aguardando retirada';
-    if (req) { if (req.falta) return sem(`Não encontrei a requisição ${esc(req.falta)}.`); const q = req, itens = q.itens.filter(i => +i.qa > 0), tot = itens.reduce((a, i) => a + i.qa * i.preco, 0);
+    if (req) { if (req.falta) return sem(`Não encontrei a requisição ${esc(req.falta)}.`); const q = req, itens = q.itens.filter(i => +i.qa > 0), tot = itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0);
       return { html: `<b>${esc(q.id)}</b> · ${st(q)}<br>Contrato ${esc(q.contrato)}${q.contratoNome ? ' - ' + esc(q.contratoNome) : ''}<br>${esc(q.sol || '')} · ${esc(q.mes || '')}${q.motivo ? ` · ${esc(q.motivo)}` : ''}${lis(itens.map(i => `${esc(i.item)}${i.tam ? ' (' + esc(i.tam) + ')' : ''} · ${N(i.qa)} un`), 12)}${CFO.pode('abrir', 'controle_gastos') ? `Total ${R$(tot)}` : ''}` }; }
     const num = (a, b) => String(b.id).localeCompare(String(a.id), 'pt-BR', { numeric: true }), ordem = (a, b) => P.key(b.mes) - P.key(a.mes) || num(a, b);
     const li = q => `<b>${esc(q.id)}</b> · ${esc(q.sol || '')} · contrato ${esc(q.contrato)} · ${esc(q.mes || '')}`;
