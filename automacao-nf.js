@@ -125,18 +125,18 @@
     { k: 'e2', lab: 'Quantos Enter depois da quantidade (até cadastrar o item)', tipo: 'num', def: '2', larg: 1 },
     { k: 'seg', lab: 'Esperar quantos segundos depois do 1º Enter (para o sistema da NF achar o item)', tipo: 'num', def: '1', larg: 1 }];
   const itensTexto = (modo, v) => {
-    const cod = modo === 'cod', n = (x, d) => Math.max(0, Math.floor(Number(String(num(x, d)).replace(',', '.'))) || 0), e1 = n(v.e1, '2'), e2 = n(v.e2, '2'), seg = String(num(v.seg, '1')).replace(',', '.');
-    const L = [`# [itens ${modo} ${e1} ${e2} ${seg}] lanca cada item da requisicao: ${cod ? 'codigo' : 'nome'} + quantidade`, 'para cada produto'], i = cod ? '    ' : '  ';
+    const cod = modo === 'cod' || modo === 'codl', letra = modo === 'codl', dig = letra ? 'teclar' : 'digitar', n = (x, d) => Math.max(0, Math.floor(Number(String(num(x, d)).replace(',', '.'))) || 0), e1 = n(v.e1, '2'), e2 = n(v.e2, '2'), seg = String(num(v.seg, '1')).replace(',', '.');
+    const L = [`# [itens ${modo} ${e1} ${e2} ${seg}] lanca cada item da requisicao: ${cod ? 'codigo' : 'nome'} + quantidade${letra ? ' (letra por letra)' : ''}`, 'para cada produto'], i = cod ? '    ' : '  ';
     const enter = q => q > 0 ? [i + (q === 1 ? 'tecla enter' : `tecla enter ${q} vezes`)] : [];
     if (cod) L.push('  se {codigo} nao vazio');
-    L.push(i + `digitar ${cod ? '{codigo}' : '{produto}'}`);
+    L.push(i + `${dig} ${cod ? '{codigo}' : '{produto}'}`);
     if (e1 > 0) { L.push(...enter(1)); if (Number(seg) > 0) L.push(i + `esperar ${seg}`); L.push(...enter(e1 - 1)); }
-    L.push(i + 'digitar {quantidade}', ...enter(e2));
+    L.push(i + `${dig} {quantidade}`, ...enter(e2));
     if (cod) L.push('  senao', '    avisar "Item sem codigo: {produto} (quantidade {quantidade}). Lance este item na mao e clique OK."', '  fim se');
     L.push('fim');
     return L.join('\n');
   };
-  const itensLer = (c, modo) => { const m = /^@@itens\s+(cod|nome)\s+(\d+)\s+(\d+)\s+([\d.,]+)$/.exec(c); return m && m[1] === modo ? { e1: m[2], e2: m[3], seg: m[4] } : null; };
+  const itensLer = (c, modo) => { const m = /^@@itens\s+(codl|cod|nome)\s+(\d+)\s+(\d+)\s+([\d.,]+)$/.exec(c); return m && m[1] === modo ? { e1: m[2], e2: m[3], seg: m[4] } : null; };
   const B = [
     { id: 'clicar', g: 'Mouse', nome: 'Clicar', f: XY, out: v => `clicar em ${num(v.x)},${num(v.y)}`, ler: R(/^clicar\s+(?:em|na|no)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
     { id: 'duplo', g: 'Mouse', nome: 'Duplo clique', f: XY, out: v => `duplo clique em ${num(v.x)},${num(v.y)}`, ler: R(/^(?:duplo clique|clique duplo)\s+(?:em|na|no)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
@@ -159,6 +159,7 @@
     { id: 'esperar', g: 'Programas e esperas', nome: 'Esperar', f: [{ k: 'seg', lab: 'Segundos', tipo: 'num', def: '1' }], out: v => `esperar ${num(v.seg, '1')}`, ler: R(/^(?:esperar|aguardar)\s+([\d.,]+)(?:\s+segundos?)?$/i, m => ({ seg: m[1] })) },
 
     { id: 'itensCod', g: 'Itens da requisição', nome: 'Lançar os itens: CÓDIGO + quantidade (um item por vez)', prio: 1, multi: 1, f: ITENS_F('código'), out: v => itensTexto('cod', v), ler: c => itensLer(c, 'cod') },
+    { id: 'itensCodLetra', g: 'Itens da requisição', nome: 'Lançar os itens: CÓDIGO + quantidade, LETRA POR LETRA (um item por vez)', prio: 1, multi: 1, f: ITENS_F('código'), out: v => itensTexto('codl', v), ler: c => itensLer(c, 'codl') },
     { id: 'itensNome', g: 'Itens da requisição', nome: 'Lançar os itens: NOME + quantidade (um item por vez)', prio: 1, multi: 1, f: ITENS_F('nome'), out: v => itensTexto('nome', v), ler: c => itensLer(c, 'nome') },
 
     { id: 'cada', g: 'Produtos e decisões', nome: 'Para cada produto (repete até o Fim)', abre: 1, f: [], out: () => 'para cada produto', ler: R(/^(?:repetir\s+)?para cada\s+(?:produto|item)$/i, () => ({})) },
@@ -193,7 +194,7 @@
   const blocosDeTexto = txt => {
     const r = []; let nota = null;
     const fecha = () => { if (nota) { r.push({ t: 'nota', v: { texto: nota.join('\n') }, nota: '' }); nota = null; } };
-    String(txt || '').replace(/^[ \t]*#[ \t]*\[itens (cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').split(/\r?\n/).forEach(raw => {
+    String(txt || '').replace(/^[ \t]*#[ \t]*\[itens (codl|cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').split(/\r?\n/).forEach(raw => {
       const s = raw.trim();
       if (!s) { fecha(); return; }
       if (s[0] === '#') { (nota = nota || []).push(s.replace(/^#\s?/, '')); return; }
