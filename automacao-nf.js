@@ -14,6 +14,7 @@
     return j;
   };
   const ligado = () => fetch(URL + '/ping').then(r => r.ok).catch(() => false);
+  const VCAP = 6;                                            // versão do agente que entende "capturar lista" e "gerar documento"
   const VMIN = 3;                                                // versão mínima do agente (a que entende se/senão, perguntar, teclar...)
   const versao = () => fetch(URL + '/ping').then(r => r.json()).then(x => x.versao || 1).catch(() => 0);
   const ANTIGO = 'O agente que está aberto neste computador é ANTIGO e não entende os comandos novos.\n\nClique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.';
@@ -33,14 +34,100 @@
     });
     return { id: r.id, contrato: r.contrato, contratoNome: r.contratoNome, sol: r.sol, mes: r.mes, motivo: r.motivo, itens: [...mapa.values()] };
   };
+  // Várias requisições numa NF só: itens somados (o montar() soma item+tamanho), textos juntos. Com uma só, devolve a própria requisição (comportamento de sempre).
+  const uniq = a => [...new Set(a.map(x => String(x == null ? '' : x).trim()).filter(Boolean))];
+  const combinar = rs => rs.length === 1 ? rs[0] : {
+    id: rs.map(r => r.id).join(' + '), juntas: rs.length, ids: rs.map(r => r.id),
+    contrato: uniq(rs.map(r => r.contrato)).join(' + '), contratoNome: uniq(rs.map(r => r.contratoNome)).join(' + '),
+    sol: uniq(rs.map(r => r.sol)).join(' / '), mes: uniq(rs.map(r => r.mes)).join(' / '), motivo: uniq(rs.map(r => r.motivo)).join(' / '),
+    itens: rs.flatMap(r => r.itens || []) };
+  const avisoJuntas = rs => rs.length < 2 ? '' : `\n\n${rs.length} requisições somadas numa NF só: ${rs.map(r => r.id).join(', ')}.` + (uniq(rs.map(r => r.contrato)).length > 1 ? `\n⚠️ ATENÇÃO: contratos diferentes (${uniq(rs.map(r => r.contrato)).join(', ')}). O roteiro vai usar todos no campo contrato.` : '');
   async function rodar(r, simular, aoIniciar) {
     if (!await garante()) return;
     const q = montar(r);
     if (!q.itens.length) { alert('Esta requisição não tem itens aprovados.'); return; }
-    if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.\nPara pausar/continuar: aperte a tecla SHIFT (a mesma tecla pausa e continua) ou leve o mouse ao canto superior direito.`)) return;
+    // Roteiro com captura/Word/PDF só roda no agente novo; roteiros antigos continuam funcionando no agente antigo
+    const usaCap = await chamar('/roteiro').then(x => /^\s*(capturar lista|gerar documento)\b/mi.test(x.texto || '')).catch(() => false);
+    if (usaCap && await versao() < VCAP) { alert('Este roteiro captura listas e gera Bloco de Notas/PDF, e o agente aberto é de uma versão anterior.\n\nClique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.'); return; }
+    if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).${r.juntas ? `\n(${r.juntas} requisições somadas numa NF só)` + (/ \+ /.test(r.contrato) ? '\n⚠️ ATENÇÃO: contratos diferentes.' : '') : ''}\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.\nPara pausar/continuar: aperte a tecla SHIFT (a mesma tecla pausa e continua) ou leve o mouse ao canto superior direito.`)) return;
     try { await chamar(simular ? '/testar' : '/executar', { requisicao: q }); aoIniciar ? aoIniciar() : tela(r); }
     catch (e) { alert(e.message); }
   }
+
+
+  // ---------- Controle remoto: o celular manda, o PC executa ----------
+  // Canal de "broadcast" do Realtime do Supabase (o mesmo serviço do online.js; nada é gravado em banco).
+  // O nome do canal leva um código secreto de 12 letras/números, que aparece no PC e é digitado uma vez no celular.
+  // O celular só manda o NÚMERO da requisição e o comando; os dados vêm do próprio PC. Só roda com o agente ligado e o token colado no PC.
+  const CFGS = window.CFO_SUPABASE || {}, RK = 'cfo_nf_remoto';       // fica só neste aparelho (não vai para a nuvem)
+  const remCfg = () => { try { return JSON.parse(localStorage.getItem(RK) || '{}') || {}; } catch { return {}; } };
+  const setRem = o => { try { localStorage.setItem(RK, JSON.stringify({ ...remCfg(), ...o })); } catch {} };
+  const novoCodigo = () => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; return [...crypto.getRandomValues(new Uint8Array(12))].map(x => a[x % a.length]).join(''); };
+  const nonce = () => Math.random().toString(36).slice(2, 10);
+  function abreCanal(codigo, aoMsg, aoStatus) {
+    const base = (/^https?:/.test(CFGS.url) ? CFGS.url : `https://${CFGS.url}.supabase.co`).replace(/\/+$/, '');
+    const WS = base.replace(/^http/, 'ws') + '/realtime/v1/websocket?apikey=' + encodeURIComponent(CFGS.anonKey) + '&vsn=1.0.0', TOP = 'realtime:cfo-nf-' + codigo;
+    let ws = null, beat = null, retry = null, tent = 0, ok = false, seq = 1, fechado = false;
+    const env = (topic, event, payload = {}) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ topic, event, payload, ref: String(++seq), join_ref: '1' })); };
+    const agenda = () => { if (fechado) return; clearTimeout(retry); retry = setTimeout(conecta, Math.min(1500 * ++tent, 15000)); };
+    function conecta() {
+      if (fechado || ws) return;
+      try { ws = new WebSocket(WS); } catch { return agenda(); }
+      const w = ws;
+      w.onopen = () => {
+        tent = 0;
+        w.send(JSON.stringify({ topic: TOP, event: 'phx_join', ref: '1', join_ref: '1', payload: { config: { broadcast: { ack: false, self: false }, presence: { key: '' }, postgres_changes: [], private: false }, access_token: CFGS.anonKey } }));
+        clearInterval(beat); beat = setInterval(() => env('phoenix', 'heartbeat'), 25000);
+      };
+      w.onmessage = ev => {
+        let m; try { m = JSON.parse(ev.data); } catch { return; }
+        if (m.topic !== TOP) return;
+        if (m.event === 'phx_reply' && m.ref === '1') { ok = !!(m.payload && m.payload.status === 'ok'); aoStatus(ok); }
+        else if (m.event === 'broadcast' && m.payload && m.payload.payload) aoMsg(m.payload.event, m.payload.payload);
+      };
+      w.onclose = () => { if (ws !== w) return; clearInterval(beat); ws = null; ok = false; aoStatus(false); agenda(); };
+      w.onerror = () => { try { w.close(); } catch {} };
+    }
+    conecta();
+    return { enviar: (ev, p) => env(TOP, 'broadcast', { type: 'broadcast', event: ev, payload: p }), ligado: () => ok && !!ws && ws.readyState === 1,
+      fechar: () => { fechado = true; clearTimeout(retry); clearInterval(beat); const w = ws; ws = null; ok = false; try { w && w.close(); } catch {} } };
+  }
+
+  // Lado do PC: recebe os comandos e fala com o agente local, sem janelas de aviso (ninguém precisa estar na frente do PC)
+  let recep = null, timerPc = 0, vistos = new Set();
+  async function rodaRemoto(idOuIds, simular) {
+    if (!await ligado()) throw new Error('O agente não está ligado no PC. Abra o iniciar.bat.');
+    if (!token()) throw new Error('Falta o token no PC. No PC, abra Automação de NF e use "Colar token".');
+    const v = await versao(); if (v < VMIN) throw new Error('O agente do PC é antigo. No PC, use "Baixar agente" e troque a pasta.');
+    const ids = [].concat(idOuIds).map(String), todas = CFO.store.get('requisicoes', []), rs = ids.map(i => todas.find(x => String(x.id) === i));
+    const faltam = ids.filter((_, k) => !rs[k]);
+    if (faltam.length) throw new Error('Não está no PC: ' + faltam.join(', ') + '. Confira se o sistema do PC sincronizou (botão ☁️).');
+    const q = montar(combinar(rs)); if (!q.itens.length) throw new Error('Esta requisição não tem itens aprovados.');
+    const rot = (await chamar('/roteiro')).texto || '';
+    if (/^\s*(capturar lista|gerar documento)\b/mi.test(rot) && v < VCAP) throw new Error('O roteiro captura listas e gera Bloco de Notas/PDF, e o agente do PC é antigo. No PC, use "Baixar agente".');
+    await chamar(simular ? '/testar' : '/executar', { requisicao: q });
+  }
+  function ligaReceptor() {
+    if (recep) { recep.fechar(); recep = null; } clearInterval(timerPc);
+    const c = remCfg(); if (c.papel !== 'pc' || !c.codigoPc || !c.receptor || !CFGS.url || !CFGS.anonKey) return;
+    const ret = (t, x) => recep && recep.enviar('nf-res', { t, ...x });
+    recep = abreCanal(c.codigoPc, async (ev, p) => {
+      if (ev !== 'nf-cmd' || !p || !p.t) return;
+      if (p.t !== 'ping') { if (vistos.has(p.n)) return; vistos.add(p.n); if (vistos.size > 50) vistos = new Set([...vistos].slice(-20)); }   // o mesmo comando nunca roda duas vezes
+      try {
+        if (p.t === 'ping') return ret('pong', { n: p.n, agente: await ligado(), token: !!token(), versao: await versao() });
+        if (p.t === 'play' || p.t === 'test') { await rodaRemoto(p.ids && p.ids.length ? p.ids : p.id, p.t === 'test'); return ret('ok', { n: p.n }); }
+        if (!await ligado() || !token()) throw new Error('Agente desligado ou sem token no PC.');
+        if (p.t === 'parar' || p.t === 'pausar' || p.t === 'continuar') { await chamar('/' + p.t, {}); return ret('ok', { n: p.n }); }
+      } catch (e) { ret('erro', { n: p.n, msg: e.message || String(e) }); }
+    }, () => {});
+    let eraRod = false;
+    timerPc = setInterval(async () => {                                // enquanto roda, manda o andamento para o celular
+      if (!recep || !recep.ligado() || !token()) return;
+      try { const s = await chamar('/estado'); if (s.rodando || eraRod) ret('estado', { rodando: !!s.rodando, pausado: !!s.pausado, log: (s.log || []).slice(-12) }); eraRod = !!s.rodando; } catch {}
+    }, 2000);
+  }
+  ligaReceptor();                                                      // o PC escuta desde que a página abre (se o receptor estiver ligado)
 
   // Acompanha o andamento (log do agente)
   function acompanhar(el, parar, pausa) {
@@ -115,8 +202,8 @@
   const SIS_REQ = [['data', 'Data de hoje'], ['hora', 'Hora de agora'], ['requisicao', 'Número da requisição'], ['contrato', 'Número do contrato'], ['contrato_nome', 'Nome do contrato'], ['nome', 'Nome do solicitante'], ['mes', 'Mês'], ['motivo', 'Motivo']];
   const TECLAS = ['enter', 'tab', 'esc', 'baixo', 'cima', 'esquerda', 'direita', 'espaco', 'delete', 'apagar', 'home', 'end', 'f2', 'f5'];
   const PRONTOS = ['fechar janela', 'fechar aba', 'nova aba', 'voltar', 'avancar', 'atualizar', 'selecionar tudo', 'copiar', 'colar', 'recortar', 'desfazer', 'salvar', 'imprimir'];
-  const COR = { 'Mouse': '#3b82f6', 'Escrever': '#22c55e', 'Itens da requisição': '#14b8a6', 'Teclas': '#f59e0b', 'Programas e esperas': '#a855f7', 'Produtos e decisões': '#ef4444', 'Mais': '#64748b' };
-  const ICO = { 'Mouse': '🖱️', 'Escrever': '✍️', 'Itens da requisição': '📦', 'Teclas': '⌨️', 'Programas e esperas': '🪟', 'Produtos e decisões': '🔀', 'Mais': '⚙️' };
+  const COR = { 'Mouse': '#3b82f6', 'Escrever': '#22c55e', 'Itens da requisição': '#14b8a6', 'Teclas': '#f59e0b', 'Programas e esperas': '#a855f7', 'Produtos e decisões': '#ef4444', 'Capturar para Bloco de Notas/PDF': '#0ea5e9', 'Roteiros prontos': '#ec4899', 'Mais': '#64748b' };
+  const ICO = { 'Mouse': '🖱️', 'Escrever': '✍️', 'Itens da requisição': '📦', 'Teclas': '⌨️', 'Programas e esperas': '🪟', 'Produtos e decisões': '🔀', 'Capturar para Bloco de Notas/PDF': '📥', 'Roteiros prontos': '🧱', 'Mais': '⚙️' };
   const XY = [{ k: 'x', lab: 'X', tipo: 'num', def: '0' }, { k: 'y', lab: 'Y', tipo: 'num', def: '0' }];
   const OPS = [['vazio', 'está vazio'], ['nao vazio', 'não está vazio'], ['for', 'for igual a'], ['nao for', 'for diferente de'], ['contem', 'contém']];
   // Blocos "Lançar os itens": viram um "para cada produto" pronto (digita código ou nome, Enter, quantidade, Enter, e vai para o próximo item)
@@ -137,6 +224,19 @@
     return L.join('\n');
   };
   const itensLer = (c, modo) => { const m = /^@@itens\s+(codl|cod|nome)\s+(\d+)\s+(\d+)\s+([\d.,]+)$/.exec(c); return m && m[1] === modo ? { e1: m[2], e2: m[3], seg: m[4] } : null; };
+  // ----- Roteiro pronto = 1 bloco. Na hora de salvar vira texto comum (o agente não muda e não sabe de blocos): o texto do modelo é copiado entre duas linhas de marcação "# [roteiro ...]" / "# [/roteiro]", que o agente ignora (comentário). -----
+  const modelosNf = () => { try { return CFO.store.get('modelos_nf', []) || []; } catch { return []; } };
+  const acharModelo = id => id === 'padrao' ? { id: 'padrao', nome: 'Modelo da NF (padrão)', texto: MODELO_NF } : modelosNf().find(m => m.id === id);
+  const opsDe = f => typeof f.op === 'function' ? f.op() : f.op;
+  const RE_MARCA = /^[ \t]*# \[\/?roteiro[ \]][^\n]*\n?/gm;
+  const achata = t => String(t || '').replace(RE_MARCA, '').replace(/\s+$/, '');          // roteiro dentro de roteiro: tira as marcações, sobra só o texto (sem aninhar)
+  let _regs = [];
+  const saldo = t => { let d = 0, neg = false; achata(t).split(/\r?\n/).forEach(l => { const c = l.split('#')[0].trim(); if (/^(?:repetir\s+)?para cada\b|^repetir\s+\d+|^se\s/i.test(c)) d++; else if (/^fim\b/i.test(c)) { d--; if (d < 0) { neg = true; d = 0; } } }); return { d, neg }; };
+  const roteiroOut = v => {
+    const m = acharModelo(v.modelo), nome = String(m ? m.nome : (v.nomeSalvo || 'roteiro')).replace(/[\r\n]+/g, ' ');
+    const corpo = achata(m ? m.texto : v.corpo);
+    return `# [roteiro ${String(v.modelo || 'x').replace(/[^\w-]/g, '')}] ${nome}\n${corpo}\n# [/roteiro]`;
+  };
   const B = [
     { id: 'clicar', g: 'Mouse', nome: 'Clicar', f: XY, out: v => `clicar em ${num(v.x)},${num(v.y)}`, ler: R(/^clicar\s+(?:em|na|no)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
     { id: 'duplo', g: 'Mouse', nome: 'Duplo clique', f: XY, out: v => `duplo clique em ${num(v.x)},${num(v.y)}`, ler: R(/^(?:duplo clique|clique duplo)\s+(?:em|na|no)\s+(-?\d+)\s*[, ]\s*(-?\d+)$/i, m => ({ x: m[1], y: m[2] })) },
@@ -169,6 +269,24 @@
     { id: 'senao', g: 'Produtos e decisões', nome: 'Senão (outro caminho do Se)', meio: 1, f: [], out: () => 'senao', ler: R(/^(?:sen.o|caso contr.rio)$/i, () => ({})) },
     { id: 'fim', g: 'Produtos e decisões', nome: 'Fim (fecha o bloco acima)', fecha: 1, f: [], out: () => 'fim', ler: R(/^fim(?:\s+(?:para cada|repetir|se))?$/i, () => ({})) },
 
+    { id: 'capLista', g: 'Capturar para Bloco de Notas/PDF', nome: 'Capturar uma lista de outra tela (do início ao fim)', prio: 1, f: [
+      { k: 'nome', lab: 'Nome da lista (vira o título dela no documento)', tipo: 'txt', larg: 1, ph: 'Itens da nota' },
+      { k: 'x1', lab: 'Início X', tipo: 'num', def: '0' }, { k: 'y1', lab: 'Início Y', tipo: 'num', def: '0' },
+      { k: 'x2', lab: 'Fim X', tipo: 'num', def: '0' }, { k: 'y2', lab: 'Fim Y', tipo: 'num', def: '0' },
+      { k: 'rolar', lab: 'Rolar a tela antes do fim (vezes; para lista maior que a tela)', tipo: 'num', def: '0' },
+      { k: 'modo', lab: 'Como selecionar', tipo: 'sel', op: [['clicar', 'Clicar no início e Shift+clique no fim'], ['arrastar', 'Arrastar do início ao fim (sem rolagem)']], def: 'clicar', larg: 1 }],
+      out: v => 'capturar lista "' + String(v.nome || 'Lista').replace(/"/g, "'") + '" de ' + num(v.x1) + ',' + num(v.y1) + ' ate ' + num(v.x2) + ',' + num(v.y2) + (v.modo === 'arrastar' ? ' arrastar' : (Number(num(v.rolar)) > 0 ? ' rolar ' + num(v.rolar) : '')),
+      ler: R(/^capturar\s+lista\s+"([^"]*)"\s+de\s+(-?\d+)\s*[, ]\s*(-?\d+)\s+at[eé]\s+(-?\d+)\s*[, ]\s*(-?\d+)(?:\s+(arrastar)|\s+rolar\s+(\d+))?$/i, m => ({ nome: m[1], x1: m[2], y1: m[3], x2: m[4], y2: m[5], rolar: m[7] || '0', modo: m[6] ? 'arrastar' : 'clicar' })) },
+    { id: 'genDoc', g: 'Capturar para Bloco de Notas/PDF', nome: 'Gerar o documento (Bloco de Notas e/ou PDF) com as listas capturadas', prio: 1, f: [
+      { k: 'titulo', lab: 'Título do documento', tipo: 'txt', larg: 1, ph: 'Relatório da requisição {requisicao}' },
+      { k: 'arquivo', lab: 'Onde salvar (pasta e nome, sem extensão; vazio = pasta "documentos" do agente)', tipo: 'txt', larg: 1, ph: 'C:/Notas/{requisicao}' },
+      { k: 'formato', lab: 'Arquivos gerados', tipo: 'sel', op: [['txt+pdf', 'Bloco de Notas (.txt) e PDF'], ['txt', 'Só Bloco de Notas (.txt)'], ['pdf', 'Só PDF']], def: 'txt+pdf', larg: 1 },
+      { k: 'como', lab: 'Como mostrar a lista', tipo: 'sel', op: [['tabela', 'Colunas alinhadas'], ['texto', 'Texto (células separadas por |)']], def: 'tabela', larg: 1 }],
+      out: v => 'gerar documento "' + String(v.titulo || 'Documento').replace(/"/g, "'") + '" em "' + String(v.arquivo || '').replace(/"/g, "'") + '" formato ' + (v.formato || 'txt+pdf') + ' como ' + (v.como || 'tabela'),
+      ler: R(/^gerar\s+documento\s+"([^"]*)"\s+em\s+"([^"]*)"\s+formato\s+(txt\+pdf|txt|pdf)\s+como\s+(tabela|texto)$/i, m => ({ titulo: m[1], arquivo: m[2], formato: m[3].toLowerCase(), como: m[4].toLowerCase() })) },
+
+    { id: 'roteiroPronto', g: 'Roteiros prontos', nome: 'Usar um roteiro salvo (vira um bloco só)', prio: 1, multi: 1, f: [{ k: 'modelo', lab: 'Qual roteiro', tipo: 'sel', op: () => [['padrao', '📄 Modelo da NF (padrão)'], ...modelosNf().map(m => [m.id, '🧱 ' + m.nome])], def: 'padrao', larg: 1 }],
+      out: roteiroOut, ler: c => { const m = /^@@roteiro (\d+)$/.exec(c); const r = m && _regs[+m[1]]; return r ? { modelo: r.id, nomeSalvo: r.nome, corpo: r.corpo } : null; } },
     { id: 'definir', g: 'Mais', nome: 'Criar um dado meu', f: [{ k: 'nome', lab: 'Nome do dado', tipo: 'txt', ph: 'numero' }, { k: 'valor', lab: 'Valor', tipo: 'txt', larg: 1 }], out: v => `definir ${v.nome || 'dado'} = ${v.valor || ''}`.trim(), ler: R(/^definir\s+\{?([^\s={}]+)\}?\s*=\s*(.*)$/i, m => ({ nome: m[1], valor: m[2] })) },
     { id: 'perguntar', g: 'Mais', nome: 'Perguntar na hora (abre uma caixinha)', f: [{ k: 'pergunta', lab: 'Pergunta', tipo: 'txt', larg: 1, ph: 'Qual o número?' }, { k: 'nome', lab: 'Guardar em (nome)', tipo: 'txt', ph: 'numero' }], out: v => `perguntar "${v.pergunta || ''}" em ${v.nome || 'resposta'}`, ler: R(/^(?:perguntar|pedir)\s+"(.+)"\s+(?:em|como|para)\s+\{?([^\s{}]+)\}?$/i, m => ({ pergunta: m[1], nome: m[2] })) },
     { id: 'avisar', g: 'Mais', nome: 'Avisar e esperar você clicar OK', f: [{ k: 'msg', lab: 'Mensagem', tipo: 'txt', larg: 1 }], out: v => v.msg ? `avisar "${v.msg}"` : 'avisar', ler: R(/^(?:avisar|mensagem|pausar)(?:\s+"(.*)")?$/i, m => ({ msg: m[1] || '' })) },
@@ -194,7 +312,8 @@
   const blocosDeTexto = txt => {
     const r = []; let nota = null;
     const fecha = () => { if (nota) { r.push({ t: 'nota', v: { texto: nota.join('\n') }, nota: '' }); nota = null; } };
-    String(txt || '').replace(/^[ \t]*#[ \t]*\[itens (codl|cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').split(/\r?\n/).forEach(raw => {
+    _regs = [];
+    String(txt || '').replace(/^[ \t]*# \[roteiro ([\w-]+)\][ \t]*([^\n]*)\n([\s\S]*?)^[ \t]*# \[\/roteiro\][ \t]*\r?$/gm, (_, id, nome, corpo) => '@@roteiro ' + (_regs.push({ id, nome: nome.trim(), corpo: corpo.replace(/\s+$/, '') }) - 1)).replace(/^[ \t]*#[ \t]*\[itens (codl|cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').split(/\r?\n/).forEach(raw => {
       const s = raw.trim();
       if (!s) { fecha(); return; }
       if (s[0] === '#') { (nota = nota || []).push(s.replace(/^#\s?/, '')); return; }
@@ -213,9 +332,15 @@
   function criaBlocos(raiz) {
     let bl = [], sel = -1;
     const E = x => esc(String(x == null ? '' : x));
+    const paletaHtml = () => Object.keys(COR).map(g => {
+      const chips = g === 'Roteiros prontos'
+        ? [{ id: 'padrao', nome: 'Modelo da NF (padrão)' }, ...modelosNf()].map(m => `<button class="ghost" data-add="roteiroPronto" data-modelo="${E(m.id)}" style="border-color:${COR[g]}">${g === 'Roteiros prontos' ? '🧱 ' : ''}${E(m.nome)}</button>`).join('')
+        : B.filter(d => d.g === g).map(d => `<button class="ghost" data-add="${d.id}" style="border-color:${COR[g]}">${E(d.nome)}</button>`).join('');
+      return `<div class="bl-gt" style="color:${COR[g]}">${ICO[g]} ${g}</div><div class="bl-chips">${chips}</div>`;
+    }).join('');
     raiz.innerHTML = `<datalist id="bl-teclas">${TECLAS.map(t => `<option value="${t}">`).join('')}</datalist>
       <div class="nf-row" style="margin-top:0"><button class="bl-add">＋ Adicionar passo</button><button class="ghost danger bl-limpar">🗑 Limpar tudo</button></div>
-      <div class="bl-pal" hidden>${Object.keys(COR).map(g => `<div class="bl-gt" style="color:${COR[g]}">${ICO[g]} ${g}</div><div class="bl-chips">${B.filter(d => d.g === g).map(d => `<button class="ghost" data-add="${d.id}" style="border-color:${COR[g]}">${E(d.nome)}</button>`).join('')}</div>`).join('')}</div>
+      <div class="bl-pal" hidden>${paletaHtml()}</div>
       <div class="bl-aviso"></div>
       <div class="bl-lista"></div>
       <div class="nf-row"><button class="bl-add">＋ Adicionar passo</button></div>
@@ -225,8 +350,8 @@
     const campoHtml = (b, i, f) => {
       const val = b.v[f.k] == null ? (f.def == null ? '' : f.def) : b.v[f.k], at = `data-i="${i}" data-k="${f.k}"`; let el;
       if (f.tipo === 'sel') {
-        const ops = f.op.map(o => Array.isArray(o) ? o : [o, o]);
-        if (!ops.some(o => String(o[0]) === String(val))) ops.push([val, val]);
+        const ops = opsDe(f).map(o => Array.isArray(o) ? o : [o, o]);
+        if (!ops.some(o => String(o[0]) === String(val))) ops.push([val, b.v.nomeSalvo ? '(apagado) ' + b.v.nomeSalvo : val]);
         el = `<select ${at}>${ops.map(o => `<option value="${E(o[0])}"${String(o[0]) === String(val) ? ' selected' : ''}>${E(o[1])}</option>`).join('')}</select>`;
       } else if (f.tipo === 'area') el = `<textarea ${at} rows="${Math.min(6, Math.max(2, String(val).split('\n').length))}" spellcheck="false">${E(val)}</textarea>`;
       else el = `<input type="text" ${at} value="${E(val)}"${f.tipo === 'lista' ? ' list="bl-teclas"' : ''}${f.tipo === 'num' ? ' inputmode="numeric"' : ''}${f.ph ? ` placeholder="${E(f.ph)}"` : ''} autocomplete="off" autocapitalize="off" spellcheck="false">`;
@@ -234,11 +359,16 @@
     };
     const avisos = () => {
       let d = 0, neg = false, pend = 0;
-      bl.forEach(b => { const df = DEF[b.t]; if (df.fecha) { d--; if (d < 0) { neg = true; d = 0; } } if (df.abre) d++; if (['clicar', 'duplo', 'direito', 'mover'].includes(b.t) && Number(num(b.v.x)) <= 2 && Number(num(b.v.y)) <= 2) pend++; });
+      bl.forEach(b => { const df = DEF[b.t]; if (df.fecha) { d--; if (d < 0) { neg = true; d = 0; } } if (df.abre) d++; if (['clicar', 'duplo', 'direito', 'mover'].includes(b.t) && Number(num(b.v.x)) <= 2 && Number(num(b.v.y)) <= 2) pend++; if (b.t === 'capLista' && ((Number(num(b.v.x1)) <= 2 && Number(num(b.v.y1)) <= 2) || (Number(num(b.v.x2)) <= 2 && Number(num(b.v.y2)) <= 2))) pend++; });
       const m = [];
       if (pend) m.push(`⚠️ ${pend} passo(s) do mouse ainda em 0,0. Troque pelo X,Y.`);
       if (d > 0) m.push('⚠️ Falta um "Fim" para fechar um bloco.');
       if (neg) m.push('⚠️ Tem um "Fim" sobrando.');
+      bl.filter(b => b.t === 'roteiroPronto').forEach(b => { const mo = acharModelo(b.v.modelo), sd = saldo(mo ? mo.texto : b.v.corpo); if (!mo) m.push(`⚠️ O roteiro salvo "${E(b.v.nomeSalvo || '')}" não existe mais: vale a cópia que já está no roteiro.`); if (sd.d > 0 || sd.neg) m.push(`⚠️ O roteiro "${E(mo ? mo.nome : b.v.nomeSalvo)}" ${sd.d > 0 ? 'deixa um bloco aberto (falta Fim)' : 'tem um Fim sobrando'}: confira antes de usar.`); });
+      const iCap = bl.findIndex(b => b.t === 'capLista'), iDoc = bl.findIndex(b => b.t === 'genDoc');
+      if (iDoc >= 0 && (iCap < 0 || iCap > iDoc)) m.push('⚠️ "Gerar o documento" precisa de pelo menos uma "Capturar uma lista" ANTES dele.');
+      if (iCap >= 0 && iDoc < 0) m.push('⚠️ As listas capturadas só vão para o Bloco de Notas/PDF se o roteiro tiver o passo "Gerar o documento" no fim.');
+      if (iCap >= 0 || iDoc >= 0) m.push('ℹ️ Capturar e gerar documento exigem o agente versão 6 (não precisa de Word) (use "Baixar agente" se precisar).');
       avisoEl.innerHTML = m.join('<br>');
     };
     const mudou = () => { avisos(); prev.textContent = blocosParaTexto(bl); };
@@ -255,16 +385,17 @@
       mudou();
       if (foco != null) { const it = lista.querySelector(`.bl-item[data-i="${foco}"]`); if (it) { it.scrollIntoView({ block: 'center', behavior: 'smooth' }); const inp = it.querySelector('input,select,textarea'); if (inp) { inp.focus({ preventScroll: true }); if (typeof inp.select === 'function' && inp.tagName === 'INPUT') inp.select(); } } }
     };
-    const novo = id => { const v = {}; DEF[id].f.forEach(f => { v[f.k] = f.def != null ? f.def : (f.op ? (Array.isArray(f.op[0]) ? f.op[0][0] : f.op[0]) : ''); }); return { t: id, v, nota: '' }; };
-    const adiciona = id => {
+    const novo = id => { const v = {}; DEF[id].f.forEach(f => { v[f.k] = f.def != null ? f.def : (f.op ? (() => { const o = opsDe(f); return Array.isArray(o[0]) ? o[0][0] : o[0]; })() : ''); }); return { t: id, v, nota: '' }; };
+    const adiciona = (id, modelo) => {
       const pos = sel >= 0 && sel < bl.length ? sel + 1 : bl.length, novos = [novo(id)];
+      if (modelo) novos[0].v.modelo = modelo;
       if (DEF[id].abre) novos.push(novo('fim'));          // já fecha o bloco: os passos de dentro entram entre os dois
       bl.splice(pos, 0, ...novos); sel = pos; pal.hidden = true; desenha(pos);
     };
 
-    raiz.querySelectorAll('.bl-add').forEach(b => b.onclick = () => { b.parentElement.after(pal); pal.hidden = !pal.hidden; });
+    raiz.querySelectorAll('.bl-add').forEach(b => b.onclick = () => { pal.innerHTML = paletaHtml(); b.parentElement.after(pal); pal.hidden = !pal.hidden; });
     $q('.bl-limpar').onclick = () => { if (bl.length && !confirm('Apagar todos os passos da tela?')) return; bl = []; sel = -1; desenha(); };
-    pal.addEventListener('click', e => { const a = e.target.closest('[data-add]'); if (a) adiciona(a.dataset.add); });
+    pal.addEventListener('click', e => { const a = e.target.closest('[data-add]'); if (a) adiciona(a.dataset.add, a.dataset.modelo); });
     lista.addEventListener('click', e => {
       const a = e.target.closest('[data-act]'); if (!a) return;
       const i = +a.dataset.i, act = a.dataset.act;
@@ -278,12 +409,14 @@
     return { deTexto: t => { bl = blocosDeTexto(t); sel = -1; desenha(); }, paraTexto: () => blocosParaTexto(bl) };
   }
 
+  let canalCel = null, timerRem = 0;                           // canal do celular (um só; fecha ao sair da tela)
+
   // ---------- Tela da gaveta Ferramentas ----------
   CFO.modules.autonf = Object.assign(body => {
     const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
     const mesKey = s => { const m = CFO.norm(s).match(/^([a-z]+)(\d{4})$/), i = m ? MESES.indexOf(m[1]) : -1; return i >= 0 ? m[2] + String(i + 1).padStart(2, '0') : '000000'; };
     const reqs = () => CFO.store.get('requisicoes', []).slice().sort((a, b) => mesKey(b.mes).localeCompare(mesKey(a.mes)) || String(b.id).localeCompare(String(a.id), 'pt-BR', { numeric: true }));
-    let sel = null;
+    let selIds = [];                                          // requisições marcadas, na ordem em que foram marcadas
     body.innerHTML = `<div class="nf">
       <div class="nf-box"><h3>1) Agente no computador</h3>
         <div class="nf-st" id="st"><i></i><span>Verificando...</span></div>
@@ -298,15 +431,22 @@
           <p><b>Programas e páginas:</b> <code>abrir "caminho do programa"</code> <code>abrir site "https://..."</code> <code>focar janela "Título"</code> <code>esperar janela "Título"</code> <code>esperar 2</code></p>
           <p><b>Seus próprios campos:</b> <code>definir numero = 123</code> · <code>perguntar "Qual o número?" em numero</code> (abre uma caixinha, você digita na hora, e depois usa <code>{numero}</code>)</p>
           <p><b>Decisões e repetições:</b> <code>se produto sem codigo</code> · <code>se {campo} vazio</code> · <code>se {campo} for "x"</code> · <code>se {campo} contem "x"</code> ... <code>senao</code> ... <code>fim se</code> · <code>para cada produto</code> ... <code>fim para cada</code> · <code>repetir 3 vezes</code> ... <code>fim</code></p>
+          <p><b>Capturar para Bloco de Notas/PDF:</b> <code>capturar lista "Nome" de X1,Y1 ate X2,Y2</code> (clica no início, rola se pedir <code>rolar 3</code>, dá Shift+clique no fim e copia; ou <code>arrastar</code> em vez de rolar) · <code>gerar documento "Título" em "C:/pasta/arquivo" formato txt+pdf como tabela</code> (formato: <code>txt+pdf</code>, <code>txt</code> ou <code>pdf</code>; como: <code>tabela</code> ou <code>texto</code>; o .txt abre no Bloco de Notas). Pode usar <code>{requisicao}</code>, <code>{data}</code> etc. no título e no nome do arquivo. Não precisa de Word; precisa do agente versão 6.</p>
+          <p><b>Roteiros prontos (blocos):</b> no 🧩 Passo a passo, o grupo <b>🧱 Roteiros prontos</b> traz o Modelo da NF e cada roteiro que você salvou (<b>🧱 Salvar como bloco</b>). Ele entra como <b>um bloco só</b>; ao salvar, o texto dele é copiado para o roteiro entre as linhas <code># [roteiro ...]</code> e <code># [/roteiro]</code> (comentários que o agente ignora). Use <code>definir</code>/<code>perguntar</code> antes dele para dar valores aos campos.</p>
           <p><b>Outros:</b> <code>avisar "faça tal coisa e clique OK"</code> (pausa até você clicar OK) · <code>ignorar erros</code> · <code>parar</code></p></details>
         <textarea id="rt" spellcheck="false" placeholder="Ligue o agente para carregar o roteiro"></textarea>
         <div id="blw" hidden></div>
-        <div class="nf-row"><button id="sv">💾 Salvar roteiro</button><button id="md" class="ghost">📚 Modelos</button><button id="nv" class="ghost">☁️ Salvar na nuvem</button><button id="pp" class="ghost">🧩 Passo a passo</button></div></div>
+        <div class="nf-row"><button id="sv">💾 Salvar roteiro</button><button id="md" class="ghost">📚 Modelos</button><button id="nv" class="ghost">☁️ Salvar na nuvem</button><button id="sb" class="ghost">🧱 Salvar como bloco</button><button id="pp" class="ghost">🧩 Passo a passo</button></div></div>
       <div class="nf-box"><h3>3) Preencher uma nota</h3>
         <input id="q" type="search" placeholder="Digite o número da requisição...">
+        <div id="sels" hidden style="margin:.5rem 0;font-size:.9rem;line-height:1.5"></div>
         <div id="lst" style="margin-top:.5rem"></div>
-        <div class="nf-row"><button id="go" disabled>🤖 Preencher NF</button><button id="ts" class="ghost" disabled>🧪 Testar (sem clicar)</button></div>
-        <p style="margin-top:.8rem">Faça sempre o teste antes: ele mostra todos os passos com os dados da requisição, sem mexer no mouse.</p></div></div>`;
+        <div class="nf-row"><button id="go" disabled>🤖 Preencher NF</button><button id="ts" class="ghost" disabled>🧪 Testar (sem clicar)</button><button id="gr" hidden disabled>📱 ▶ Iniciar no PC</button><button id="tr" class="ghost" hidden disabled>📱 🧪 Testar no PC</button></div>
+        <p style="margin-top:.8rem">Faça sempre o teste antes: ele mostra todos os passos com os dados da requisição, sem mexer no mouse.</p></div>
+      <div class="nf-box"><h3>4) Controle remoto (celular → PC)</h3>
+        <p>Deixe o agente e esta tela abertos no <b>PC</b>. No <b>celular</b> você escolhe a requisição e toca em <b>Iniciar no PC</b>: quem executa é o PC.</p>
+        <div class="nf-row" style="margin-top:0"><button id="rp" class="ghost">💻 Este aparelho é o PC</button><button id="rc" class="ghost">📱 Este aparelho é o celular</button></div>
+        <div id="rem" style="margin-top:.7rem"></div></div></div>`;
     const $ = s => body.querySelector(s);
     // Passo a passo (blocos) <-> texto do roteiro. O que vale para salvar é sempre o texto gerado.
     let modoBl = false; const blk = criaBlocos($('#blw'));
@@ -372,7 +512,7 @@ dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
     $('#nv').onclick = async () => {
       const texto = textoAtual();
       if (!texto.trim()) return alert('Não há roteiro na tela para salvar.');
-      const nome = (prompt('Nome do modelo:', '') || '').trim(); if (!nome) return;
+      const nome = (prompt('Nome do modelo (ele também vira um bloco em "Roteiros prontos" no Passo a passo):', '') || '').trim(); if (!nome) return;
       const ls = modelos(), i = ls.findIndex(m => CFO.norm(m.nome) === CFO.norm(nome));
       if (i >= 0 && !confirm(`Já existe o modelo "${ls[i].nome}". Substituir?`)) return;
       const m = { id: i >= 0 ? ls[i].id : 'm' + Date.now().toString(36), nome, texto, criado: Date.now() };
@@ -383,25 +523,102 @@ dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
       bt.disabled = false; bt.textContent = '☁️ Salvar na nuvem';
       alert(ok ? `Modelo "${nome}" salvo e enviado para a nuvem.` : `Modelo "${nome}" salvo neste aparelho, mas não consegui confirmar o envio para a nuvem. Ele vai sozinho quando a conexão voltar (veja o botão ☁️ do topo).`);
     };
+    $('#sb').onclick = () => $('#nv').click();
+    const selecionadas = () => { const todas = reqs(); return selIds.map(id => todas.find(r => r.id === id)).filter(Boolean); };
+    const habilita = () => { $('#go').disabled = $('#ts').disabled = $('#gr').disabled = $('#tr').disabled = !selIds.length; };
     const lista = () => {
       const t = CFO.norm($('#q').value.trim()), todas = reqs();
       let v = t ? todas.filter(r => CFO.norm([r.id, r.contrato, r.contratoNome, r.sol].join(' ')).includes(t)).sort((x, y) => (CFO.norm(String(y.id)) === t) - (CFO.norm(String(x.id)) === t)).slice(0, 30) : todas.slice(0, 3);
-      if (!t && sel && !v.some(r => r.id === sel)) { const s0 = todas.find(r => r.id === sel); if (s0) v = [s0, ...v]; }   // a escolhida não some quando você limpa a busca
-      $('#lst').innerHTML = v.map(r => `<label class="nf-req${sel === r.id ? ' on' : ''}"><input type="radio" name="rq" value="${esc(r.id)}"${sel === r.id ? ' checked' : ''}><span><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<small>${esc(r.sol)} · ${esc(r.mes)}</small></span></label>`).join('') || '<p>Nenhuma requisição encontrada.</p>';
-      if (!t && todas.length > 3) $('#lst').insertAdjacentHTML('beforeend', '<p style="margin:.4rem 0 0;font-size:.85em;opacity:.7">Mostrando só as 3 últimas. Para outra, digite o número dela na busca.</p>');
-      $('#lst').querySelectorAll('input').forEach(i => i.onchange = () => { sel = i.value; $('#go').disabled = $('#ts').disabled = false; lista(); });
+      if (!t) { const extras = selecionadas().filter(r => !v.some(x => x.id === r.id)); v = [...extras, ...v]; }   // as marcadas não somem quando você limpa a busca
+      $('#lst').innerHTML = v.map(r => `<label class="nf-req${selIds.includes(r.id) ? ' on' : ''}"><input type="checkbox" value="${esc(r.id)}"${selIds.includes(r.id) ? ' checked' : ''}><span><b>${esc(r.id)}</b> · Contrato ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<small>${esc(r.sol)} · ${esc(r.mes)}</small></span></label>`).join('') || '<p>Nenhuma requisição encontrada.</p>';
+      if (!t && todas.length > 3) $('#lst').insertAdjacentHTML('beforeend', '<p style="margin:.4rem 0 0;font-size:.85em;opacity:.7">Mostrando só as 3 últimas. Para outra, digite o número dela na busca. Pode marcar várias: os itens somam numa NF só.</p>');
+      $('#lst').querySelectorAll('input').forEach(i => i.onchange = () => { selIds = i.checked ? [...selIds.filter(x => x !== i.value), i.value] : selIds.filter(x => x !== i.value); habilita(); lista(); });
+      const sl = selecionadas(), el = $('#sels'); el.hidden = !sl.length;
+      el.innerHTML = sl.length ? (sl.length > 1 ? `<b>${sl.length} requisições numa NF só:</b> ` : '<b>Marcada:</b> ') + esc(sl.map(r => r.id).join(', ')) + ` <button type="button" id="lmp" class="ghost" style="margin-left:.4rem;padding:.2rem .6rem;font-size:.8rem">Limpar</button>` : '';
+      if (sl.length) $('#lmp').onclick = () => { selIds = []; habilita(); lista(); };
     };
     let tm = 0; $('#q').oninput = () => { clearTimeout(tm); tm = setTimeout(lista, 200); };
-    const atual = () => reqs().find(r => r.id === sel);
-    $('#go').onclick = () => atual() && rodar(atual(), false); $('#ts').onclick = () => atual() && rodar(atual(), true);
+    const juntada = () => { const rs = selecionadas(); return rs.length ? combinar(rs) : null; };
+    $('#go').onclick = () => { const r = juntada(); if (r) rodar(r, false); }; $('#ts').onclick = () => { const r = juntada(); if (r) rodar(r, true); };
     lista(); status();
+
+    // ----- Controle remoto (tela) -----
+    const rem = $('#rem'), fmt = c => String(c || '').replace(/(.{4})(?=.)/g, '$1-').toUpperCase(), limpa = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    let pongEm = 0, pcInfo = {}, ultEstado = {}; const pend = new Map();
+    const fechaCel = () => { if (canalCel) { canalCel.fechar(); canalCel = null; } clearInterval(timerRem); };
+    const pintaSt = () => {
+      const e = $('#rst'); if (!e) return; const c = remCfg();
+      let cls = '', t;
+      if (c.papel === 'pc') { const l = recep && recep.ligado(); cls = c.receptor && l ? 'ok' : 'av'; t = !c.receptor ? 'Receptor DESLIGADO: o celular não consegue mandar comandos.' : l ? 'Receptor ligado, esperando o celular.' : 'Conectando à nuvem...'; }
+      else if (!canalCel || !canalCel.ligado()) t = 'Sem conexão com a nuvem.';
+      else if (Date.now() - pongEm > 11000) t = 'O PC não responde. Confira se a aba do sistema está aberta no PC com o receptor ligado.';
+      else if (!pcInfo.agente) { cls = 'av'; t = 'PC online, mas o agente está desligado (iniciar.bat).'; }
+      else if (!pcInfo.token) { cls = 'av'; t = 'PC online, mas falta colar o token no PC.'; }
+      else { cls = 'ok'; t = 'PC online e pronto.'; }
+      e.className = 'nf-st ' + cls; e.lastElementChild.textContent = t;
+    };
+    const pedir = (t, ids) => new Promise((res, rej) => {
+      if (!canalCel || !canalCel.ligado()) return rej(new Error('Sem conexão com a nuvem. Tente de novo em instantes.'));
+      const n = nonce(), to = setTimeout(() => { pend.delete(n); rej(new Error('O PC não respondeu. Confira se a aba do sistema está aberta no PC, com o receptor ligado.')); }, 8000);
+      pend.set(n, { res: x => { clearTimeout(to); res(x); }, rej: e => { clearTimeout(to); rej(e); } });
+      canalCel.enviar('nf-cmd', { t, id: ids && ids[0], ids, n });
+    });
+    const mostraEstado = p => {
+      ultEstado = p; const lg = $('#rlog'), ps = $('#rps'), pa = $('#rpa'); if (!lg) return;
+      lg.hidden = false; lg.textContent = (p.log || []).join('\n'); lg.scrollTop = lg.scrollHeight;
+      pa.hidden = !p.rodando; ps.hidden = !p.rodando; ps.textContent = p.pausado ? '▶ Continuar' : '⏸ Pausar';
+    };
+    const desenhaRem = () => {
+      const c = remCfg(); fechaCel();
+      $('#rp').className = c.papel === 'pc' ? '' : 'ghost'; $('#rc').className = c.papel === 'cel' ? '' : 'ghost';
+      $('#gr').hidden = $('#tr').hidden = !(c.papel === 'cel' && c.codigoCel);
+      if (c.papel === 'pc') {
+        rem.innerHTML = `<p>Este aparelho é o <b>PC</b>: ele executa o que o celular mandar. Mantenha esta aba aberta (sem fechar o navegador) e o <code>iniciar.bat</code> ligado.</p>
+          <div class="nf-st" id="rst"><i></i><span></span></div>
+          <p style="margin-top:.7rem">No celular, escolha “Este aparelho é o celular” e digite o código:</p>
+          <p><b style="font-family:ui-monospace,Consolas,monospace;font-size:1.2rem;letter-spacing:.06em">${esc(fmt(c.codigoPc))}</b></p>
+          <div class="nf-row"><button id="rlig" class="ghost">${c.receptor ? '⏹ Desligar receptor' : '▶ Ligar receptor'}</button><button id="rnov" class="ghost">🔑 Gerar novo código</button></div>`;
+        $('#rlig').onclick = () => { setRem({ receptor: !remCfg().receptor }); ligaReceptor(); desenhaRem(); };
+        $('#rnov').onclick = () => { if (!confirm('Gerar um novo código? Os celulares pareados terão que digitar o código novo.')) return; setRem({ codigoPc: novoCodigo() }); ligaReceptor(); desenhaRem(); };
+        timerRem = setInterval(() => { if (!rem.isConnected) return fechaCel(); pintaSt(); }, 2000); pintaSt();
+      } else if (c.papel === 'cel' && !c.codigoCel) {
+        rem.innerHTML = `<p>Digite o código que aparece no PC (Automação de NF > “Este aparelho é o PC”).</p>
+          <input id="rcod" type="search" placeholder="xxxx-xxxx-xxxx" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="nf-row"><button id="rok">Conectar</button></div>`;
+        $('#rok').onclick = () => { const v = limpa($('#rcod').value); if (v.length !== 12) return alert('O código tem 12 letras/números (ex.: abcd-efgh-jkmn).'); setRem({ codigoCel: v }); desenhaRem(); };
+      } else if (c.papel === 'cel') {
+        rem.innerHTML = `<div class="nf-st" id="rst"><i></i><span>Procurando o PC...</span></div>
+          <div class="nf-row"><button id="rps" class="ghost" hidden>⏸ Pausar</button><button id="rpa" class="ghost danger" hidden>⏹ Parar</button><button id="rtc" class="ghost">🔑 Trocar código</button></div>
+          <pre class="nf-log" id="rlog" hidden></pre>`;
+        $('#rtc').onclick = () => { setRem({ codigoCel: '' }); desenhaRem(); };
+        $('#rpa').onclick = () => pedir('parar').catch(e => alert(e.message));
+        $('#rps').onclick = () => pedir(ultEstado.pausado ? 'continuar' : 'pausar').catch(e => alert(e.message));
+        pongEm = 0; pcInfo = {};
+        canalCel = abreCanal(c.codigoCel, (ev, p) => {
+          if (ev !== 'nf-res' || !p) return;
+          if (p.t === 'pong') { pongEm = Date.now(); pcInfo = p; } else if (p.t === 'estado') { pongEm = Date.now(); mostraEstado(p); }
+          const f = p.n && pend.get(p.n); if (f) { pend.delete(p.n); if (p.t === 'erro') f.rej(new Error(p.msg)); else if (p.t === 'ok') f.res(p); }
+        }, () => { setTimeout(() => canalCel && canalCel.enviar('nf-cmd', { t: 'ping', n: nonce() }), 600); });
+        timerRem = setInterval(() => { if (!rem.isConnected) return fechaCel(); if (canalCel) canalCel.enviar('nf-cmd', { t: 'ping', n: nonce() }); pintaSt(); }, 4000); pintaSt();
+      } else rem.innerHTML = '<p style="margin:0">Escolha acima qual é este aparelho.</p>';
+    };
+    $('#rp').onclick = () => { const c = remCfg(); setRem({ papel: 'pc', codigoPc: c.codigoPc || novoCodigo(), receptor: c.receptor === undefined ? true : c.receptor }); ligaReceptor(); desenhaRem(); };
+    $('#rc').onclick = () => { setRem({ papel: 'cel' }); ligaReceptor(); desenhaRem(); };
+    const remoto = async simular => {
+      const rs = selecionadas(); if (!rs.length) return; const r = combinar(rs);
+      if (!simular && !confirm(`Iniciar no PC a nota da ${r.id}?\n\nContrato ${r.contrato}.${avisoJuntas(rs)}\nO PC vai controlar o mouse e o teclado. Para interromper: botão ⏹ Parar aqui, ou mouse no canto superior esquerdo do PC.`)) return;
+      try { await pedir(simular ? 'test' : 'play', rs.map(x => x.id)); alert(simular ? 'Teste iniciado no PC (não clica nem digita).' : 'Iniciado no PC. O andamento aparece aqui embaixo.'); }
+      catch (e) { alert(e.message); }
+    };
+    $('#gr').onclick = () => remoto(false); $('#tr').onclick = () => remoto(true);
+    desenhaRem();
   }, { cfg: { title: 'Automação de NF', hints: [] } });
 
   // ---------- Baixar o agente (pasta do agente em um .zip) ----------
   function baixarAgente() {
     const ir = () => CFO.baixarAgenteNF();
     if (CFO.baixarAgenteNF) return ir();
-    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261102a'; sc.onload = ir;
+    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261104b'; sc.onload = ir;
     sc.onerror = () => alert('Não achei o arquivo automacao-nf-pacote.js. Confira se ele foi enviado ao GitHub junto com os outros.');
     document.head.append(sc);
   }

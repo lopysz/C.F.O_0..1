@@ -68,3 +68,32 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - Bloco de notas e Agenda abrem numa janela no meio da tela (não cobre tudo). Salvam sozinhos, um por PERFIL (`notas_<perfil>` e `agenda_<perfil>`), e vão para a nuvem pelo mesmo caminho dos outros dados (almoxarifado: Supabase principal | outros setores: pasta do setor).
 - Perfil sem acesso ao assistente continua vendo as bolinhas de notas e agenda.
 - Para desfazer: apague `notas-agenda.js` e a linha dele no `index.html` (sobra só o chat).
+
+## Capturar lista de outra tela -> Bloco de Notas -> PDF (agente versão 6)
+- `automacao-nf.js` e `automacao-nf-pacote.js` ATUALIZADOS (+ `index.html` com a versão do script trocada). Baixe o agente de novo ("Baixar agente") e troque a pasta `agente-windows`.
+- Em **🧩 Passo a passo** há o grupo **📥 Capturar para Bloco de Notas/PDF**:
+  - **Capturar uma lista de outra tela**: nome, X,Y do início, X,Y do fim, rolar (lista maior que a tela) e modo (Shift+clique ou arrastar). Texto: `capturar lista "Nome" de X1,Y1 ate X2,Y2 [rolar N | arrastar]`.
+  - **Gerar o documento**: título, onde salvar, formato (`txt+pdf`, `txt`, `pdf`) e como mostrar (`tabela` = colunas alinhadas, `texto`). Texto: `gerar documento "Título" em "C:/pasta/arquivo" formato txt+pdf como tabela`.
+- O `.txt` abre sozinho no Bloco de Notas; o PDF é gerado pelo próprio agente (texto simples, fonte Courier). Não precisa de Word.
+- Pode capturar várias listas (de telas diferentes) e gerar um documento só no fim. Aceita `{requisicao}`, `{data}` etc. no título/arquivo. Sem caminho, salva em `documentos` ao lado do agente. Não use `#` no título/caminho.
+
+## Controle remoto: iniciar a automação pelo celular, executando no PC
+- `automacao-nf.js` ATUALIZADO (+ versão do script no `index.html`). Não muda o agente: se o agente já é o versão 6 (ou o 3+ para roteiros comuns), nada precisa ser baixado de novo.
+- Usa o Realtime do Supabase (o mesmo do "Quem está online"); nada é gravado em banco. Canal protegido por um código de 12 letras/números.
+- **No PC** (Ferramentas > Automação de NF > 4) Controle remoto): toque em "Este aparelho é o PC". Aparece o código. Deixe o `iniciar.bat` ligado, o token colado e a aba do sistema aberta (desative a "suspensão de abas" do navegador, se houver).
+- **No celular**: mesma tela, "Este aparelho é o celular", digite o código uma vez. Escolha a requisição normalmente e toque em **📱 ▶ Iniciar no PC** (ou **📱 🧪 Testar no PC**). Aparecem o status do PC, o andamento e os botões Pausar/Continuar/Parar.
+- O celular só envia o número da requisição e o comando; os itens vêm dos dados do PC (por isso o PC precisa estar sincronizado ☁️). O mesmo comando nunca roda duas vezes. Se o PC não responder em 8 s, o celular avisa.
+- Para bloquear: "Desligar receptor" no PC, ou "Gerar novo código".
+
+## Roteiro salvo vira um bloco (🧱 Roteiros prontos)
+- `automacao-nf.js` ATUALIZADO (+ versão do script no `index.html`). O agente NÃO muda: ele continua lendo só texto comum.
+- Monte um roteiro, toque em **🧱 Salvar como bloco** (ou ☁️ Salvar na nuvem) e dê um nome. No 🧩 Passo a passo, **＋ Adicionar passo > 🧱 Roteiros prontos** mostra o Modelo da NF e cada roteiro salvo: um toque coloca o roteiro inteiro como **um bloco só**, que dá para subir, descer, copiar e apagar como os outros.
+- Ao salvar, o texto do roteiro é copiado para dentro do roteiro final, entre `# [roteiro ID] Nome` e `# [/roteiro]` (comentários que o agente ignora). Ao reabrir, essas linhas voltam a ser um bloco só.
+- Se você mudar o roteiro salvo, o bloco usa a versão nova no próximo Salvar roteiro. Se apagar o roteiro salvo, vale a cópia que já está no roteiro (o editor avisa).
+- Roteiro dentro de roteiro é permitido: as marcações são achatadas (sem aninhar). O editor avisa se o roteiro usado deixa um bloco aberto (falta Fim) ou tem Fim sobrando.
+
+## Várias requisições numa NF só
+- `automacao-nf.js` ATUALIZADO (+ versão do script no `index.html`). O agente não muda.
+- No passo 3) da Automação de NF a lista agora tem **caixinhas**: marque quantas requisições quiser. Os itens iguais (mesmo item e tamanho) são **somados** e a NF é preenchida uma vez só. Itens com quantidade aprovada 0 ficam de fora, como sempre.
+- Com mais de uma marcada, `{requisicao}` vira `RQ1 + RQ2`, `{nome}`/`{mes}`/`{motivo}` juntam os textos diferentes (separados por ` / `) e `{contrato}` junta os contratos diferentes (` + `). Se os contratos forem diferentes, a confirmação avisa.
+- Funciona igual no **📱 Iniciar no PC** (o celular manda a lista de requisições; o PC junta). Marcar só uma requisição funciona exatamente como antes.
