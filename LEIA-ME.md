@@ -128,3 +128,6 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - Configurações > Aparência > **Logo da empresa**: importe um PNG (ou JPG). Ele vale no lugar da logo padrão em tudo que é impresso/exportado: PDF das telas e relatórios, impressão da requisição e Excel.
 - A imagem é reduzida (máx. 500 px), mantém o fundo transparente e fica em 'logo_empresa' (sincroniza com a nuvem). "Voltar à logo padrão" desfaz.
 - A logo do C.F.O dentro do sistema (menu, login) não muda. `CFO.LOGO` agora devolve a logo que vale (própria ou padrão); a padrão ficou em `CFO.LOGO_PADRAO`.
+
+## Código na NF sem os 2 zeros do início (05/11/2026)
+- A Automação de NF lança o código sem os 2 primeiros zeros: 0012 -> 12, 00105 -> 105. Vale para o Código NF e para o Código SG (quando o NF está vazio). A planilha e as impressões continuam mostrando o código completo.

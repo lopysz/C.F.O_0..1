@@ -32,7 +32,9 @@
     // Linha da Planilha EPI do item: pelo código do WL (quando a requisição trouxe) e, se não bater, pelo nome
     const linha = i => { let m = achar(i.item); if (i.cod && (!m || CFO.norm(m.codigo) !== CFO.norm(i.cod))) m = porCod.get(CFO.norm(i.cod)) || m; return m; };
     // Código lançado na NF = "Código NF" da planilha; se ainda não foi preenchido, usa o código normal (como era antes)
-    const codNf = m => m ? String(m.codigoNf || m.codigo || '').trim() : '';
+    // Na NF o código entra SEM os 2 zeros do início (0012 -> 12, 0105 -> 105); se o código tiver só zeros ou for curto, não mexe
+    const semZeros = c => c.replace(/^00(?=.)/, '');
+    const codNf = m => m ? semZeros(String(m.codigoNf || m.codigo || '').trim()) : '';
     r.itens.filter(i => i.qa > 0).forEach(i => {
       const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = mapa.get(k) || { item: i.item, tam: i.tam || '', qa: 0, preco: i.preco, codigo: codNf(linha(i)) };
       x.qa += i.qa; mapa.set(k, x);
