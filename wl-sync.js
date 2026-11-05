@@ -13,6 +13,7 @@
   const txtNome = v => { if (v && typeof v === 'object') v = pick(v, ['name', 'full_name', 'nome']); return v === undefined || v === null || typeof v === 'object' ? '' : String(v).trim(); };
   const achaFunc = o => txtNome(pick(o, ['employee_name', 'collaborator_name', 'worker_name']));
   const achaCargo = o => txtNome(pick(o, ['function_name', 'employee_function']));
+  const parseContrato = s => { s = String(s || '').trim(); const m = s.match(/^(\d+)\s*[-–]?\s*(.*)$/); return m ? { num: m[1], nome: m[2].trim() } : { num: s, nome: '' }; };
   const hdr = { apikey: C.key, Authorization: 'Bearer ' + C.key };
 
   // Lê uma tabela inteira do WL, de 1000 em 1000 (limite do Supabase por pedido)
