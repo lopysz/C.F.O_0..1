@@ -8,17 +8,11 @@
 
   const pick = (o, ks) => { for (const k of ks) if (o && o[k] !== undefined && o[k] !== null && o[k] !== '') return o[k]; return undefined; };
   const num = v => v === undefined ? 0 : CFO.toNum(String(v));
-  // Nome do funcionário dono do EPI: não sei o nome exato da coluna no WL, então tenta nomes conhecidos e depois qualquer chave que lembre funcionário/colaborador.
-  const FUNC_CHAVES = ['employee_name', 'collaborator_name', 'worker_name', 'staff_name', 'recipient_name', 'beneficiary_name', 'employee', 'collaborator', 'worker', 'recipient', 'beneficiary', 'colaborador', 'funcionario', 'nome_funcionario', 'nome_colaborador'];
-  const FUNC_RE = /employee|colaborador|collaborator|funcionario|worker|recipient|beneficiar|staff/i, FUNC_NAO = /id$|_id|code|codigo|count|qtd|quant|date|data|size|number|email|phone|role|cargo|sector|setor|department/i;
+  // Funcionário dono do EPI. Campos reais do WL: item.employee_name (cargo: function_name / employee_function) e, na requisição, employee_name.
+  // Só usa campos de NOME (nunca CPF nem cargo no lugar do nome).
   const txtNome = v => { if (v && typeof v === 'object') v = pick(v, ['name', 'full_name', 'nome']); return v === undefined || v === null || typeof v === 'object' ? '' : String(v).trim(); };
-  const achaFunc = o => {
-    if (!o || typeof o !== 'object') return '';
-    for (const k of FUNC_CHAVES) { const t = txtNome(o[k]); if (t) return t; }
-    for (const k of Object.keys(o)) if (FUNC_RE.test(k) && !FUNC_NAO.test(k)) { const t = txtNome(o[k]); if (t) return t; }
-    return '';
-  };
-  const parseContrato = s => { s = String(s || '').trim(); const m = s.match(/^(\d+)\s*[-–]?\s*(.*)$/); return m ? { num: m[1], nome: m[2].trim() } : { num: s, nome: '' }; };
+  const achaFunc = o => txtNome(pick(o, ['employee_name', 'collaborator_name', 'worker_name']));
+  const achaCargo = o => txtNome(pick(o, ['function_name', 'employee_function']));
   const hdr = { apikey: C.key, Authorization: 'Bearer ' + C.key };
 
   // Lê uma tabela inteira do WL, de 1000 em 1000 (limite do Supabase por pedido)
@@ -44,7 +38,7 @@
     if (CFO.espaco) return { erro: 'Sincronização desligada neste perfil (outro setor).' };
     if (rodando) return { erro: 'Já está sincronizando.' };
     rodando = true;
-    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, status: {}, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, lista: [], amostraItem: null, amostraCat: null, amostraReq: null, comFunc: 0, semFunc: 0 };
+    const t0 = Date.now(), res = { ok: false, add: 0, upd: 0, status: {}, iguais: 0, ignoradas: 0, canc: 0, naoEpi: 0, tipos: {}, semNome: 0, semPreco: 0, lista: [], amostraItem: null, amostraCat: null, amostraReq: null, comFunc: 0, semFunc: 0, semFuncComId: 0 };
     try {
       const desde = completa ? '' : '&date=gte.' + ISO(new Date(Date.now() - C.diasAuto * 864e5));
       const [reqs, cat] = await Promise.all([ler(C.tabela, desde + '&order=created_at.desc,id.asc'), catalogo(completa)]);
@@ -76,10 +70,10 @@
           if (!nome || nome === String(it.epi_code ?? '').trim()) res.semNome++;
           if (!preco) res.semPreco++;
           const jaTem = new RegExp('\\(' + tam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\)\\s*$', 'i').test(nome);
-          const func = achaFunc(it) || achaFunc(w);
-          if (func) res.comFunc = (res.comFunc || 0) + 1; else res.semFunc = (res.semFunc || 0) + 1;
+          const func = achaFunc(it) || achaFunc(w), cargo = achaCargo(it) || achaCargo(w);
+          if (func) res.comFunc++; else { res.semFunc++; if (it.employee_id || w.employee_id) res.semFuncComId++; }
           const novoIt = { item: nome + (tam && ntam !== 'na' && !jaTem ? ` (${tam})` : ''), tam: tam || 'N/A', qs: qs === undefined ? q : num(qs), qa: qa === undefined ? q : num(qa), preco };
-          if (func) novoIt.func = func;
+          if (func) { novoIt.func = func; if (cargo) novoIt.cargo = cargo; }
           return novoIt;
         });
         const novo = { id, sol: String(w.requester || '').trim(), motivo: String(w.motive || '').trim(), contrato: c.num, contratoNome: CFO.contratoNome(c.num, c.nome), mes, itens, origem: 'WL' };
@@ -124,7 +118,7 @@
         + (r.status && Object.keys(r.status).length ? `<p class="log">Status das requisições lidas: ${esc(Object.entries(r.status).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ': ' + v).join(' · '))}</p>` : '')
         + (r.lista && r.lista.length ? `<h4>Últimas ${r.lista.length} ignoradas</h4><div class="log">${r.lista.map(x => `<p><b>${esc(x.id)}</b>${x.data ? ' · ' + esc(String(x.data).slice(0, 10).split('-').reverse().join('/')) : ''}<br>${esc(x.motivo)}</p>`).join('')}</div>` : '')
         + (r.semNome || r.semPreco ? `<p class="log down">Atenção: ${r.semNome} item(ns) sem nome e ${r.semPreco} sem preço. Campos dos itens no WL: ${esc(r.amostraItem || '-')} · Campos do catálogo: ${esc(r.amostraCat || '-')}. Me mande esses nomes para eu ajustar.</p>` : '')
-        + (r.semFunc ? `<p class="log down">Funcionário: ${r.comFunc} item(ns) com nome e ${r.semFunc} sem. Se vier zero, me mande os campos — itens: ${esc(r.amostraItem || '-')} · requisição: ${esc(r.amostraReq || '-')}.</p>` : '');
+        + (r.semFunc ? `<p class="log down">Funcionário: ${r.comFunc} item(ns) com nome e ${r.semFunc} sem nome no WL (${r.semFuncComId} deles têm só o código do funcionário).</p>` : '');
     }
     // Diagnóstico: lista as tabelas legíveis do WL (colunas, meses com dados e exemplos). Não grava nada.
     const cur = (v, n = 40) => { v = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''); return v.length > n ? v.slice(0, n - 1) + '…' : v; };

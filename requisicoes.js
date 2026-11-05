@@ -15,7 +15,6 @@
   const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   const mesKey = s => { const m = CFO.norm(s).match(/^([a-z]+)(\d{4})$/), i = m ? MESES.indexOf(m[1]) : -1; return i >= 0 ? m[2] + String(i + 1).padStart(2, '0') : '000000'; };
   const parseContrato = s => { s = String(s || '').trim(); const m = s.match(/^(\d+)\s*[-–]?\s*(.*)$/); return m ? { num: m[1], nome: m[2].trim() } : { num: s, nome: '' }; };
-  const temFunc = r => r.itens.some(i => i.func);   // nome do funcionário vem do WL (sincronização)
   const total = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
 
   const score = data => CFO.findHeader(data, COLS, 4).n;   // só reconhece se achar 4+ colunas do modelo
@@ -39,11 +38,11 @@
   };
 
   // Impressão / PDF da requisição (modelo "Relatório de Requisição"): cabeçalho com logo, dados, resumo dos itens aprovados e aviso.
-  // Não mostra nome de colaborador - só código, item, tamanho e quantidade.
+  // Só na impressão: embaixo de cada item vai o nome do funcionário (vem do WL; não aparece em nenhuma tela do sistema).
   const relatorio = r => {
     const achar = CFO.casarEpi(CFO.store.get('epi', []));
     const resumo = new Map();
-    r.itens.filter(i => i.qa > 0).forEach(i => { const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = resumo.get(k) || { item: i.item, tam: i.tam || 'N/A', qa: 0 }; x.qa += i.qa; resumo.set(k, x); });
+    r.itens.filter(i => i.qa > 0).forEach(i => { const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = resumo.get(k) || { item: i.item, tam: i.tam || 'N/A', qa: 0, fun: new Map() }; x.qa += i.qa; if (i.func) x.fun.set(i.func, (x.fun.get(i.func) || 0) + i.qa); resumo.set(k, x); });
     const linhas = [...resumo.values()], vS = r.itens.reduce((a, i) => a + i.qs * CFO.preco(i), 0);
     const card = (t, v, cls = '') => `<div class="rq-c"><small>${t}</small><b class="${cls}">${v}</b></div>`;
     const html = `<style>
@@ -57,6 +56,7 @@
       .rq-box{border:1px solid #058a5b;border-radius:8px;padding:10px 12px;margin-bottom:14px}.rq-box h2{margin:0 0 8px;font-size:11px;color:#058a5b;text-transform:uppercase}
       .rq table{width:100%;border-collapse:collapse;font-size:11px}.rq th{background:#f4f6fa;border:1px solid #cbd5e1;padding:8px;font-size:9px;text-transform:uppercase}
       .rq td{border:1px solid #cbd5e1;padding:10px 8px;text-align:center;white-space:normal}.rq td.l{text-align:left;font-weight:700}.rq td.q{font-weight:700;color:#058a5b;font-size:14px}
+      .rq-fn{font-weight:400;font-size:9px;color:#475569;margin-top:3px}
       .rq tr{break-inside:avoid}
       .rq-av{border:1px solid #e5646b;background:#fdf0f0;color:#b91c1c;border-radius:8px;padding:12px;text-align:center;font-weight:700;font-size:11px;text-transform:uppercase}
       .rq-ft{margin-top:24px;border-top:4px solid #0f172a}
@@ -72,7 +72,7 @@
       </div>
       <div class="rq-box"><h2>Quadro de resumo total de itens aprovados</h2>
         <table><thead><tr><th>Código</th><th>Item / Descrição</th><th>Tamanho</th><th>Total aprovado</th></tr></thead><tbody>
-        ${linhas.map(x => `<tr><td>${esc((achar(x.item) || {}).codigo || '-')}</td><td class="l">${esc(x.item)}</td><td>${esc(x.tam)}</td><td class="q">${x.qa}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum item aprovado</td></tr>'}
+        ${linhas.map(x => `<tr><td>${esc((achar(x.item) || {}).codigo || '-')}</td><td class="l">${esc(x.item)}${x.fun.size ? `<div class="rq-fn">${[...x.fun].map(([n, q]) => esc(n) + (q > 1 ? ' (' + q + ')' : '')).join(' · ')}</div>` : ''}</td><td>${esc(x.tam)}</td><td class="q">${x.qa}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum item aprovado</td></tr>'}
         </tbody></table></div>
       <div class="rq-av">⚠ Atenção: você tem o prazo de 5 dias para retirar. Se não retirar, o produto irá voltar para o estoque. Obrigado.</div>
       <div class="rq-ft"></div>
@@ -112,7 +112,7 @@
     // Lê tudo do armazenamento UMA vez (e quando importar/apagar); digitar na busca só filtra o que já está na memória
     function carrega() {
       base = all(); meta.clear();
-      base.forEach(r => meta.set(r, { t: CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item + ' ' + (i.func || ''))].join(' ')), tot: total(r), qt: qtd(r) }));
+      base.forEach(r => meta.set(r, { t: CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item)].join(' ')), tot: total(r), qt: qtd(r) }));
       CFO.periodo.fill(body, base.map(r => ({ mes: CFO.regras.texto(r) }))); CFO.motivo.fill(body, base);
       indexaFotos(); render();
     }
@@ -154,9 +154,9 @@
       CFO.open('Requisição ' + r.id, b => {
         b.innerHTML = `<div class="card" style="margin-bottom:1rem"><b style="font-size:1.1rem">${esc(r.id)}</b>
           <p class="log">Contrato: ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>Data: ${esc(r.mes)}<br>Solicitante: ${esc(r.sol)}<br>Motivo: ${esc(r.motivo)}${negs()[r.id] ? `<br><b style="color:#e74c3c">🚫 NEGADA em ${fmtDH(negs()[r.id])}</b>` : ''}${(x => rets()[r.id] ? `<br>Retirada: ✔ ${fmtDH(rets()[r.id])} (marcada manualmente)` : x ? `<br>Retirada: ${x.ok === x.total ? '✔ ' + (fmtDH(x.ts) || 'retirada') : x.ok ? 'parcial (' + x.ok + ' de ' + x.total + ' fotos)' : 'aguardando'}` : '')(retirada(r))}</p></div>
-          <div class="tw"><table><thead><tr><th>Item</th>${temFunc(r) ? '<th>Funcionário</th>' : ''}<th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
-          ${r.itens.map(i => `<tr><td>${esc(i.item)}</td>${temFunc(r) ? `<td>${esc(i.func || '-')}</td>` : ''}<td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(CFO.preco(i))}</td><td>${R$(i.qa * CFO.preco(i))}</td></tr>`).join('')}
-          <tr><th>Totais</th>${temFunc(r) ? '<th></th>' : ''}<th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
+          <div class="tw"><table><thead><tr><th>Item</th><th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
+          ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(CFO.preco(i))}</td><td>${R$(i.qa * CFO.preco(i))}</td></tr>`).join('')}
+          <tr><th>Totais</th><th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
           <div class="bar" style="margin-top:1rem"><button id="prn">🖨 Imprimir / PDF</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="del" class="ghost danger">Excluir requisição</button>' : ''}</div>`;
         b.querySelector('#prn').onclick = () => relatorio(r);
         (b.querySelector('#del') || {}).onclick = () => {

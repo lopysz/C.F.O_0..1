@@ -106,7 +106,6 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - Cadastro alterado depois reflete sozinho nas requisições antigas (não precisa reimportar).
 
 ## Nome do funcionário vindo do WL (04/11/2026)
-- `wl-sync.js`: a sincronização procura o nome do funcionário em cada item do WL (colunas conhecidas como employee_name/collaborator_name... e, se não achar, qualquer coluna com "employee/colaborador/funcionario/worker/recipient"). Salva em `item.func`.
-- `requisicoes.js`: o detalhe da requisição ganha a coluna "Funcionário" (só aparece quando há nome) e a busca passa a achar pelo nome.
-- Impressão/PDF da requisição continua SEM nome de colaborador (como era antes).
-- Depois de trocar os arquivos: Ferramentas > Sincronizar WL > rodar a sincronização COMPLETA para preencher as requisições antigas. Se aparecer "Funcionário: 0 com nome", o aviso mostra os campos do WL para ajustar.
+- `wl-sync.js`: lê `employee_name` (item, senão requisição) e salva em `item.func` (e o cargo em `item.cargo`). CPF não é lido.
+- O nome NÃO aparece em nenhuma tela nem na busca. Só aparece na IMPRESSÃO/PDF da requisição (`requisicoes.js`), em letra pequena embaixo de cada item (com a quantidade entre parênteses quando for mais de 1).
+- Depois de trocar os arquivos: Ferramentas > Sincronizar WL > sincronização COMPLETA para preencher as requisições antigas. Itens sem nome no WL imprimem sem nome embaixo.
