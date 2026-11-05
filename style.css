@@ -704,3 +704,7 @@ input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user
 .tw td input.gi,.tw td select.gi{width:100%;min-width:5rem;padding:.3rem .45rem;border-radius:8px;font-size:.82rem}
 .tw td input.gi[data-k=item]{min-width:15rem}
 #gear{font-size:1.1rem;padding:.3rem .7rem}
+
+/* Configurações > Aparência: logo da empresa */
+.cf-logo{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--line)}.cf-logo h4{margin:0 0 .2rem}
+.cf-logo-pv{background:#fff;border:1px solid var(--line);border-radius:10px;padding:.6rem;display:inline-block;margin:.4rem 0 .6rem}.cf-logo-pv img{display:block;max-height:80px;max-width:240px;object-fit:contain}

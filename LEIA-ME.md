@@ -123,3 +123,8 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - A sincronização do WL passa a guardar o código do WL em cada item da requisição (`cod`); o sistema acha a linha da planilha por esse código e, se não bater, pelo nome.
 - Para ir corrigindo com o tempo: lápis ✎ (um item) ou ⚙ (todos de uma vez). Botão **Códigos NF**: traz uma planilha com a lista do sistema de NF (Código NF + Descrição, ou Código SG + Código NF), mostra o que vai mudar e só grava depois de confirmar.
 - Importar a Planilha EPI aceita as colunas "Código SG" e "Código NF" (e "Código" sozinho vale como SG).
+
+## Logo da empresa nas impressões (04/11/2026)
+- Configurações > Aparência > **Logo da empresa**: importe um PNG (ou JPG). Ele vale no lugar da logo padrão em tudo que é impresso/exportado: PDF das telas e relatórios, impressão da requisição e Excel.
+- A imagem é reduzida (máx. 500 px), mantém o fundo transparente e fica em 'logo_empresa' (sincroniza com a nuvem). "Voltar à logo padrão" desfaz.
+- A logo do C.F.O dentro do sistema (menu, login) não muda. `CFO.LOGO` agora devolve a logo que vale (própria ou padrão); a padrão ficou em `CFO.LOGO_PADRAO`.

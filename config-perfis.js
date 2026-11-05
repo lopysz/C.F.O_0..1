@@ -101,8 +101,14 @@
     const abertas = new Set();
     const gav = (id, icone, titulo, sub, conteudo) => `<details class="cf-gav" data-g="${id}"${abertas.has(id) ? ' open' : ''}>
       <summary>${icone}<span><b>${titulo}</b><small>${sub}</small></span>${ico('chev')}</summary><div class="cf-gv">${conteudo}</div></details>`;
+    // Logo da empresa: vale no lugar da logo padrão em tudo que é impresso ou exportado (PDF/Excel)
+    const logoBloco = () => { const L = CFO.logoInfo(); return `<div class="cf-logo"><h4>Logo da empresa</h4>
+      <p class="log" style="margin:.2rem 0">Usada no lugar da logo padrão ao imprimir ou exportar (PDF e Excel). ${L.propria ? 'Logo atual: ' + esc(L.nome || 'importada') + '.' : 'Agora está a logo padrão.'}</p>
+      <div class="cf-logo-pv"><img src="${L.dados}" alt="Logo usada nas impressões"></div>
+      <div class="bar" style="padding:0;min-height:0"><button type="button" id="cf-logo-imp">Importar logo (PNG)</button>${L.propria ? '<button type="button" id="cf-logo-pad" class="ghost">Voltar à logo padrão</button>' : ''}</div>
+      <input type="file" id="cf-logo-file" accept="image/png,image/jpeg,image/webp" hidden></div>`; };
     const gavAparencia = () => gav('aparencia', ico(escuro() ? 'moon' : 'sun', 20), 'Aparência', escuro() ? 'Tema escuro' : 'Tema claro',
-      `<div class="cf-tema" role="group" aria-label="Tema"><button type="button" data-tema="claro" class="${escuro() ? 'ghost' : ''}" aria-pressed="${!escuro()}">${ico('sun', 16)} Claro</button><button type="button" data-tema="escuro" class="${escuro() ? '' : 'ghost'}" aria-pressed="${escuro()}">${ico('moon', 16)} Escuro</button></div>`);
+      `<div class="cf-tema" role="group" aria-label="Tema"><button type="button" data-tema="claro" class="${escuro() ? 'ghost' : ''}" aria-pressed="${!escuro()}">${ico('sun', 16)} Claro</button><button type="button" data-tema="escuro" class="${escuro() ? '' : 'ghost'}" aria-pressed="${escuro()}">${ico('moon', 16)} Escuro</button></div>${logoBloco()}`);
 
     function draw() {
       const perfis = CFO.perfis(), eu = CFO.usuario() || {}, adm = CFO.admin();
@@ -124,6 +130,12 @@
           : gav('perfis', gUser, 'Perfil', 'Seu acesso', '<p class="log" style="margin-top:0">Só o perfil principal cria, exclui e limita perfis.</p>')}</div>`;
       body.querySelectorAll('details.cf-gav').forEach(d => d.addEventListener('toggle', () => { d.open ? abertas.add(d.dataset.g) : abertas.delete(d.dataset.g); }));
       ligaRegras(body);
+      const lf = body.querySelector('#cf-logo-file');
+      if (lf) {
+        body.querySelector('#cf-logo-imp').onclick = () => lf.click();
+        lf.onchange = async () => { const f = lf.files[0]; lf.value = ''; if (!f) return; try { await CFO.logoImportar(f); } catch (err) { return alert(err.message || err); } draw(); };
+        const lp = body.querySelector('#cf-logo-pad'); if (lp) lp.onclick = () => { if (confirm('Voltar para a logo padrão nas impressões e exportações?')) { CFO.logoPadrao(); draw(); } };
+      }
       body.querySelectorAll('[data-tema]').forEach(b => b.onclick = () => { if ((b.dataset.tema === 'escuro') !== escuro()) CFO.tema.alternar(); draw(); });
       if (!adm) {
         if (!eu.isolado) return;
