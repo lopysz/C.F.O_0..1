@@ -97,3 +97,16 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - No passo 3) da Automação de NF a lista agora tem **caixinhas**: marque quantas requisições quiser. Os itens iguais (mesmo item e tamanho) são **somados** e a NF é preenchida uma vez só. Itens com quantidade aprovada 0 ficam de fora, como sempre.
 - Com mais de uma marcada, `{requisicao}` vira `RQ1 + RQ2`, `{nome}`/`{mes}`/`{motivo}` juntam os textos diferentes (separados por ` / `) e `{contrato}` junta os contratos diferentes (` + `). Se os contratos forem diferentes, a confirmação avisa.
 - Funciona igual no **📱 Iniciar no PC** (o celular manda a lista de requisições; o PC junta). Marcar só uma requisição funciona exatamente como antes.
+
+## Nome completo do contrato nas requisições (04/11/2026)
+- A requisição vem da planilha/WL com o nome do contrato encurtado (ex.: "Franco da Rocha"). Agora o sistema troca pelo nome COMPLETO do cadastro (Almoxarifado Operacional > Contratos), casando pelo número (1382, 0130 = 130).
+- Vale em todo lugar que lê as requisições: lista, detalhe, impressão/PDF, Automação de NF (`{contrato_nome}`), Controle de gastos/mensal, EPIs por contrato, Assistente.
+- `core.js` NOVO: `CFO.contratoNome(num, curto)` e a leitura de 'requisicoes' já devolve o nome completo. `requisicoes.js` e `wl-sync.js`: ao importar/sincronizar já gravam o nome completo.
+- Contrato que NÃO está no cadastro continua com o nome curto da requisição -> cadastre o contrato (número + nome completo) em Contratos.
+- Cadastro alterado depois reflete sozinho nas requisições antigas (não precisa reimportar).
+
+## Nome do funcionário vindo do WL (04/11/2026)
+- `wl-sync.js`: a sincronização procura o nome do funcionário em cada item do WL (colunas conhecidas como employee_name/collaborator_name... e, se não achar, qualquer coluna com "employee/colaborador/funcionario/worker/recipient"). Salva em `item.func`.
+- `requisicoes.js`: o detalhe da requisição ganha a coluna "Funcionário" (só aparece quando há nome) e a busca passa a achar pelo nome.
+- Impressão/PDF da requisição continua SEM nome de colaborador (como era antes).
+- Depois de trocar os arquivos: Ferramentas > Sincronizar WL > rodar a sincronização COMPLETA para preencher as requisições antigas. Se aparecer "Funcionário: 0 com nome", o aviso mostra os campos do WL para ajustar.

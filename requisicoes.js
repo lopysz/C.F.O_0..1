@@ -15,6 +15,7 @@
   const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   const mesKey = s => { const m = CFO.norm(s).match(/^([a-z]+)(\d{4})$/), i = m ? MESES.indexOf(m[1]) : -1; return i >= 0 ? m[2] + String(i + 1).padStart(2, '0') : '000000'; };
   const parseContrato = s => { s = String(s || '').trim(); const m = s.match(/^(\d+)\s*[-–]?\s*(.*)$/); return m ? { num: m[1], nome: m[2].trim() } : { num: s, nome: '' }; };
+  const temFunc = r => r.itens.some(i => i.func);   // nome do funcionário vem do WL (sincronização)
   const total = r => r.itens.reduce((a, i) => a + i.qa * CFO.preco(i), 0), qtd = r => r.itens.reduce((a, i) => a + i.qa, 0);
 
   const score = data => CFO.findHeader(data, COLS, 4).n;   // só reconhece se achar 4+ colunas do modelo
@@ -28,7 +29,7 @@
       const g = k => m[k] === undefined ? '' : String(line[m[k]] ?? '').trim(), id = g('req'), item = g('item');
       if (!id || !item) return;                              // ignora a linha de totais
       let r = fresh.get(id);
-      if (!r) { const c = parseContrato(g('contrato')); r = { id, sol: g('sol'), motivo: g('motivo'), contrato: c.num, contratoNome: c.nome, mes: g('mes'), itens: [] }; fresh.set(id, r); }
+      if (!r) { const c = parseContrato(g('contrato')); r = { id, sol: g('sol'), motivo: g('motivo'), contrato: c.num, contratoNome: CFO.contratoNome(c.num, c.nome), mes: g('mes'), itens: [] }; fresh.set(id, r); }
       r.itens.push({ item, tam: g('tam'), qs: CFO.toNum(g('qs')), qa: CFO.toNum(g('qa')), preco: CFO.toNum(g('preco')) });
     });
     const agora = new Date().toISOString();                 // 'chegou' = quando a requisição entrou no sistema (usado no Painel do Início)
@@ -111,7 +112,7 @@
     // Lê tudo do armazenamento UMA vez (e quando importar/apagar); digitar na busca só filtra o que já está na memória
     function carrega() {
       base = all(); meta.clear();
-      base.forEach(r => meta.set(r, { t: CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item)].join(' ')), tot: total(r), qt: qtd(r) }));
+      base.forEach(r => meta.set(r, { t: CFO.norm([r.id, r.contrato, r.contratoNome, r.sol, r.mes, r.motivo, ...r.itens.map(i => i.item + ' ' + (i.func || ''))].join(' ')), tot: total(r), qt: qtd(r) }));
       CFO.periodo.fill(body, base.map(r => ({ mes: CFO.regras.texto(r) }))); CFO.motivo.fill(body, base);
       indexaFotos(); render();
     }
@@ -153,9 +154,9 @@
       CFO.open('Requisição ' + r.id, b => {
         b.innerHTML = `<div class="card" style="margin-bottom:1rem"><b style="font-size:1.1rem">${esc(r.id)}</b>
           <p class="log">Contrato: ${esc(r.contrato)}${r.contratoNome ? ' - ' + esc(r.contratoNome) : ''}<br>Data: ${esc(r.mes)}<br>Solicitante: ${esc(r.sol)}<br>Motivo: ${esc(r.motivo)}${negs()[r.id] ? `<br><b style="color:#e74c3c">🚫 NEGADA em ${fmtDH(negs()[r.id])}</b>` : ''}${(x => rets()[r.id] ? `<br>Retirada: ✔ ${fmtDH(rets()[r.id])} (marcada manualmente)` : x ? `<br>Retirada: ${x.ok === x.total ? '✔ ' + (fmtDH(x.ts) || 'retirada') : x.ok ? 'parcial (' + x.ok + ' de ' + x.total + ' fotos)' : 'aguardando'}` : '')(retirada(r))}</p></div>
-          <div class="tw"><table><thead><tr><th>Item</th><th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
-          ${r.itens.map(i => `<tr><td>${esc(i.item)}</td><td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(CFO.preco(i))}</td><td>${R$(i.qa * CFO.preco(i))}</td></tr>`).join('')}
-          <tr><th>Totais</th><th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
+          <div class="tw"><table><thead><tr><th>Item</th>${temFunc(r) ? '<th>Funcionário</th>' : ''}<th>Tam.</th><th>Solic.</th><th>Aprov.</th><th>Preço</th><th>Total</th></tr></thead><tbody>
+          ${r.itens.map(i => `<tr><td>${esc(i.item)}</td>${temFunc(r) ? `<td>${esc(i.func || '-')}</td>` : ''}<td>${esc(i.tam)}</td><td>${i.qs}</td><td>${i.qa}</td><td>${R$(CFO.preco(i))}</td><td>${R$(i.qa * CFO.preco(i))}</td></tr>`).join('')}
+          <tr><th>Totais</th>${temFunc(r) ? '<th></th>' : ''}<th></th><th>${r.itens.reduce((a, i) => a + i.qs, 0)}</th><th>${qtd(r)}</th><th></th><th>${R$(total(r))}</th></tr></tbody></table></div>
           <div class="bar" style="margin-top:1rem"><button id="prn">🖨 Imprimir / PDF</button>${CFO.pode('apagar', 'requisicoes') ? '<button id="del" class="ghost danger">Excluir requisição</button>' : ''}</div>`;
         b.querySelector('#prn').onclick = () => relatorio(r);
         (b.querySelector('#del') || {}).onclick = () => {

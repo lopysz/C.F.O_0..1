@@ -28,6 +28,28 @@ CFO.store = {
   set(k, v) { localStorage.setItem(chaveLocal(k), JSON.stringify(v)); }
 };
 
+// Nome COMPLETO do contrato: o do cadastro (Almoxarifado Operacional > Contratos) manda; o que vem na requisição (planilha/WL) costuma vir encurtado.
+// Mapa nº -> nome fica em cache enquanto o cadastro não muda (compara o texto salvo), então não pesa nas listas grandes.
+const numContrato = n => String(n ?? '').trim().replace(/^0+(?=\d)/, '');
+let _mapaContratos = { raw: undefined, map: new Map() };
+CFO.contratoMapa = () => {
+  const raw = localStorage.getItem(chaveLocal('contratos'));
+  if (raw !== _mapaContratos.raw) {
+    const m = new Map();
+    try { (JSON.parse(raw) || []).forEach(c => { const n = numContrato(c && c.num), nm = String((c && c.nome) ?? '').trim(); if (n && nm && !m.has(n)) m.set(n, nm); }); } catch { /* cadastro ilegível: segue com o nome da requisição */ }
+    _mapaContratos = { raw, map: m };
+  }
+  return _mapaContratos.map;
+};
+CFO.contratoNome = (num, curto) => CFO.contratoMapa().get(numContrato(num)) || String(curto ?? '').trim();
+// Toda tela/NF/relatório que lê 'requisicoes' já recebe o nome completo do contrato (o dado salvo não é alterado por isso)
+const _lerStore = CFO.store.get;
+CFO.store.get = (k, d) => {
+  const v = _lerStore(k, d);
+  if (k === 'requisicoes' && Array.isArray(v)) { const m = CFO.contratoMapa(); if (m.size) v.forEach(r => { const n = r && m.get(numContrato(r.contrato)); if (n) r.contratoNome = n; }); }
+  return v;
+};
+
 // Abre uma tela cobrindo a atual (com X para voltar)
 CFO.open = (title, render) => {
   const s = document.createElement('section');
