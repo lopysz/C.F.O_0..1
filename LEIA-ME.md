@@ -131,3 +131,10 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 
 ## Código na NF sem os 2 zeros do início (05/11/2026)
 - A Automação de NF lança o código sem os 2 primeiros zeros: 0012 -> 12, 00105 -> 105. Vale para o Código NF e para o Código SG (quando o NF está vazio). A planilha e as impressões continuam mostrando o código completo.
+
+## OCR: ler os códigos da tela do sistema de NF (05/11/2026)
+- Planilha EPI > **📷 Ler da tela** (`ocr-nf.js`). Compartilhe a janela do sistema de NF (lista de produtos) e toque em **Capturar** (role e capture de novo quantas vezes quiser), ou cole um print (Ctrl+V) / escolha imagens.
+- O OCR (Tesseract.js 5.1.1, baixado do jsdelivr na 1ª vez; precisa de internet) lê as linhas "código + descrição" e liga cada uma a uma linha da Planilha EPI pelo nome (nome sem tamanho = todos os tamanhos do EPI).
+- Tela de conferência: marque/desmarque, corrija o código digitado, **trocar** a ligação. Itens "parecido: conferir" vêm desmarcados. Só grava em **Código NF** depois de **Aplicar** + confirmação.
+- O OCR pode errar dígitos: sempre confira. Se o sistema de NF exportar a lista (Excel/CSV), o botão **Códigos NF** é mais seguro.
+- `CFO.linhasPorNome(rows, nome)` (epi.js) é usado pelo OCR e pelo importador de códigos NF.

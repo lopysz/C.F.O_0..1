@@ -44,6 +44,13 @@ CFO.estoqueMin = rows => {
    - se a planilha tiver o Código SG, liga por ele; senão liga pelo nome do item (sem tamanho = vale para todos os tamanhos daquele EPI);
    - se vier só "Código" + "Descrição", o código é tratado como o da NF.
    Mostra o que vai mudar e só grava depois de confirmar. */
+// Linhas da Planilha EPI que combinam com um nome (de outro sistema). tipo: 'exato' (mesmo nome), 'base' (nome sem tamanho = todos os tamanhos do EPI) ou 'parecido' (aproximado: conferir).
+CFO.linhasPorNome = (rows, nome) => {
+  const norm = CFO.norm, ls = rows.filter(r => r && r.item), base = r => norm(CFO.baseEpi(r.item));
+  const ex = ls.find(r => norm(r.item) === norm(nome)); if (ex) return { rows: [ex], tipo: 'exato' };
+  if (!CFO.tamEpi(nome)) { const b = ls.filter(r => base(r) === norm(CFO.baseEpi(nome))); if (b.length) return { rows: b, tipo: 'base' }; }
+  const a = CFO.casarEpi(ls)(nome); return a ? { rows: [a], tipo: 'parecido' } : { rows: [], tipo: '' };
+};
 CFO.importarCodigosNf = async file => {
   const norm = CFO.norm, cols = [
     { k: 'codigoNf', label: 'Código NF', alias: ['codigo nf', 'cod nf', 'codigo da nf', 'codigo na nf', 'codigo nota', 'codigo nota fiscal', 'codigo fiscal'] },
@@ -54,19 +61,14 @@ CFO.importarCodigosNf = async file => {
   if (!achou) return alert('Não achei as colunas. A planilha precisa ter o código da NF e a descrição do item (ou o Código SG). Ex.: "Código NF | Descrição".');
   const { data, f } = achou, m = f.m;
   const nfCol = m.codigoNf !== undefined ? m.codigoNf : m.codigo, sgCol = m.codigoNf !== undefined ? m.codigo : undefined, itCol = m.item;
-  const rows = CFO.store.get('epi', []), achar = CFO.casarEpi(rows.filter(r => r && r.item)), base = r => norm(CFO.baseEpi(r.item));
+  const rows = CFO.store.get('epi', []);
   const mud = new Map(), sem = [];                      // linha(id) -> { r, nf, de }
   data.slice(f.hi + 1).forEach(l => {
     const nf = String(l[nfCol] ?? '').trim(), sg = sgCol === undefined ? '' : String(l[sgCol] ?? '').trim(), nome = itCol === undefined ? '' : String(l[itCol] ?? '').trim();
     if (!nf) return;
     let alvo = [];
     if (sg) alvo = rows.filter(r => r && norm(r.codigo) === norm(sg));
-    if (!alvo.length && nome) {
-      const ex = rows.find(r => r && norm(r.item) === norm(nome));
-      if (ex) alvo = [ex];
-      else if (!CFO.tamEpi(nome)) alvo = rows.filter(r => r && r.item && base(r) === norm(CFO.baseEpi(nome)));   // sem tamanho: todos os tamanhos
-      if (!alvo.length) { const a = achar(nome); if (a) alvo = [a]; }
-    }
+    if (!alvo.length && nome) alvo = CFO.linhasPorNome(rows, nome).rows;      // sem tamanho no nome = todos os tamanhos do EPI
     if (!alvo.length) return sem.push((sg ? sg + ' ' : '') + (nome || nf));
     alvo.forEach(r => { if (String(r.codigoNf ?? '').trim() !== nf) mud.set(r.id, { r, nf, de: String(r.codigoNf ?? '').trim() }); });
   });
@@ -80,7 +82,7 @@ CFO.importarCodigosNf = async file => {
 
 // Planilha de EPIs (modelo: CÓDIGO SG | CÓDIGO NF | ITEM / DESCRIÇÃO | VALOR | QUANTIDADE EM ESTOQUE | MÍNIMO)
 CFO.modules.epi = CFO.sheet({
-  key: 'epi', title: 'Planilha EPI', editAll: true, codigosNf: f => CFO.importarCodigosNf(f), hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
+  key: 'epi', title: 'Planilha EPI', editAll: true, codigosNf: f => CFO.importarCodigosNf(f), ocrNf: () => CFO.ocrNf(), hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
   columns: [
     { k: 'codigo', label: 'Código SG', alias: ['codigo', 'cod', 'codigo item', 'codigo sg', 'codigo wl'] },
     { k: 'codigoNf', label: 'Código NF', alias: ['codigo nf', 'cod nf', 'codigo da nf', 'codigo na nf', 'codigo nota', 'codigo nota fiscal', 'codigo fiscal'], hint: 'Código do produto no sistema de NF da empresa. A automação da NF usa este; se estiver vazio, usa o Código SG.' },

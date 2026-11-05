@@ -211,6 +211,7 @@ CFO.sheet = cfg => {
           ${cx.filtro ? `<button id="solo" class="ghost" data-f data-on="${solo ? 1 : 0}">${solo ? '✓ ' : ''}${cx.filtro.label}</button>` : ''}
           ${ed && cfg.editAll ? (edit ? '<button id="gsave">✓ Salvar alterações</button><button id="gcancel" class="ghost">Cancelar</button>' : '<button id="gear" class="ghost" title="Editar todos os itens de uma vez" aria-label="Editar todos os itens de uma vez">⚙</button>') : ''}
           ${ed && !edit ? '<button id="add">+ Adicionar</button><button id="imp" class="ghost">Importar</button>' : ''}
+          ${ed && !edit && cfg.ocrNf ? '<button id="ocr" class="ghost" title="Ler a lista de códigos direto da tela do sistema de NF (OCR)">📷 Ler da tela</button>' : ''}
           ${ed && !edit && cfg.codigosNf ? '<button id="cnf" class="ghost" title="Trazer a lista de códigos do sistema de NF">Códigos NF</button><input id="cnff" type="file" accept=".xlsx,.xls,.csv" hidden>' : ''}
           <button id="exp" class="ghost">Exportar</button>
           ${CFO.pode('apagar', K) && !edit ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
@@ -281,6 +282,7 @@ CFO.sheet = cfg => {
       };
       ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(true); } };
       if ($('#imp')) $('#imp').onclick = () => $('#file').click();
+      if ($('#ocr')) $('#ocr').onclick = async () => { try { await cfg.ocrNf(); } catch (err) { alert(err.message || err); } rows = CFO.store.get(K, []); H = new WeakMap(); draw(); };
       if ($('#cnf')) {                                      // lista de códigos da NF -> preenche a coluna Código NF (cfg.codigosNf mostra o que vai mudar e pede confirmação)
         $('#cnf').onclick = () => $('#cnff').click();
         $('#cnff').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await cfg.codigosNf(f); } catch (err) { return alert(err.message || err); } rows = CFO.store.get(K, []); H = new WeakMap(); draw(); };

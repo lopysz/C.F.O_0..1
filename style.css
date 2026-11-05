@@ -708,3 +708,8 @@ input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user
 /* Configurações > Aparência: logo da empresa */
 .cf-logo{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--line)}.cf-logo h4{margin:0 0 .2rem}
 .cf-logo-pv{background:#fff;border:1px solid var(--line);border-radius:10px;padding:.6rem;display:inline-block;margin:.4rem 0 .6rem}.cf-logo-pv img{display:block;max-height:80px;max-width:240px;object-fit:contain}
+
+/* OCR: ler códigos da tela do sistema de NF */
+dialog.ocr-dlg{width:min(96vw,920px);max-height:92vh;overflow:auto}
+.ocr-tw{max-height:46vh;overflow:auto;margin-top:.4rem}
+dialog.ocr-dlg td,dialog.ocr-dlg th{font-size:.82rem}
