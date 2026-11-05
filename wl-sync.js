@@ -74,6 +74,7 @@
           if (func) res.comFunc++; else { res.semFunc++; if (it.employee_id || w.employee_id) res.semFuncComId++; }
           const novoIt = { item: nome + (tam && ntam !== 'na' && !jaTem ? ` (${tam})` : ''), tam: tam || 'N/A', qs: qs === undefined ? q : num(qs), qa: qa === undefined ? q : num(qa), preco };
           if (func) { novoIt.func = func; if (cargo) novoIt.cargo = cargo; }
+          const codWl = String(it.epi_code ?? '').trim(); if (codWl) novoIt.cod = codWl;      // código do WL: liga o item à linha da Planilha EPI (e ao Código NF)
           return novoIt;
         });
         const novo = { id, sol: String(w.requester || '').trim(), motivo: String(w.motive || '').trim(), contrato: c.num, contratoNome: CFO.contratoNome(c.num, c.nome), mes, itens, origem: 'WL' };

@@ -136,12 +136,14 @@ CFO.mapaPara = async (mod, data, nome) => {
 
 CFO.sheet = cfg => {
   const K = cfg.key, first = cfg.columns.find(c => c.k === cfg.nameKey) || cfg.columns[0], norm = CFO.norm;
+  const cols = () => cfg.columns.filter(c => !c.ver || c.ver());        // colunas que este perfil pode ver
   const dk = r => (cfg.dedupe || cfg.columns.map(c => c.k)).map(k => norm(r[k])).join('|');
   const fold = t => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();   // busca sem diferenciar acento nem maiúscula
 
   /* --- Tratamento de valores --- */
   const clean = d => {
     cfg.columns.forEach(c => {
+      if (!(c.k in d)) return;                          // campo que não veio (ex.: coluna escondida para este perfil) fica como está
       let v = d[c.k];
       if (c.type === 'number') { v = String(v ?? '').replace(/[^\d,.-]/g, ''); if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.'); d[c.k] = parseFloat(v) || 0; }
       else if (c.type === 'date') { const t = String(v ?? '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (t) d[c.k] = `${t[3].length == 2 ? '20' + t[3] : t[3]}-${t[2].padStart(2, '0')}-${t[1].padStart(2, '0')}`; }
@@ -173,6 +175,7 @@ CFO.sheet = cfg => {
   /* --- Tela da planilha --- */
   const api = body => {
     let rows = CFO.store.get(K, []), movs = CFO.store.get(K + ':mov', []), q = '', qv = '', solo = false, per = { m: '', y: '', t: '' };
+    let edit = false, draft = {};                     // modo "editar tudo" (engrenagem): draft = { idDaLinha: { campo: valor digitado } }
     let cx = { cols: [], cards: [], filtro: null, todas: [] }, H = new WeakMap(), tq = null;   // H guarda o texto de busca de cada linha (some quando algo muda)
     const texto = r => { let t = H.get(r); if (t === undefined) { t = fold(Object.values(r).join(' ')); H.set(r, t); } return t; };
     const calcular = () => {                          // colunas calculadas a partir das requisições (cfg.calc) no período escolhido
@@ -185,10 +188,17 @@ CFO.sheet = cfg => {
     const field = (c, v = '') => c.options
       ? `<label>${c.label}<select name="${c.k}">${c.options.map(o => `<option ${o == v ? 'selected' : ''}>${o}</option>`).join('')}</select></label>`
       : `<label>${c.label}${c.hint ? `<small>${c.hint}</small>` : ''}<input name="${c.k}" type="${c.type || 'text'}" step="any" value="${CFO.esc(v)}" ${c === first ? 'required' : ''}></label>`;
-    const form = (r = {}) => cfg.columns.map(c => field(c, r[c.k])).join('');
+    const form = (r = {}) => cols().map(c => field(c, r[c.k])).join('');
     const filtrar = () => rows.filter(r => !q || texto(r).includes(q)).filter(r => !(solo && cx.filtro) || cx.filtro.test(r));
-    const linhas = list => { const ed = CFO.pode('editar', K); return list.map(r => `<tr>${cfg.columns.map(c => `<td>${CFO.esc(r[c.k])}</td>`).join('')}${cx.cols.map(c => `<td>${CFO.esc(c.get(r))}</td>`).join('')}
-            <td class="act">${ed && cfg.moves ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}${ed ? `<button data-e="${r.id}" title="Editar">✎</button>` : ''}${CFO.pode('apagar', K) ? `<button data-d="${r.id}" title="Excluir">🗑</button>` : ''}</td></tr>`).join('')
+    const virg = (c, v) => c.type === 'number' && v !== '' && v != null ? String(v).replace('.', ',') : (v ?? '');
+    const cel = (r, c) => {
+      if (!edit) return `<td>${CFO.esc(c.fmt ? c.fmt(r[c.k]) : r[c.k])}</td>`;
+      const v = draft[r.id] && c.k in draft[r.id] ? draft[r.id][c.k] : virg(c, r[c.k]), at = `class="gi" data-id="${CFO.esc(r.id)}" data-k="${c.k}" aria-label="${CFO.esc(c.label)}"`;
+      return c.options ? `<td><select ${at}>${c.options.map(o => `<option ${o == v ? 'selected' : ''}>${o}</option>`).join('')}</select></td>`
+        : `<td><input ${at} inputmode="${c.type === 'number' ? 'decimal' : 'text'}" autocomplete="off" value="${CFO.esc(v)}"></td>`;
+    };
+    const linhas = list => { const ed = CFO.pode('editar', K), cs = cols(); return list.map(r => `<tr>${cs.map(c => cel(r, c)).join('')}${cx.cols.map(c => `<td>${CFO.esc(c.get(r))}</td>`).join('')}
+            <td class="act">${ed && cfg.moves && !edit ? `<button data-m="${r.id}" title="Entrada/Saída">⇅</button>` : ''}${ed && !edit ? `<button data-e="${r.id}" title="Editar">✎</button>` : ''}${CFO.pode('apagar', K) ? `<button data-d="${r.id}" title="Excluir">🗑</button>` : ''}</td></tr>`).join('')
             || '<tr><td colspan="99" class="empty">Nenhum registro. Adicione um item ou importe uma planilha.</td></tr>'; };
 
     function draw() {
@@ -199,12 +209,15 @@ CFO.sheet = cfg => {
           <input id="q" type="search" placeholder="Buscar..." value="${CFO.esc(qv)}">
           ${cfg.calc ? CFO.periodo.html() + CFO.motivo.html() : ''}
           ${cx.filtro ? `<button id="solo" class="ghost" data-f data-on="${solo ? 1 : 0}">${solo ? '✓ ' : ''}${cx.filtro.label}</button>` : ''}
-          ${ed ? '<button id="add">+ Adicionar</button><button id="imp" class="ghost">Importar</button>' : ''}
+          ${ed && cfg.editAll ? (edit ? '<button id="gsave">✓ Salvar alterações</button><button id="gcancel" class="ghost">Cancelar</button>' : '<button id="gear" class="ghost" title="Editar todos os itens de uma vez" aria-label="Editar todos os itens de uma vez">⚙</button>') : ''}
+          ${ed && !edit ? '<button id="add">+ Adicionar</button><button id="imp" class="ghost">Importar</button>' : ''}
+          ${ed && !edit && cfg.codigosNf ? '<button id="cnf" class="ghost" title="Trazer a lista de códigos do sistema de NF">Códigos NF</button><input id="cnff" type="file" accept=".xlsx,.xls,.csv" hidden>' : ''}
           <button id="exp" class="ghost">Exportar</button>
-          ${CFO.pode('apagar', K) ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
+          ${CFO.pode('apagar', K) && !edit ? '<button id="clr" class="ghost danger">Limpar tudo</button>' : ''}
           <input id="file" type="file" accept=".xlsx,.xls,.csv" hidden>
         </div>
-        <div class="tw"><table><thead><tr>${cfg.columns.map(c => `<th>${c.label}</th>`).join('')}${cx.cols.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>${linhas(filtrar())}</tbody></table></div>
+        ${edit ? '<p class="log" style="margin:.2rem 0 .6rem">Modo edição: mude o que quiser direto na tabela (Enter desce para a linha de baixo) e toque em <b>Salvar alterações</b>.</p>' : ''}
+        <div class="tw"><table><thead><tr>${cols().map(c => `<th>${c.label}</th>`).join('')}${cx.cols.map(c => `<th>${c.label}</th>`).join('')}<th></th></tr></thead><tbody>${linhas(filtrar())}</tbody></table></div>
         ${cfg.moves && movs.length ? `<ul class="log"><b>Últimas movimentações</b>${movs.slice(-5).reverse().map(m => `<li>${m.tipo}: ${CFO.esc(m.item)} (${m.qtd}) - ${CFO.esc(m.resp)} - ${m.data.slice(0, 10)}</li>`).join('')}</ul>` : ''}`;
       if (cfg.calc) {                                   // filtro de mês/ano
         body.querySelector('#fm').value = per.m; CFO.periodo.fill(body, cx.todas, per.y);
@@ -224,6 +237,10 @@ CFO.sheet = cfg => {
 
     function bindLinhas() {
       const find = id => rows.find(r => r.id === id);
+      body.querySelectorAll('.gi').forEach(el => {          // modo editar tudo: guarda o que foi digitado; Enter desce para a mesma coluna da linha de baixo
+        el.oninput = el.onchange = () => { (draft[el.dataset.id] = draft[el.dataset.id] || {})[el.dataset.k] = el.value; };
+        if (el.tagName === 'INPUT') { el.onfocus = () => el.select(); el.onkeydown = ev => { if (ev.key !== 'Enter') return; ev.preventDefault(); const todos = [...body.querySelectorAll(`.gi[data-k="${el.dataset.k}"]`)], n = todos[todos.indexOf(el) + 1]; if (n) n.focus(); else el.blur(); }; }
+      });
       body.querySelectorAll('[data-e]').forEach(b => b.onclick = () => { const r = find(b.dataset.e); CFO.dialog('Editar registro', form(r), d => { Object.assign(r, clean(d)); save(); }); });
       body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { if (confirm('Excluir este registro?')) { rows = rows.filter(r => r.id !== b.dataset.d); save(); } });
       body.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
@@ -243,8 +260,17 @@ CFO.sheet = cfg => {
       if ($('#solo')) $('#solo').onclick = () => { solo = !solo; draw(); };
       if ($('#add')) $('#add').onclick = () => CFO.dialog('Novo registro', form(), d => { rows.push({ id: Date.now() + Math.random().toString(36).slice(2, 5), ...clean(d) }); save(); });
       bindLinhas();
+      if ($('#gear')) $('#gear').onclick = () => { edit = true; draft = {}; draw(); };
+      if ($('#gcancel')) $('#gcancel').onclick = () => { if (Object.keys(draft).length && !confirm('Descartar as alterações feitas?')) return; edit = false; draft = {}; draw(); };
+      if ($('#gsave')) $('#gsave').onclick = () => {
+        rows = CFO.store.get(K, []);                         // pega a lista mais recente (nuvem/preenchimento automático) e aplica só o que foi digitado
+        const ids = Object.keys(draft).filter(id => rows.some(r => r.id === id));
+        for (const id of ids) { const r = rows.find(x => x.id === id); if (!String(('' + (first.k in draft[id] ? draft[id][first.k] : r[first.k])).trim())) return alert(`O campo "${first.label}" não pode ficar vazio (linha de ${r[first.k] || 'item sem nome'}).`); }
+        ids.forEach(id => { const r = rows.find(x => x.id === id), d = {}; Object.keys(draft[id]).forEach(k => d[k] = String(draft[id][k]).trim()); Object.assign(r, clean(d)); });
+        edit = false; draft = {}; save();
+      };
       $('#exp').onclick = () => {
-        const cols = [...cfg.columns.map(c => ({ label: c.label, get: r => r[c.k] })), ...calcular().cols.map(c => ({ label: c.label, get: c.get }))];
+        const cols = [...cfg.columns.filter(c => !c.ver || c.ver()).map(c => ({ label: c.label, get: r => r[c.k] })), ...calcular().cols.map(c => ({ label: c.label, get: c.get }))];
         const itens = cols.map((c, i) => ({ id: i, nome: c.label }));
         CFO.exportar({ titulo: 'Exportar - ' + K, itens, run: (fmt, sel, { logo }) => {
           const cs = cols.filter((c, i) => sel.has(i)), cab = cs.map(c => c.label), dados = rows.map(r => cs.map(c => c.get(r)));
@@ -255,6 +281,10 @@ CFO.sheet = cfg => {
       };
       ($('#clr') || {}).onclick = () => { if (confirm('Apagar TODOS os registros e movimentações desta planilha?')) { rows = []; movs = []; save(true); } };
       if ($('#imp')) $('#imp').onclick = () => $('#file').click();
+      if ($('#cnf')) {                                      // lista de códigos da NF -> preenche a coluna Código NF (cfg.codigosNf mostra o que vai mudar e pede confirmação)
+        $('#cnf').onclick = () => $('#cnff').click();
+        $('#cnff').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await cfg.codigosNf(f); } catch (err) { return alert(err.message || err); } rows = CFO.store.get(K, []); H = new WeakMap(); draw(); };
+      }
       if ($('#file')) $('#file').onchange = async e => {
         const f = e.target.files[0]; e.target.value = ''; if (!f) return;
         let sheets; try { sheets = await CFO.readBook(f); } catch (err) { return alert(err.message || err); }
@@ -269,7 +299,7 @@ CFO.sheet = cfg => {
     // Chegaram dados novos pela nuvem (de outra pessoa/aparelho): atualiza a tela. Sem isso a tela ficava com a lista antiga e o próximo salvar sobrescrevia a mudança dos outros.
     const novos = () => {
       if (!body.isConnected) return document.removeEventListener('cfo-sync', novos);
-      if (document.querySelector('dialog[open]')) return setTimeout(novos, 2500);     // com janela aberta espera fechar
+      if (edit || document.querySelector('dialog[open]')) return setTimeout(novos, 2500);     // com janela aberta ou editando tudo, espera terminar
       rows = CFO.store.get(K, []); movs = CFO.store.get(K + ':mov', []); H = new WeakMap(); draw();
     };
     document.addEventListener('cfo-sync', novos);

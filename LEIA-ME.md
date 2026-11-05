@@ -109,3 +109,17 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - `wl-sync.js`: lê `employee_name` (item, senão requisição) e salva em `item.func` (e o cargo em `item.cargo`). CPF não é lido.
 - O nome NÃO aparece em nenhuma tela nem na busca. Só aparece na IMPRESSÃO/PDF da requisição (`requisicoes.js`), em letra pequena embaixo de cada item (com a quantidade entre parênteses quando for mais de 1).
 - Depois de trocar os arquivos: Ferramentas > Sincronizar WL > sincronização COMPLETA para preencher as requisições antigas. Itens sem nome no WL imprimem sem nome embaixo.
+
+## Planilha EPI: coluna Valor + botão ⚙ (04/11/2026)
+- Nova coluna **Valor (R$)** na Planilha EPI, antes de **Estoque** (visível só para quem pode ver Gastos). A gaveta "Valores dos EPIs" foi apagada do menu.
+- Valores que já estavam na gaveta antiga são trazidos sozinhos para a coluna; EPI ainda sem valor recebe o preço da requisição mais recente (uma vez). Depois é só editar na planilha.
+- Os cálculos de gasto continuam iguais: usam o preço da requisição e, se vier zerado, o Valor da Planilha EPI (`valores-epi.js`).
+- Importar/Exportar a Planilha EPI agora também tem a coluna Valor (cabeçalhos aceitos: Valor, Valor unitário, Preço...).
+- Botão **⚙** (barra da Planilha EPI): modo "editar tudo". Todas as linhas viram campos editáveis (Enter desce para a linha de baixo); **Salvar alterações** grava tudo de uma vez, **Cancelar** descarta. Os lápis ✎ continuam funcionando fora desse modo.
+
+## Código SG x Código NF (04/11/2026)
+- A Planilha EPI agora tem **Código SG** (o do WL) e **Código NF** (o do sistema de NF da empresa), lado a lado.
+- A Automação de NF lança o **Código NF**; se ele estiver vazio, usa o Código SG (como era antes). `{codigo}` do roteiro = esse código.
+- A sincronização do WL passa a guardar o código do WL em cada item da requisição (`cod`); o sistema acha a linha da planilha por esse código e, se não bater, pelo nome.
+- Para ir corrigindo com o tempo: lápis ✎ (um item) ou ⚙ (todos de uma vez). Botão **Códigos NF**: traz uma planilha com a lista do sistema de NF (Código NF + Descrição, ou Código SG + Código NF), mostra o que vai mudar e só grava depois de confirmar.
+- Importar a Planilha EPI aceita as colunas "Código SG" e "Código NF" (e "Código" sozinho vale como SG).

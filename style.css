@@ -699,3 +699,8 @@ input,textarea,select,[contenteditable],td,.sel-ok{-webkit-user-select:text;user
 
 .cf-rg .cf-rdel{padding:.3rem .45rem;color:var(--muted);display:grid;place-items:center}
 
+
+/* Planilha EPI: modo "editar tudo" (botão ⚙) */
+.tw td input.gi,.tw td select.gi{width:100%;min-width:5rem;padding:.3rem .45rem;border-radius:8px;font-size:.82rem}
+.tw td input.gi[data-k=item]{min-width:15rem}
+#gear{font-size:1.1rem;padding:.3rem .7rem}

@@ -27,9 +27,14 @@
 
   // Requisição no formato do agente: itens aprovados somados por item+tamanho, com o código do EPI
   const montar = r => {
-    const achar = CFO.casarEpi(CFO.store.get('epi', [])), mapa = new Map();
+    const rows = CFO.store.get('epi', []), achar = CFO.casarEpi(rows), mapa = new Map(), porCod = new Map();
+    rows.forEach(e => { const c = CFO.norm(e && e.codigo); if (c && !porCod.has(c)) porCod.set(c, e); });
+    // Linha da Planilha EPI do item: pelo código do WL (quando a requisição trouxe) e, se não bater, pelo nome
+    const linha = i => { let m = achar(i.item); if (i.cod && (!m || CFO.norm(m.codigo) !== CFO.norm(i.cod))) m = porCod.get(CFO.norm(i.cod)) || m; return m; };
+    // Código lançado na NF = "Código NF" da planilha; se ainda não foi preenchido, usa o código normal (como era antes)
+    const codNf = m => m ? String(m.codigoNf || m.codigo || '').trim() : '';
     r.itens.filter(i => i.qa > 0).forEach(i => {
-      const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = mapa.get(k) || { item: i.item, tam: i.tam || '', qa: 0, preco: i.preco, codigo: (achar(i.item) || {}).codigo || '' };
+      const k = CFO.norm(i.item) + '|' + CFO.norm(i.tam), x = mapa.get(k) || { item: i.item, tam: i.tam || '', qa: 0, preco: i.preco, codigo: codNf(linha(i)) };
       x.qa += i.qa; mapa.set(k, x);
     });
     return { id: r.id, contrato: r.contrato, contratoNome: r.contratoNome, sol: r.sol, mes: r.mes, motivo: r.motivo, itens: [...mapa.values()] };

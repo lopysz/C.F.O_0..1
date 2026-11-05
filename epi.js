@@ -38,12 +38,56 @@ CFO.estoqueMin = rows => {
   return res;
 };
 
-// Planilha de EPIs (modelo: CÓDIGO | ITEM / DESCRIÇÃO | QUANTIDADE EM ESTOQUE)
+/* ----- Códigos da NF -----
+   A planilha tem dois códigos por item: Código SG (o do WL / segurança do trabalho) e Código NF (o do sistema de NF da empresa).
+   Esta função lê uma planilha com os códigos da NF e preenche a coluna "Código NF" das linhas que combinarem:
+   - se a planilha tiver o Código SG, liga por ele; senão liga pelo nome do item (sem tamanho = vale para todos os tamanhos daquele EPI);
+   - se vier só "Código" + "Descrição", o código é tratado como o da NF.
+   Mostra o que vai mudar e só grava depois de confirmar. */
+CFO.importarCodigosNf = async file => {
+  const norm = CFO.norm, cols = [
+    { k: 'codigoNf', label: 'Código NF', alias: ['codigo nf', 'cod nf', 'codigo da nf', 'codigo na nf', 'codigo nota', 'codigo nota fiscal', 'codigo fiscal'] },
+    { k: 'codigo', label: 'Código SG', alias: ['codigo', 'cod', 'codigo item', 'codigo sg', 'codigo wl'] },
+    { k: 'item', label: 'Item / Descrição', alias: ['item', 'descricao', 'produto', 'epi'] }];
+  let achou = null;
+  for (const l of await CFO.readBook(file)) { const f = CFO.findHeader(l.data, cols, 2); if (f.hi >= 0 && (f.m.codigoNf !== undefined || f.m.codigo !== undefined) && (f.m.item !== undefined || f.m.codigoNf !== undefined && f.m.codigo !== undefined)) { achou = { data: l.data, f }; break; } }
+  if (!achou) return alert('Não achei as colunas. A planilha precisa ter o código da NF e a descrição do item (ou o Código SG). Ex.: "Código NF | Descrição".');
+  const { data, f } = achou, m = f.m;
+  const nfCol = m.codigoNf !== undefined ? m.codigoNf : m.codigo, sgCol = m.codigoNf !== undefined ? m.codigo : undefined, itCol = m.item;
+  const rows = CFO.store.get('epi', []), achar = CFO.casarEpi(rows.filter(r => r && r.item)), base = r => norm(CFO.baseEpi(r.item));
+  const mud = new Map(), sem = [];                      // linha(id) -> { r, nf, de }
+  data.slice(f.hi + 1).forEach(l => {
+    const nf = String(l[nfCol] ?? '').trim(), sg = sgCol === undefined ? '' : String(l[sgCol] ?? '').trim(), nome = itCol === undefined ? '' : String(l[itCol] ?? '').trim();
+    if (!nf) return;
+    let alvo = [];
+    if (sg) alvo = rows.filter(r => r && norm(r.codigo) === norm(sg));
+    if (!alvo.length && nome) {
+      const ex = rows.find(r => r && norm(r.item) === norm(nome));
+      if (ex) alvo = [ex];
+      else if (!CFO.tamEpi(nome)) alvo = rows.filter(r => r && r.item && base(r) === norm(CFO.baseEpi(nome)));   // sem tamanho: todos os tamanhos
+      if (!alvo.length) { const a = achar(nome); if (a) alvo = [a]; }
+    }
+    if (!alvo.length) return sem.push((sg ? sg + ' ' : '') + (nome || nf));
+    alvo.forEach(r => { if (String(r.codigoNf ?? '').trim() !== nf) mud.set(r.id, { r, nf, de: String(r.codigoNf ?? '').trim() }); });
+  });
+  if (!mud.size) return alert('Nenhuma linha mudou.' + (sem.length ? `\n\n${sem.length} da lista não combinaram com nenhum item da planilha.` : ''));
+  const amostra = [...mud.values()].slice(0, 8).map(x => `• ${x.r.item}: ${x.de || '(vazio)'} → ${x.nf}`).join('\n');
+  if (!confirm(`Vou preencher o Código NF de ${mud.size} linha(s).\n\n${amostra}${mud.size > 8 ? '\n…' : ''}\n\n${sem.length} da lista não combinaram com nenhum item.\nConfirmar?`)) return;
+  mud.forEach(x => { x.r.codigoNf = x.nf; });
+  CFO.store.set('epi', rows);
+  alert(`${mud.size} linha(s) atualizada(s).` + (sem.length ? `\n\nNão combinaram (primeiros): ${sem.slice(0, 8).join(', ')}` : ''));
+};
+
+// Planilha de EPIs (modelo: CÓDIGO SG | CÓDIGO NF | ITEM / DESCRIÇÃO | VALOR | QUANTIDADE EM ESTOQUE | MÍNIMO)
 CFO.modules.epi = CFO.sheet({
-  key: 'epi', title: 'Planilha EPI', hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
+  key: 'epi', title: 'Planilha EPI', editAll: true, codigosNf: f => CFO.importarCodigosNf(f), hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
   columns: [
-    { k: 'codigo', label: 'Código', alias: ['cod', 'codigo item'] },
+    { k: 'codigo', label: 'Código SG', alias: ['codigo', 'cod', 'codigo item', 'codigo sg', 'codigo wl'] },
+    { k: 'codigoNf', label: 'Código NF', alias: ['codigo nf', 'cod nf', 'codigo da nf', 'codigo na nf', 'codigo nota', 'codigo nota fiscal', 'codigo fiscal'], hint: 'Código do produto no sistema de NF da empresa. A automação da NF usa este; se estiver vazio, usa o Código SG.' },
     { k: 'item', label: 'Item / Descrição', alias: ['item', 'descricao', 'produto', 'epi'] },
+    // Valor unitário do EPI (antes ficava na gaveta "Valores dos EPIs"). Só aparece para quem pode ver os gastos.
+    { k: 'valor', label: 'Valor (R$)', type: 'number', ver: () => CFO.pode('abrir', 'controle_gastos'), alias: ['valor', 'valor unitario', 'valor do epi', 'valor dos epis', 'preco', 'preco unitario', 'preco do epi'],
+      fmt: v => +v > 0 ? (+v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-' },
     { k: 'qtd', label: 'Estoque', type: 'number', alias: ['quantidade', 'qtd', 'quantidade em estoque'] },
     { k: 'min', label: 'Mínimo manual', type: 'number', hint: 'Deixe 0 para o sistema calcular sozinho pelas saídas', alias: ['minimo', 'estoque minimo'] }
   ],

@@ -4,7 +4,7 @@ const DRAWERS = [
   { id: 'a', icon: 'box', name: 'Almoxarifado Operacional', short: 'Almox. Op.',
     subs: [{ name: 'Planilha EPI', m: 'epi' }, { name: 'Contratos', m: 'contratos' }, { name: 'Requisição', m: 'requisicoes' }, { name: 'Recebimento', m: 'recebimento' }, { name: 'Histórico de movimentação', m: 'historico' }] },
   { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
-    subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }, { name: 'Valores dos EPIs', m: 'valores_epi' }] },
+    subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
   { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
     subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Mapa livre', m: 'mapalivre' }, ...(CFO.espaco ? [] : [{ name: 'Automação de NF', m: 'autonf' }])] }
 ];

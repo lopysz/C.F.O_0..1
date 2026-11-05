@@ -225,6 +225,6 @@ CFO.motivo = (() => {
 /* ----- Itens com tamanho: "BOTINA DE COURO (42)" e "BOTINA DE COURO (38)" são o MESMO item em tamanhos diferentes ----- */
 CFO.TAM_RE = /^(\d{1,3}([.,]\d)?|P{1,2}|M|G{1,2}|XG{1,2}|EG{1,2}|XXG|XXL|XL|S|L|U|UNICO|ÚNICO|UNICA|ÚNICA|N\/A)$/i;
 CFO.tamEpi = nome => { const m = String(nome ?? '').match(/\(([^)]+)\)\s*$/); return m && CFO.TAM_RE.test(m[1].trim()) ? CFO.norm(m[1]) : ''; };
-// Preço unitário de um item de requisição: o da própria requisição; se vier vazio/zero, o da tabela Valores dos EPIs (valores-epi.js troca esta função)
+// Preço unitário de um item de requisição: o da própria requisição; se vier vazio/zero, o "Valor (R$)" da Planilha EPI (valores-epi.js troca esta função)
 CFO.preco = i => +i.preco > 0 ? +i.preco : 0;
 CFO.baseEpi = nome => { const s = String(nome ?? '').trim(), m = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/); return m && m[1] && CFO.TAM_RE.test(m[2].trim()) ? m[1].trim() : s; };
