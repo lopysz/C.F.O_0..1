@@ -82,7 +82,7 @@ CFO.importarCodigosNf = async file => {
 
 // Planilha de EPIs (modelo: CÓDIGO SG | CÓDIGO NF | ITEM / DESCRIÇÃO | VALOR | QUANTIDADE EM ESTOQUE | MÍNIMO)
 CFO.modules.epi = CFO.sheet({
-  key: 'epi', title: 'Planilha EPI', editAll: true, codigosNf: f => CFO.importarCodigosNf(f), ocrNf: () => CFO.ocrNf(), hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
+  key: 'epi', title: 'Planilha EPI', editAll: true, codigosNf: f => CFO.importarCodigosNf(f), hints: ['epi', 'inventario', 'produto', 'item', 'estoque', 'material', 'almox'], moves: true, qty: 'qtd', nameKey: 'item', dedupe: ['codigo', 'item'],
   columns: [
     { k: 'codigo', label: 'Código SG', alias: ['codigo', 'cod', 'codigo item', 'codigo sg', 'codigo wl'] },
     { k: 'codigoNf', label: 'Código NF', alias: ['codigo nf', 'cod nf', 'codigo da nf', 'codigo na nf', 'codigo nota', 'codigo nota fiscal', 'codigo fiscal'], hint: 'Código do produto no sistema de NF da empresa. A automação da NF usa este; se estiver vazio, usa o Código SG.' },

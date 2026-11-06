@@ -6,7 +6,7 @@ const DRAWERS = [
   { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
     subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
   { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
-    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Mapa livre', m: 'mapalivre' }, ...(CFO.espaco ? [] : [{ name: 'Automação de NF', m: 'autonf' }])] }
+    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Mapa livre', m: 'mapalivre' }, { name: 'OCR', m: 'ocr' }, ...(CFO.espaco ? [] : [{ name: 'Automação de NF', m: 'autonf' }])] }
 ];
 // Lista completa (a Configuração do administrador júnior usa para restaurar); depois tira o que o setor apagou
 const DRAWERS_TODAS = DRAWERS.map(d => ({ ...d, subs: [...d.subs] }));
@@ -65,7 +65,7 @@ function resumoLateral() {
     <div><b>${doMes}</b><span>neste mês</span></div>${u ? `<p>Conectado como <b>${CFO.esc(u)}</b></p>` : ''}</div>`);
 }
 function montarNav() {
-  rail.innerHTML = `<div class="brand">${CFO.logo('icone', 'brand-img')}<span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261031a</div>`;
+  rail.innerHTML = `<div class="brand">${CFO.logo('icone', 'brand-img')}<span>C.F.O<small>Caixa de Ferramentas Operacional</small></span></div>${navHTML(true)}<div class="sp"></div><div class="ver">versão 20261106a</div>`;
   tabbar.innerHTML = navHTML(false);
   resumoLateral();
   document.querySelectorAll('.nav[data-d]').forEach(b => b.onclick = e => { e.stopPropagation(); aberto === b.dataset.d ? fechar() : (fechar(), abrirLeque(b)); });
