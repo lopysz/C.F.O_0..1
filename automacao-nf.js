@@ -46,10 +46,24 @@
   };
   // Várias requisições numa NF só: itens somados (o montar() soma item+tamanho), textos juntos. Com uma só, devolve a própria requisição (comportamento de sempre).
   const uniq = a => [...new Set(a.map(x => String(x == null ? '' : x).trim()).filter(Boolean))];
+  // Coordenador do contrato (mesma regra do Controle mensal): o digitado em Parâmetros; senão, quem mais pede naquele contrato
+  const coordDeContrato = ct => {
+    const dig = (((CFO.store.get('mensal:cfg', {}) || {})[ct] || {}).coord || '').trim(); if (dig) return dig;
+    const mp = new Map();
+    CFO.store.get('requisicoes', []).filter(r => String(r.contrato) === String(ct)).forEach(r => { const k = CFO.norm(r.sol || ''); if (!k) return; const x = mp.get(k) || { n: 0, t: String(r.sol).trim() }; x.n++; mp.set(k, x); });
+    const b = [...mp.values()].sort((x, y) => y.n - x.n)[0]; return b ? b.t : '';
+  };
+  // Solicitante da NF: se todas as requisições são do mesmo solicitante, usa ele; se forem de solicitantes diferentes, usa o coordenador do contrato
+  const solDe = rs => {
+    const ss = [...new Map(rs.map(r => [CFO.norm(r.sol || ''), String(r.sol || '').trim()]).filter(x => x[0])).values()];
+    if (ss.length <= 1) return ss[0] || '';
+    const cs = uniq(uniq(rs.map(r => r.contrato)).map(coordDeContrato));
+    return cs.join(' / ') || ss.join(' / ');
+  };
   const combinar = rs => rs.length === 1 ? rs[0] : {
-    id: rs.map(r => r.id).join(' + '), juntas: rs.length, ids: rs.map(r => r.id),
+    id: rs.map(r => r.id).join(','), juntas: rs.length, ids: rs.map(r => r.id),
     contrato: uniq(rs.map(r => r.contrato)).join(' + '), contratoNome: uniq(rs.map(r => r.contratoNome)).join(' + '),
-    sol: uniq(rs.map(r => r.sol)).join(' / '), mes: uniq(rs.map(r => r.mes)).join(' / '), motivo: uniq(rs.map(r => r.motivo)).join(' / '),
+    sol: solDe(rs), mes: uniq(rs.map(r => r.mes)).join(' / '), motivo: uniq(rs.map(r => r.motivo)).join(' / '),
     itens: rs.flatMap(r => r.itens || []) };
   const avisoJuntas = rs => rs.length < 2 ? '' : `\n\n${rs.length} requisições somadas numa NF só: ${rs.map(r => r.id).join(', ')}.` + (uniq(rs.map(r => r.contrato)).length > 1 ? `\n⚠️ ATENÇÃO: contratos diferentes (${uniq(rs.map(r => r.contrato)).join(', ')}). O roteiro vai usar todos no campo contrato.` : '');
   async function rodar(r, simular, aoIniciar) {
