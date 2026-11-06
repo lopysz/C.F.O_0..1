@@ -673,7 +673,7 @@ dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
   function baixarAgente() {
     const ir = () => CFO.baixarAgenteNF();
     if (CFO.baixarAgenteNF) return ir();
-    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261105a'; sc.onload = ir;
+    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261106a'; sc.onload = ir;
     sc.onerror = () => alert('Não achei o arquivo automacao-nf-pacote.js. Confira se ele foi enviado ao GitHub junto com os outros.');
     document.head.append(sc);
   }
