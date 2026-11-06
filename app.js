@@ -6,7 +6,7 @@ const DRAWERS = [
   { id: 'j', icon: 'scale', name: 'Jurídico Operacional', short: 'Jurídico Op.',
     subs: [{ name: 'EPIs por contrato', m: 'epis_contrato' }, { name: 'Gastos em EPIs', m: 'controle_gastos' }, { name: 'Controle mensal', m: 'controle_mensal' }] },
   { id: 'f', icon: 'tool', name: 'Ferramentas', short: 'Ferramentas',
-    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Mapa livre', m: 'mapalivre' }, { name: 'OCR', m: 'ocr' }, ...(CFO.espaco ? [] : [{ name: 'Automação de NF', m: 'autonf' }])] }
+    subs: [{ name: 'Foto de Separação', m: 'fotos' }, { name: 'Gerador de Identificação', m: 'etiquetas' }, { name: 'Contagem de estoque', m: 'contagem' }, { name: 'Mapa almoxarifado', m: 'mapa' }, { name: 'Mapa livre', m: 'mapalivre' }, { name: 'Visão OCR', m: 'ocr' }, ...(CFO.espaco ? [] : [{ name: 'Automação de NF', m: 'autonf' }])] }
 ];
 // Lista completa (a Configuração do administrador júnior usa para restaurar); depois tira o que o setor apagou
 const DRAWERS_TODAS = DRAWERS.map(d => ({ ...d, subs: [...d.subs] }));

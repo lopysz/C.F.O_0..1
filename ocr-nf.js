@@ -224,14 +224,11 @@
   /* ----- Gaveta Ferramentas > OCR (aqui entram as leituras por OCR; por enquanto: códigos da NF) ----- */
   CFO.modules.ocr = body => {
     const pode = CFO.pode('editar', 'epi');
-    body.innerHTML = `<p class="sub" style="margin-top:0">Escolha uma opção de leitura por OCR (texto direto da tela do computador ou de um print, sem digitar).</p>
-      <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
-        <div class="card"><h3 style="margin:0 0 .3rem">Ler lista</h3>
-          <p class="log" style="margin:.2rem 0 .7rem">Lê a lista de produtos e códigos do sistema de NF (compartilhando a tela ou colando um print) e preenche o <b>Código NF</b> da Planilha EPI. Você confere tudo antes de gravar.</p>
-          <button type="button" id="oc-go" ${pode ? '' : 'disabled'}>📷 Ler lista</button>
-          ${pode ? '' : '<p class="log">Seu perfil não pode editar a Planilha EPI.</p>'}</div>
+    // Cada função do OCR é um botão. Para criar outra no futuro: copie a linha do botão e ligue o clique à função nova.
+    body.innerHTML = `<div class="bar" style="padding:0;min-height:0;flex-wrap:wrap;gap:.6rem">
+        <button type="button" id="oc-go" ${pode ? '' : 'disabled'}>📷 Ler lista</button>
       </div>
-      <p class="log">Resultado: Almoxarifado Operacional › Planilha EPI › coluna Código NF.</p>`;
+      ${pode ? '' : '<p class="log">Seu perfil não pode editar a Planilha EPI.</p>'}`;
     body.querySelector('#oc-go').onclick = () => CFO.ocrNf().catch(e => alert(e.message || e));
   };
 })();
