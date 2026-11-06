@@ -15,6 +15,9 @@
   };
   const ligado = () => fetch(URL + '/ping').then(r => r.ok).catch(() => false);
   const VCAP = 6;                                            // versão do agente que entende "capturar lista" e "gerar documento"
+  const VCONF = 7;                                               // versão do agente que entende "confirmar", "lembrar mouse" e "voltar mouse"
+  const usaConf = t => /^\s*(confirmar|conferir|lembrar mouse|voltar mouse)\b/mi.test(t || '');
+  const AVISO_CONF = 'Este roteiro tem o bloco que PERGUNTA "está correto?" a cada item, e o agente aberto é de uma versão anterior.\n\nClique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.';
   const VMIN = 3;                                                // versão mínima do agente (a que entende se/senão, perguntar, teclar...)
   const versao = () => fetch(URL + '/ping').then(r => r.json()).then(x => x.versao || 1).catch(() => 0);
   const ANTIGO = 'O agente que está aberto neste computador é ANTIGO e não entende os comandos novos.\n\nClique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.';
@@ -55,6 +58,8 @@
     if (!q.itens.length) { alert('Esta requisição não tem itens aprovados.'); return; }
     // Roteiro com captura/Word/PDF só roda no agente novo; roteiros antigos continuam funcionando no agente antigo
     const usaCap = await chamar('/roteiro').then(x => /^\s*(capturar lista|gerar documento)\b/mi.test(x.texto || '')).catch(() => false);
+    const usaCf = await chamar('/roteiro').then(x => usaConf(x.texto)).catch(() => false);
+    if (usaCf && await versao() < VCONF) { alert(AVISO_CONF); return; }
     if (usaCap && await versao() < VCAP) { alert('Este roteiro captura listas e gera Bloco de Notas/PDF, e o agente aberto é de uma versão anterior.\n\nClique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.'); return; }
     if (!simular && !confirm(`Preencher a nota da ${r.id}?\n\nContrato ${r.contrato} · ${q.itens.length} produto(s).${r.juntas ? `\n(${r.juntas} requisições somadas numa NF só)` + (/ \+ /.test(r.contrato) ? '\n⚠️ ATENÇÃO: contratos diferentes.' : '') : ''}\nO agente vai controlar o mouse e o teclado.\nPara interromper: jogue o mouse no canto superior esquerdo da tela.\nPara pausar/continuar: aperte a tecla SHIFT (a mesma tecla pausa e continua) ou leve o mouse ao canto superior direito.`)) return;
     try { await chamar(simular ? '/testar' : '/executar', { requisicao: q }); aoIniciar ? aoIniciar() : tela(r); }
@@ -112,6 +117,7 @@
     const q = montar(combinar(rs)); if (!q.itens.length) throw new Error('Esta requisição não tem itens aprovados.');
     const rot = (await chamar('/roteiro')).texto || '';
     if (/^\s*(capturar lista|gerar documento)\b/mi.test(rot) && v < VCAP) throw new Error('O roteiro captura listas e gera Bloco de Notas/PDF, e o agente do PC é antigo. No PC, use "Baixar agente".');
+    if (usaConf(rot) && v < VCONF) throw new Error('O roteiro tem o bloco que pergunta "está correto?" a cada item, e o agente do PC é antigo. No PC, use "Baixar agente".');
     await chamar(simular ? '/testar' : '/executar', { requisicao: q });
   }
   function ligaReceptor() {
@@ -231,6 +237,25 @@
     return L.join('\n');
   };
   const itensLer = (c, modo) => { const m = /^@@itens\s+(codl|cod|nome)\s+(\d+)\s+(\d+)\s+([\d.,]+)$/.exec(c); return m && m[1] === modo ? { e1: m[2], e2: m[3], seg: m[4] } : null; };
+  // Bloco "Lançar os itens + conferir": digita o código, 1º Enter (busca), PERGUNTA "está correto?" e só então dá os outros Enter e a quantidade.
+  // Se a resposta for NÃO, o agente para, você corrige na mão e aperta a tecla escolhida: o item vale como concluído e ele segue para o próximo.
+  const TECLAS_CONF = ['f8', 'f9', 'espaco', 'ctrl'];
+  const itensConfTexto = v => {
+    const n = (x, d) => Math.max(0, Math.floor(Number(String(num(x, d)).replace(',', '.'))) || 0), e1 = Math.max(1, n(v.e1, '2')), e2 = n(v.e2, '2'), seg = String(num(v.seg, '1')).replace(',', '.');
+    const dig = v.como === 'digitar' ? 'digitar' : 'teclar', tk = TECLAS_CONF.includes(v.tecla) ? v.tecla : 'f8', cl = v.clicar === 'nao' ? 'nao' : 'sim';
+    const enter = q => q > 0 ? [q === 1 ? '      tecla enter' : `      tecla enter ${q} vezes`] : [];
+    const L = [`# [itens conf ${e1} ${e2} ${seg} ${dig} ${tk} ${cl}] lanca cada item: codigo, 1o Enter, PERGUNTA se esta correto e so entao segue (NAO = voce corrige na mao e aperta ${tk.toUpperCase()})`];
+    if (cl === 'sim') L.push('lembrar mouse');
+    L.push('para cada produto', '  se {codigo} nao vazio');
+    if (cl === 'sim') L.push('    voltar mouse');
+    L.push(`    ${dig} {codigo}`, '    tecla enter');
+    if (Number(seg) > 0) L.push(`    esperar ${seg}`);
+    L.push(`    confirmar "Item {produto} - codigo {codigo}. Esta correto?" em confere tecla ${tk}`, '    se {confere} for "sim"');
+    L.push(...enter(e1 - 1), `      ${dig} {quantidade}`, ...enter(e2), '    fim se');
+    L.push('  senao', '    avisar "Item sem codigo: {produto} (quantidade {quantidade}). Lance este item na mao e clique OK."', '  fim se', 'fim');
+    return L.join('\n');
+  };
+  const itensConfLer = c => { const m = /^@@itens conf (\d+) (\d+) ([\d.,]+) (teclar|digitar) (\w+) (sim|nao)$/.exec(c); return m ? { e1: m[1], e2: m[2], seg: m[3], como: m[4], tecla: m[5], clicar: m[6] } : null; };
   // ----- Roteiro pronto = 1 bloco. Na hora de salvar vira texto comum (o agente não muda e não sabe de blocos): o texto do modelo é copiado entre duas linhas de marcação "# [roteiro ...]" / "# [/roteiro]", que o agente ignora (comentário). -----
   const modelosNf = () => { try { return CFO.store.get('modelos_nf', []) || []; } catch { return []; } };
   const acharModelo = id => id === 'padrao' ? { id: 'padrao', nome: 'Modelo da NF (padrão)', texto: MODELO_NF } : modelosNf().find(m => m.id === id);
@@ -267,6 +292,14 @@
 
     { id: 'itensCod', g: 'Itens da requisição', nome: 'Lançar os itens: CÓDIGO + quantidade (um item por vez)', prio: 1, multi: 1, f: ITENS_F('código'), out: v => itensTexto('cod', v), ler: c => itensLer(c, 'cod') },
     { id: 'itensCodLetra', g: 'Itens da requisição', nome: 'Lançar os itens: CÓDIGO + quantidade, LETRA POR LETRA (um item por vez)', prio: 1, multi: 1, f: ITENS_F('código'), out: v => itensTexto('codl', v), ler: c => itensLer(c, 'codl') },
+    { id: 'itensCodConf', g: 'Itens da requisição', nome: 'Lançar os itens: CÓDIGO + conferir "está correto?" antes do 2º Enter', prio: 1, multi: 1, f: [
+      { k: 'e1', lab: 'Quantos Enter depois do código (o 1º busca o item; o agente pergunta antes dos outros)', tipo: 'num', def: '2', larg: 1 },
+      { k: 'e2', lab: 'Quantos Enter depois da quantidade (até cadastrar o item)', tipo: 'num', def: '2', larg: 1 },
+      { k: 'seg', lab: 'Esperar quantos segundos depois do 1º Enter (para o sistema da NF achar o item)', tipo: 'num', def: '1', larg: 1 },
+      { k: 'como', lab: 'Como escrever o código', tipo: 'sel', op: [['teclar', 'Número por número (tecla por tecla)'], ['digitar', 'Colar de uma vez']], def: 'teclar', larg: 1 },
+      { k: 'tecla', lab: 'Tecla para continuar depois que você corrigir na mão (se responder NÃO)', tipo: 'sel', op: [['f8', 'F8 (recomendado)'], ['f9', 'F9'], ['espaco', 'Espaço (cuidado: pode digitar um espaço no campo)'], ['ctrl', 'Ctrl']], def: 'f8', larg: 1 },
+      { k: 'clicar', lab: 'Antes de cada item, clicar onde o mouse estava no começo (o campo do código)', tipo: 'sel', op: [['sim', 'Sim (deixe o mouse em cima do campo do código ao iniciar)'], ['nao', 'Não clicar']], def: 'sim', larg: 1 }],
+      out: v => itensConfTexto(v), ler: c => itensConfLer(c) },
     { id: 'itensNome', g: 'Itens da requisição', nome: 'Lançar os itens: NOME + quantidade (um item por vez)', prio: 1, multi: 1, f: ITENS_F('nome'), out: v => itensTexto('nome', v), ler: c => itensLer(c, 'nome') },
 
     { id: 'cada', g: 'Produtos e decisões', nome: 'Para cada produto (repete até o Fim)', abre: 1, f: [], out: () => 'para cada produto', ler: R(/^(?:repetir\s+)?para cada\s+(?:produto|item)$/i, () => ({})) },
@@ -320,7 +353,7 @@
     const r = []; let nota = null;
     const fecha = () => { if (nota) { r.push({ t: 'nota', v: { texto: nota.join('\n') }, nota: '' }); nota = null; } };
     _regs = [];
-    String(txt || '').replace(/^[ \t]*# \[roteiro ([\w-]+)\][ \t]*([^\n]*)\n([\s\S]*?)^[ \t]*# \[\/roteiro\][ \t]*\r?$/gm, (_, id, nome, corpo) => '@@roteiro ' + (_regs.push({ id, nome: nome.trim(), corpo: corpo.replace(/\s+$/, '') }) - 1)).replace(/^[ \t]*#[ \t]*\[itens (codl|cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').split(/\r?\n/).forEach(raw => {
+    String(txt || '').replace(/^[ \t]*# \[roteiro ([\w-]+)\][ \t]*([^\n]*)\n([\s\S]*?)^[ \t]*# \[\/roteiro\][ \t]*\r?$/gm, (_, id, nome, corpo) => '@@roteiro ' + (_regs.push({ id, nome: nome.trim(), corpo: corpo.replace(/\s+$/, '') }) - 1)).replace(/^[ \t]*#[ \t]*\[itens (codl|cod|nome) (\d+) (\d+) ([\d.,]+)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens $1 $2 $3 $4').replace(/^[ \t]*#[ \t]*\[itens conf (\d+) (\d+) ([\d.,]+) (teclar|digitar) (\w+) (sim|nao)\][^\n]*\n[\s\S]*?^[ \t]*fim[ \t]*\r?$/gm, '@@itens conf $1 $2 $3 $4 $5 $6').split(/\r?\n/).forEach(raw => {
       const s = raw.trim();
       if (!s) { fecha(); return; }
       if (s[0] === '#') { (nota = nota || []).push(s.replace(/^#\s?/, '')); return; }
@@ -440,6 +473,7 @@
           <p><b>Decisões e repetições:</b> <code>se produto sem codigo</code> · <code>se {campo} vazio</code> · <code>se {campo} for "x"</code> · <code>se {campo} contem "x"</code> ... <code>senao</code> ... <code>fim se</code> · <code>para cada produto</code> ... <code>fim para cada</code> · <code>repetir 3 vezes</code> ... <code>fim</code></p>
           <p><b>Capturar para Bloco de Notas/PDF:</b> <code>capturar lista "Nome" de X1,Y1 ate X2,Y2</code> (clica no início, rola se pedir <code>rolar 3</code>, dá Shift+clique no fim e copia; ou <code>arrastar</code> em vez de rolar) · <code>gerar documento "Título" em "C:/pasta/arquivo" formato txt+pdf como tabela</code> (formato: <code>txt+pdf</code>, <code>txt</code> ou <code>pdf</code>; como: <code>tabela</code> ou <code>texto</code>; o .txt abre no Bloco de Notas). Pode usar <code>{requisicao}</code>, <code>{data}</code> etc. no título e no nome do arquivo. Não precisa de Word; precisa do agente versão 6.</p>
           <p><b>Roteiros prontos (blocos):</b> no 🧩 Passo a passo, o grupo <b>🧱 Roteiros prontos</b> traz o Modelo da NF e cada roteiro que você salvou (<b>🧱 Salvar como bloco</b>). Ele entra como <b>um bloco só</b>; ao salvar, o texto dele é copiado para o roteiro entre as linhas <code># [roteiro ...]</code> e <code># [/roteiro]</code> (comentários que o agente ignora). Use <code>definir</code>/<code>perguntar</code> antes dele para dar valores aos campos.</p>
+          <p><b>Conferir cada item (agente versão 7):</b> <code>confirmar "Está correto?" em confere tecla f8</code> abre uma caixa Sim/Não. Sim: segue. Não: o agente para, você corrige na mão e aperta a tecla (f8, f9, espaco ou ctrl) e ele segue para o próximo item. A resposta fica em <code>{confere}</code> (sim/nao), para usar com <code>se {confere} for "sim"</code>. · <code>lembrar mouse</code> guarda onde o mouse está · <code>voltar mouse</code> clica de novo nesse lugar. No 🧩 Passo a passo, tudo isso já vem pronto no bloco <b>📦 Lançar os itens: CÓDIGO + conferir</b>.</p>
           <p><b>Outros:</b> <code>avisar "faça tal coisa e clique OK"</code> (pausa até você clicar OK) · <code>ignorar erros</code> · <code>parar</code></p></details>
         <textarea id="rt" spellcheck="false" placeholder="Ligue o agente para carregar o roteiro"></textarea>
         <div id="blw" hidden></div>
@@ -625,7 +659,7 @@ dialog.nfmod .nfm-fechar{width:100%;margin:.2rem 0 0}`;
   function baixarAgente() {
     const ir = () => CFO.baixarAgenteNF();
     if (CFO.baixarAgenteNF) return ir();
-    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261104b'; sc.onload = ir;
+    const sc = document.createElement('script'); sc.src = 'automacao-nf-pacote.js?v=20261105a'; sc.onload = ir;
     sc.onerror = () => alert('Não achei o arquivo automacao-nf-pacote.js. Confira se ele foi enviado ao GitHub junto com os outros.');
     document.head.append(sc);
   }

@@ -133,8 +133,22 @@ Na tela da Automação de NF, o botão **🧩 Passo a passo** troca o campo de t
 - A Automação de NF lança o código sem os 2 primeiros zeros: 0012 -> 12, 00105 -> 105. Vale para o Código NF e para o Código SG (quando o NF está vazio). A planilha e as impressões continuam mostrando o código completo.
 
 ## OCR: ler os códigos da tela do sistema de NF (05/11/2026)
-- Planilha EPI > **📷 Ler da tela** (`ocr-nf.js`). Compartilhe a janela do sistema de NF (lista de produtos) e toque em **Capturar** (role e capture de novo quantas vezes quiser), ou cole um print (Ctrl+V) / escolha imagens.
+- Ferramentas > **OCR** > **📷 Ler códigos da tela** (`ocr-nf.js`; a gaveta OCR também vai receber outras leituras no futuro). O botão saiu da Planilha EPI. Compartilhe a janela do sistema de NF (lista de produtos) e toque em **Capturar** (role e capture de novo quantas vezes quiser), ou cole um print (Ctrl+V) / escolha imagens.
 - O OCR (Tesseract.js 5.1.1, baixado do jsdelivr na 1ª vez; precisa de internet) lê as linhas "código + descrição" e liga cada uma a uma linha da Planilha EPI pelo nome (nome sem tamanho = todos os tamanhos do EPI).
 - Tela de conferência: marque/desmarque, corrija o código digitado, **trocar** a ligação. Itens "parecido: conferir" vêm desmarcados. Só grava em **Código NF** depois de **Aplicar** + confirmação.
 - O OCR pode errar dígitos: sempre confira. Se o sistema de NF exportar a lista (Excel/CSV), o botão **Códigos NF** é mais seguro.
 - `CFO.linhasPorNome(rows, nome)` (epi.js) é usado pelo OCR e pelo importador de códigos NF.
+
+## NOVO (agente versão 7): conferir cada item + rolagem automática no OCR
+Arquivos: `ocr-nf.js`, `automacao-nf.js`, `automacao-nf-pacote.js` (traz o agente novo), `index.html` (só o número ?v= dos scripts). Depois de subir, use **Baixar agente** em Ferramentas > Automação de NF, troque a pasta `agente-windows` e abra o `iniciar.bat` de novo (o agente antigo não conhece os comandos novos; o sistema avisa).
+
+### Bloco "Lançar os itens: CÓDIGO + conferir" (Automação de NF > 🧩 Passo a passo > 📦 Itens da requisição)
+Para cada item: escreve o código número por número, dá o 1º Enter (busca), **abre uma caixa "Está correto?"** e só então dá os outros Enter e escreve a quantidade.
+- **Sim**: segue sozinho.
+- **Não**: o agente para; você corrige na mão e aperta a tecla escolhida (padrão **F8**; também F9, Espaço ou Ctrl). O item vale como concluído e ele vai para o próximo código.
+- Deixe o mouse em cima do campo do código ao iniciar: o agente guarda esse ponto (`lembrar mouse`) e clica de novo nele antes de cada item (`voltar mouse`), mesmo depois de você mexer o mouse para corrigir.
+- Cuidado com a tecla **Espaço**: ela também digita um espaço no campo. Por isso o padrão é F8.
+- Comandos novos no texto do roteiro: `confirmar "Está correto?" em confere tecla f8` (guarda sim/nao em `{confere}`), `lembrar mouse`, `voltar mouse`.
+
+### OCR: rolagem automática (Ferramentas > OCR > Ler códigos da tela > ⚙️ Rolagem automática)
+Marque "Rolar a lista sozinho e capturar até o fim", use "Pegar posição do mouse (4 s)" levando o mouse até cima da lista do sistema de NF, e toque em **📷 Capturar rolando**. O sistema captura, o agente gira a roda do mouse, captura de novo, e para quando a tela deixa de mudar (ou no máximo de capturas). Deixe a janela do sistema de NF visível ao lado do navegador. Opções: giros por passo, espera depois de rolar, máximo de capturas e "voltar ao topo antes de começar". Itens repetidos entre capturas são ignorados. Continua tudo sendo conferido antes de gravar.

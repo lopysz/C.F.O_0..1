@@ -4,9 +4,32 @@
       Também aceita Ctrl+V (print colado) ou escolher imagens.
    2) O OCR (Tesseract.js, em português) lê o texto; cada linha "CÓDIGO  DESCRIÇÃO" (ou "DESCRIÇÃO  CÓDIGO") vira um item da lista.
    3) Cada item é ligado a uma linha da Planilha EPI pelo nome. NADA é gravado antes de você conferir e apertar "Aplicar".
+   Rolagem automática (opcional, na configuração antes de capturar): usa o agente local (versão 7) para girar a roda do mouse sobre a lista,
+   captura de novo a cada passo e para sozinho quando a tela deixa de mudar.
    Leitor: tesseract.js 5.1.1 (jsdelivr), baixado só na primeira vez que abre a janela. */
 (() => {
   const esc = CFO.esc, norm = CFO.norm;
+  // ----- agente local (o mesmo da Automação de NF): só usado na rolagem automática -----
+  const AG = 'http://127.0.0.1:8765', TKN = 'cfo:nf_token', LSR = 'cfo:ocr_rolar', VROLAR = 7;
+  const ag = async (rota, corpo) => {
+    const r = await fetch(AG + rota, { method: corpo ? 'POST' : 'GET', headers: { 'X-Token': localStorage.getItem(TKN) || '', 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401) { localStorage.removeItem(TKN); throw new Error('Token do agente inválido. Tente de novo e cole o token que aparece na janela do agente.'); }
+    if (r.status === 404) throw new Error('O agente aberto é antigo e não sabe rolar. Use "Baixar agente" em Ferramentas > Automação de NF.');
+    if (!r.ok) throw new Error(j.erro || 'erro ' + r.status);
+    return j;
+  };
+  const agVersao = () => fetch(AG + '/ping').then(r => r.json()).then(x => x.versao || 1).catch(() => 0);
+  const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+  // "Assinatura" da tela: grade pequena em cinza. Duas telas são iguais quando quase nenhuma célula mudou (relógio/cursor piscando não contam).
+  const assinatura = v => {
+    const W = 192, H = 108, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(v, 0, 0, W, H);
+    const d = x.getImageData(0, 0, W, H).data, o = new Uint8Array(W * H);
+    for (let i = 0; i < o.length; i++) o[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
+    return o;
+  };
+  const parecidas = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 10) n++; return n / a.length < 0.003; };
   let tess = null, worker = null, prog = () => {};
 
   const carregar = () => tess || (tess = new Promise((ok, no) => {
@@ -55,7 +78,24 @@
     const d = document.createElement('dialog'); d.className = 'ocr-dlg';
     d.innerHTML = `<h3>Ler códigos da tela (OCR)</h3>
       <p class="log" style="margin:.2rem 0">Abra o sistema de NF na <b>lista de produtos</b> (código e descrição aparecendo). Toque em <b>Compartilhar tela</b>, escolha a janela dele e toque em <b>Capturar</b>. Role a lista e capture de novo quantas vezes precisar. Também dá para colar um print (Ctrl+V) ou escolher imagens.</p>
-      <div class="bar" style="padding:0;min-height:0;flex-wrap:wrap"><button type="button" id="oc-sh">Compartilhar tela</button><button type="button" id="oc-cap" disabled>📷 Capturar</button><button type="button" id="oc-fl" class="ghost">Escolher imagens</button><input type="file" id="oc-fi" accept="image/*" multiple hidden></div>
+      <details id="oc-cfg" style="margin:.4rem 0"><summary style="cursor:pointer;font-weight:600">⚙️ Rolagem automática (lista maior que a tela)</summary>
+        <label style="display:flex;gap:.4rem;align-items:center;margin:.5rem 0 .2rem"><input type="checkbox" id="oc-rol"> Rolar a lista sozinho e capturar até o fim</label>
+        <p class="log" style="margin:.2rem 0 .5rem">Precisa do agente ligado neste computador (o mesmo da Automação de NF, versão 7 ou mais nova). Deixe a janela do sistema de NF <b>visível ao lado</b> deste navegador (a roda do mouse gira a janela que estiver debaixo do mouse). O sistema captura, rola, captura de novo e para quando a tela deixar de mudar.</p>
+        <div class="bar" style="padding:0;min-height:0;flex-wrap:wrap;gap:.6rem;align-items:flex-end">
+          <label>Mouse X<br><input class="gi" id="oc-rx" type="number" style="width:5.5rem"></label>
+          <label>Mouse Y<br><input class="gi" id="oc-ry" type="number" style="width:5.5rem"></label>
+          <button type="button" id="oc-rp" class="ghost">📍 Pegar posição do mouse (4 s)</button>
+        </div>
+        <p class="log" style="margin:.2rem 0 .5rem">X e Y = um ponto em cima da lista do sistema de NF. Toque em "Pegar posição" e leve o mouse até lá.</p>
+        <div class="bar" style="padding:0;min-height:0;flex-wrap:wrap;gap:.6rem;align-items:flex-end">
+          <label>Giros da roda por passo<br><input class="gi" id="oc-rv" type="number" min="1" max="30" value="4" style="width:5.5rem"></label>
+          <label>Esperar depois de rolar (s)<br><input class="gi" id="oc-re" value="0.8" style="width:5.5rem"></label>
+          <label>Máximo de capturas<br><input class="gi" id="oc-rm" type="number" min="2" max="80" value="25" style="width:5.5rem"></label>
+        </div>
+        <label style="display:flex;gap:.4rem;align-items:center;margin:.5rem 0 0"><input type="checkbox" id="oc-rt"> Voltar ao topo da lista antes de começar</label>
+        <p class="log" style="margin:.3rem 0 0">Dica: use poucos giros por passo (3 a 5) para a lista rolar menos que a altura da tela e sobrar linhas repetidas; as repetidas são ignoradas.</p>
+      </details>
+      <div class="bar" style="padding:0;min-height:0;flex-wrap:wrap"><button type="button" id="oc-sh">Compartilhar tela</button><button type="button" id="oc-cap" disabled>📷 Capturar</button><button type="button" id="oc-stop" class="ghost" hidden>⏹ Parar rolagem</button><button type="button" id="oc-fl" class="ghost">Escolher imagens</button><input type="file" id="oc-fi" accept="image/*" multiple hidden></div>
       <video id="oc-v" muted playsinline style="display:none;max-width:100%;max-height:140px;margin-top:.5rem;border:1px solid var(--line);border-radius:8px"></video>
       <p class="log" id="oc-st" style="margin:.5rem 0"></p>
       <div class="tw ocr-tw"><table><thead><tr><th></th><th>Código NF</th><th>Descrição lida</th><th>Item da Planilha EPI</th></tr></thead><tbody id="oc-b"></tbody></table></div>
@@ -102,7 +142,58 @@
     }
     const doBlob = f => new Promise(ok => { const im = new Image(); im.onload = async () => { await ler(im, im.naturalWidth, im.naturalHeight); ok(); }; im.onerror = () => { st('Não consegui abrir essa imagem.'); ok(); }; im.src = URL.createObjectURL(f); });
 
-    const parar = () => { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $('#oc-v').style.display = 'none'; $('#oc-cap').disabled = true; $('#oc-sh').textContent = 'Compartilhar tela'; };
+    // ----- rolagem automática -----
+    let parando = false, rolando = false;
+    const esp = ms => new Promise(r => setTimeout(r, ms));
+    const cfgLer = () => ({ on: $('#oc-rol').checked, x: $('#oc-rx').value.trim(), y: $('#oc-ry').value.trim(), vezes: clamp(Math.floor(+$('#oc-rv').value) || 4, 1, 30), espera: clamp(parseFloat(String($('#oc-re').value).replace(',', '.')) || 0.8, 0.2, 5), max: clamp(Math.floor(+$('#oc-rm').value) || 25, 2, 80), topo: $('#oc-rt').checked });
+    const cfgSalvar = () => { try { localStorage.setItem(LSR, JSON.stringify({ on: $('#oc-rol').checked, x: $('#oc-rx').value, y: $('#oc-ry').value, v: $('#oc-rv').value, e: $('#oc-re').value, m: $('#oc-rm').value, t: $('#oc-rt').checked })); } catch {} };
+    const rotuloCap = () => { $('#oc-cap').textContent = $('#oc-rol').checked ? '📷 Capturar rolando' : '📷 Capturar'; };
+    try {
+      const c0 = JSON.parse(localStorage.getItem(LSR) || '{}') || {};
+      $('#oc-rol').checked = !!c0.on; $('#oc-rx').value = c0.x ?? ''; $('#oc-ry').value = c0.y ?? ''; $('#oc-rv').value = c0.v || 4; $('#oc-re').value = c0.e || 0.8; $('#oc-rm').value = c0.m || 25; $('#oc-rt').checked = !!c0.t;
+      if (c0.on) $('#oc-cfg').open = true;
+    } catch {}
+    rotuloCap();
+    ['#oc-rol', '#oc-rx', '#oc-ry', '#oc-rv', '#oc-re', '#oc-rm', '#oc-rt'].forEach(q => { $(q).onchange = () => { cfgSalvar(); rotuloCap(); }; });
+    async function agenteOk() {
+      const v = await agVersao();
+      if (!v) { st('O agente não está ligado neste computador. Abra o iniciar.bat (pasta agente-windows) ou desmarque a rolagem automática.'); return false; }
+      if (v < VROLAR) { st(`O agente aberto é antigo (versão ${v}) e não sabe rolar a tela. Em Ferramentas > Automação de NF, clique em "Baixar agente", troque a pasta agente-windows e abra o iniciar.bat de novo.`); return false; }
+      if (!localStorage.getItem(TKN)) { const t = prompt('Cole o TOKEN que aparece na janela do agente:'); if (!t) { st('Sem o token o agente não deixa rolar a tela.'); return false; } localStorage.setItem(TKN, t.trim()); }
+      return true;
+    }
+    $('#oc-rp').onclick = async () => {
+      if (!await agenteOk()) return;
+      for (let s = 4; s > 0; s--) { st(`Leve o mouse até cima da lista do sistema de NF… ${s}`); await esp(1000); }
+      try { const m = await ag('/mouse'); $('#oc-rx').value = m.x; $('#oc-ry').value = m.y; cfgSalvar(); st(`Posição guardada: ${m.x}, ${m.y}.`); } catch (e) { st('Erro: ' + (e.message || e)); }
+    };
+    $('#oc-stop').onclick = () => { parando = true; };
+    async function capturarRolando() {
+      const c = cfgLer(), v = $('#oc-v');
+      if (!stream || !v.videoWidth) return st('Toque em "Compartilhar tela" e escolha a janela do sistema de NF primeiro.');
+      if (c.x === '' || c.y === '') return st('Falta a posição do mouse em cima da lista (X e Y). Use "Pegar posição do mouse".');
+      if (!await agenteOk()) return;
+      const xy = { x: Math.round(+c.x), y: Math.round(+c.y) }; let feitas = 0, motivo = '';
+      rolando = true; parando = false; $('#oc-stop').hidden = false; $('#oc-cap').disabled = true;
+      try {
+        if (c.topo) { st('Voltando ao topo da lista…'); await ag('/rolar', { ...xy, vezes: 100, dir: 'cima' }); await esp(c.espera * 1000 + 400); }
+        let ant = null;
+        for (let i = 1; i <= c.max; i++) {
+          if (parando) { motivo = 'Parado por você.'; break; }
+          let sig = assinatura(v);
+          if (ant && parecidas(sig, ant)) { await esp(c.espera * 1000); sig = assinatura(v); if (parecidas(sig, ant)) { motivo = 'Chegou ao fim da lista (a tela parou de mudar).'; break; } }
+          await ler(v, v.videoWidth, v.videoHeight); feitas++; $('#oc-cap').disabled = true;
+          if (!stream) { motivo = 'O compartilhamento da tela foi encerrado.'; break; }
+          ant = sig;
+          await ag('/rolar', { ...xy, vezes: c.vezes, dir: 'baixo' });
+          await esp(c.espera * 1000);
+        }
+        if (!motivo) motivo = `Chegou ao máximo de ${c.max} capturas (aumente em "Máximo de capturas" se a lista for maior).`;
+      } catch (e) { motivo = 'Erro: ' + (e.message || e); }
+      rolando = false; $('#oc-stop').hidden = true; $('#oc-cap').disabled = !stream;
+      st(`${feitas} captura(s) feita(s) rolando, ${itens.length} item(ns) na lista. ${motivo} Confira os códigos (o OCR pode errar números) antes de aplicar.`);
+    }
+    const parar = () => { parando = true; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $('#oc-v').style.display = 'none'; $('#oc-cap').disabled = true; $('#oc-sh').textContent = 'Compartilhar tela'; };
     $('#oc-sh').onclick = async () => {
       if (stream) return parar();
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return st('Este navegador/aparelho não deixa compartilhar a tela. Tire um print e use "Escolher imagens" ou Ctrl+V.');
@@ -113,7 +204,7 @@
         $('#oc-cap').disabled = false; $('#oc-sh').textContent = 'Parar de compartilhar'; st('Tela compartilhada. Deixe a lista do sistema de NF visível e toque em Capturar.');
       } catch (e) { stream = null; st('Não consegui compartilhar a tela' + (e && e.name === 'NotAllowedError' ? ' (cancelado ou sem permissão).' : '.')); }
     };
-    $('#oc-cap').onclick = () => { const v = $('#oc-v'); if (v.videoWidth) ler(v, v.videoWidth, v.videoHeight); };
+    $('#oc-cap').onclick = () => { if (rolando) return; if ($('#oc-rol').checked) return capturarRolando(); const v = $('#oc-v'); if (v.videoWidth) ler(v, v.videoWidth, v.videoHeight); };
     $('#oc-fl').onclick = () => $('#oc-fi').click();
     $('#oc-fi').onchange = async e => { const fs = [...e.target.files]; e.target.value = ''; for (const f of fs) await doBlob(f); };
     d.addEventListener('paste', e => { const f = [...(e.clipboardData ? e.clipboardData.items : [])].find(i => i.type.startsWith('image/')); if (f) { e.preventDefault(); doBlob(f.getAsFile()); } });
@@ -129,4 +220,18 @@
     d.addEventListener('cancel', e => { e.preventDefault(); $('#oc-x').click(); });
     desenhar(); d.showModal();
   });
+
+  /* ----- Gaveta Ferramentas > OCR (aqui entram as leituras por OCR; por enquanto: códigos da NF) ----- */
+  CFO.modules.ocr = body => {
+    const pode = CFO.pode('editar', 'epi');
+    body.innerHTML = `<p class="sub" style="margin-top:0">Ler texto direto da tela do computador ou de um print, sem digitar.</p>
+      <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+        <div class="card"><h3 style="margin:0 0 .3rem">Códigos da NF</h3>
+          <p class="log" style="margin:.2rem 0 .7rem">Lê a lista de produtos e códigos do sistema de NF (compartilhando a tela ou colando um print) e preenche o <b>Código NF</b> da Planilha EPI. Você confere tudo antes de gravar.</p>
+          <button type="button" id="oc-go" ${pode ? '' : 'disabled'}>📷 Ler códigos da tela</button>
+          ${pode ? '' : '<p class="log">Seu perfil não pode editar a Planilha EPI.</p>'}</div>
+      </div>
+      <p class="log">Resultado: Almoxarifado Operacional › Planilha EPI › coluna Código NF.</p>`;
+    body.querySelector('#oc-go').onclick = () => CFO.ocrNf().catch(e => alert(e.message || e));
+  };
 })();
